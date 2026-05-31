@@ -21,7 +21,7 @@ jobs:
       - name: Send Discord notification infra
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_INFRA }}
-          EVENT_NAME: ${{ github.event_name }}
+          EVENT_NAME: ${{ github.event_qname }}
           REPOSITORY: ${{ github.repository }}
           BRANCH: ${{ github.ref_name }}
           HEAD_BRANCH: ${{ github.head_ref }}
@@ -59,4 +59,4 @@ jobs:
 
           curl -H "Content-Type: application/json" \
             -d @payload.json \
-            "$DISCORD_WEBHOOK_INFRA"
+            "$DISCORD_WEBHOOK_URL"
