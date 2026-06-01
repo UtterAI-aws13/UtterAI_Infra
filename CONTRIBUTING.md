@@ -23,24 +23,52 @@
 
 ## Commit Rules
 
+커밋 메시지는 아래 형식을 따른다:
+
+```
+<type>(<scope>): <description>
+```
+
 - 커밋 메시지는 짧고 목적이 분명해야 한다.
 - 커밋은 가능하면 하나의 인프라 변경 단위만 담는다.
-- 권장 prefix:
-  - `feat:`
-  - `fix:`
-  - `docs:`
-  - `refactor:`
-  - `test:`
-  - `chore:`
-  - `ci:`
 
-예시:
+### Type
 
-- `feat: add eks system nodegroup`
-- `feat: add karpenter gpu nodepool`
-- `fix: update private subnet route table`
-- `ci: add terraform plan workflow`
+| type | 설명 |
+|------|------|
+| `feat` | 신규 리소스/모듈/기능 추가 |
+| `fix` | 인프라 버그 수정 |
+| `docs` | 문서 변경 |
+| `refactor` | 기능 변경 없이 구조 개선 |
+| `test` | 테스트 추가 또는 수정 |
+| `chore` | 설정, 의존성 등 비기능 변경 |
+| `ci` | GitHub Actions 워크플로우 변경 |
+
+### Scope
+
+변경 대상 인프라 영역을 명시한다. 생략 가능하나, 범위가 명확할 때는 적는 것을 권장한다.
+
+| scope | 설명 |
+|-------|------|
+| `eks` | EKS 클러스터 및 노드그룹 |
+| `karpenter` | Karpenter 노드풀/프로비저너 |
+| `network` | VPC, 서브넷, 라우팅 |
+| `iam` | IAM 역할/정책 |
+| `rds` | RDS 인스턴스/설정 |
+| `s3` | S3 버킷/정책 |
+| `argocd` | ArgoCD Application/설정 |
+| `cicd` | CI/CD 파이프라인 |
+| `kms` | KMS 키/정책 |
+| `sg` | Security Group |
+
+### 예시
+
+- `feat(eks): add system nodegroup`
+- `feat(karpenter): add gpu nodepool`
+- `fix(network): update private subnet route table`
+- `ci(cicd): add terraform plan workflow`
 - `docs: update infra architecture diagram`
+- `chore(iam): rotate service account role`
 
 ## Issue Rules
 
