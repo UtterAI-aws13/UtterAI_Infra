@@ -2,7 +2,7 @@ apiVersion: keda.sh/v1alpha1
 kind: TriggerAuthentication
 metadata:
   name: keda-aws-auth
-  namespace: utter-batch
+  namespace: utterai-batch
 spec:
   podIdentity:
     provider: aws
@@ -10,13 +10,13 @@ spec:
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: batch-worker-scaler
-  namespace: utter-batch
+  name: utterai-batch-worker-scaler
+  namespace: utterai-batch
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: batch-worker
+    name: utterai-batch-worker
   minReplicaCount: 0
   maxReplicaCount: 5
   pollingInterval: 30

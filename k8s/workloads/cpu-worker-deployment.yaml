@@ -1,20 +1,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: cpu-analysis-worker
-  namespace: utter-ai-cpu
+  name: utterai-cpu-worker
+  namespace: utterai-ai-cpu
 spec:
   # KEDA가 관리하므로 초기 replica=0
   replicas: 0
   selector:
     matchLabels:
-      app: cpu-analysis-worker
+      app: utterai-cpu-worker
   template:
     metadata:
       labels:
-        app: cpu-analysis-worker
+        app: utterai-cpu-worker
     spec:
-      serviceAccountName: ai-cpu-worker-sa
+      serviceAccountName: utterai-cpu-worker-sa
       nodeSelector:
         workload: ai-cpu
       tolerations:

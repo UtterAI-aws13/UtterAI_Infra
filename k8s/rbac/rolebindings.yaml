@@ -1,12 +1,12 @@
 # 각 워크로드 SA에 필요한 최소 K8s 내부 권한 부여
 # AWS 권한은 IRSA(serviceaccounts.yaml annotation)에서 처리
 ---
-# utter-api: ConfigMap 읽기 (환경변수 주입용)
+# utterai-api: ConfigMap 읽기 (환경변수 주입용)
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: utter-api-role
-  namespace: utter-api
+  name: utterai-api-role
+  namespace: utterai-api
 rules:
   - apiGroups: [""]
     resources: ["configmaps", "secrets"]
@@ -15,23 +15,23 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: utter-api-rolebinding
-  namespace: utter-api
+  name: utterai-api-rolebinding
+  namespace: utterai-api
 subjects:
   - kind: ServiceAccount
-    name: utter-api-sa
-    namespace: utter-api
+    name: utterai-api-sa
+    namespace: utterai-api
 roleRef:
   kind: Role
-  name: utter-api-role
+  name: utterai-api-role
   apiGroup: rbac.authorization.k8s.io
 ---
-# utter-ai-cpu
+# utterai-ai-cpu
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: ai-cpu-worker-role
-  namespace: utter-ai-cpu
+  name: utterai-cpu-worker-role
+  namespace: utterai-ai-cpu
 rules:
   - apiGroups: [""]
     resources: ["configmaps"]
@@ -40,23 +40,23 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: ai-cpu-worker-rolebinding
-  namespace: utter-ai-cpu
+  name: utterai-cpu-worker-rolebinding
+  namespace: utterai-ai-cpu
 subjects:
   - kind: ServiceAccount
-    name: ai-cpu-worker-sa
-    namespace: utter-ai-cpu
+    name: utterai-cpu-worker-sa
+    namespace: utterai-ai-cpu
 roleRef:
   kind: Role
-  name: ai-cpu-worker-role
+  name: utterai-cpu-worker-role
   apiGroup: rbac.authorization.k8s.io
 ---
-# utter-ai-gpu
+# utterai-ai-gpu
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: ai-gpu-worker-role
-  namespace: utter-ai-gpu
+  name: utterai-gpu-worker-role
+  namespace: utterai-ai-gpu
 rules:
   - apiGroups: [""]
     resources: ["configmaps"]
@@ -65,23 +65,23 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: ai-gpu-worker-rolebinding
-  namespace: utter-ai-gpu
+  name: utterai-gpu-worker-rolebinding
+  namespace: utterai-ai-gpu
 subjects:
   - kind: ServiceAccount
-    name: ai-gpu-worker-sa
-    namespace: utter-ai-gpu
+    name: utterai-gpu-worker-sa
+    namespace: utterai-ai-gpu
 roleRef:
   kind: Role
-  name: ai-gpu-worker-role
+  name: utterai-gpu-worker-role
   apiGroup: rbac.authorization.k8s.io
 ---
-# utter-batch
+# utterai-batch
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: batch-worker-role
-  namespace: utter-batch
+  name: utterai-batch-worker-role
+  namespace: utterai-batch
 rules:
   - apiGroups: [""]
     resources: ["configmaps"]
@@ -90,13 +90,13 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: batch-worker-rolebinding
-  namespace: utter-batch
+  name: utterai-batch-worker-rolebinding
+  namespace: utterai-batch
 subjects:
   - kind: ServiceAccount
-    name: batch-worker-sa
-    namespace: utter-batch
+    name: utterai-batch-worker-sa
+    namespace: utterai-batch
 roleRef:
   kind: Role
-  name: batch-worker-role
+  name: utterai-batch-worker-role
   apiGroup: rbac.authorization.k8s.io

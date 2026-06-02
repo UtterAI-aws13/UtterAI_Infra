@@ -2,7 +2,7 @@ apiVersion: keda.sh/v1alpha1
 kind: TriggerAuthentication
 metadata:
   name: keda-aws-auth
-  namespace: utter-ai-cpu
+  namespace: utterai-ai-cpu
 spec:
   podIdentity:
     provider: aws
@@ -10,13 +10,13 @@ spec:
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: cpu-analysis-worker-scaler
-  namespace: utter-ai-cpu
+  name: utterai-cpu-worker-scaler
+  namespace: utterai-ai-cpu
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: cpu-analysis-worker
+    name: utterai-cpu-worker
   # dev: 큐가 비면 0으로 줄여 비용 절감
   minReplicaCount: 0
   maxReplicaCount: 2

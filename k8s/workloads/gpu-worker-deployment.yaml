@@ -1,19 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: gpu-diarization-worker
-  namespace: utter-ai-gpu
+  name: utterai-gpu-worker
+  namespace: utterai-ai-gpu
 spec:
   replicas: 0
   selector:
     matchLabels:
-      app: gpu-diarization-worker
+      app: utterai-gpu-worker
   template:
     metadata:
       labels:
-        app: gpu-diarization-worker
+        app: utterai-gpu-worker
     spec:
-      serviceAccountName: ai-gpu-worker-sa
+      serviceAccountName: utterai-gpu-worker-sa
       nodeSelector:
         workload: ai-gpu
       tolerations:
@@ -27,7 +27,7 @@ spec:
       # GPU cold start + 모델 로딩 시간 고려
       terminationGracePeriodSeconds: 300
       containers:
-        - name: diarization-worker
+        - name: gpu-worker
           image: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-gpu:latest
           env:
             - name: AWS_REGION
