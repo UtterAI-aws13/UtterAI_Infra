@@ -1,0 +1,94 @@
+name: Terraform Deploy Placeholder
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    name: Prepare deployment metadata
+    runs-on: ubuntu-latest
+
+    outputs:
+      short_sha: ${{ steps.meta.outputs.short_sha }}
+      target_env: ${{ steps.meta.outputs.target_env }}
+
+    steps:
+      - name: Create deployment metadata
+        id: meta
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            TARGET_ENV="prod"
+          elif [ "${GITHUB_REF_NAME}" = "dev" ]; then
+            TARGET_ENV="dev"
+          else
+            TARGET_ENV="unknown"
+          fi
+
+          echo "short_sha=$SHORT_SHA" >> "$GITHUB_OUTPUT"
+          echo "target_env=$TARGET_ENV" >> "$GITHUB_OUTPUT"
+
+          echo "SHORT_SHA=$SHORT_SHA"
+          echo "TARGET_ENV=$TARGET_ENV"
+
+  dev-placeholder:
+    name: Dev Terraform Deployment Placeholder
+    runs-on: ubuntu-latest
+    needs: prepare
+
+    if: github.ref_name == 'dev'
+
+    environment:
+      name: dev
+
+    steps:
+      - name: Explain dev deployment flow
+        run: |
+          echo "dev environment placeholder job입니다."
+          echo ""
+          echo "이 job은 dev 브랜치에 push 또는 merge 되었을 때 실행됩니다."
+          echo "현재는 실제 Terraform apply를 수행하지 않습니다."
+          echo "클라우드 비용과 리소스 생성을 방지하기 위해 placeholder로만 동작합니다."
+          echo ""
+          echo "향후 dev 환경에서는 다음 단계로 확장할 수 있습니다."
+          echo "1. terraform init"
+          echo "2. terraform plan"
+          echo "3. terraform apply"
+          echo ""
+          echo "target_env: ${{ needs.prepare.outputs.target_env }}"
+          echo "short_sha: ${{ needs.prepare.outputs.short_sha }}"
+
+  prod-placeholder:
+    name: Prod Terraform Deployment Placeholder
+    runs-on: ubuntu-latest
+    needs: prepare
+
+    if: github.ref_name == 'main'
+
+    environment:
+      name: prod
+
+    steps:
+      - name: Explain prod deployment flow
+        run: |
+          echo "prod environment placeholder job입니다."
+          echo ""
+          echo "이 job은 main 브랜치에 push 또는 merge 되었을 때 실행됩니다."
+          echo "prod environment의 required reviewer 승인을 받은 뒤 실행됩니다."
+          echo "현재는 실제 Terraform apply를 수행하지 않습니다."
+          echo "클라우드 비용과 운영 리소스 변경을 방지하기 위해 placeholder로만 동작합니다."
+          echo ""
+          echo "향후 prod 환경에서는 다음 단계로 확장할 수 있습니다."
+          echo "1. terraform init"
+          echo "2. terraform plan"
+          echo "3. approval 확인"
+          echo "4. terraform apply"
+          echo ""
+          echo "target_env: ${{ needs.prepare.outputs.target_env }}"
+          echo "short_sha: ${{ needs.prepare.outputs.short_sha }}"

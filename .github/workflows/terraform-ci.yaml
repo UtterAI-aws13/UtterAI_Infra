@@ -1,0 +1,74 @@
+name: Terraform CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - dev
+    paths:
+      - "**/*.tf"
+      - "**/*.tfvars"
+      - ".github/workflows/terraform-ci.yaml"
+
+  push:
+    branches:
+      - main
+      - dev
+      - "feature/**"
+    paths:
+      - "**/*.tf"
+      - "**/*.tfvars"
+      - ".github/workflows/terraform-ci.yaml"
+
+jobs:
+  terraform-check:
+    name: Terraform Format and Validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+
+      - name: Terraform fmt check
+        run: terraform fmt -check -recursive
+
+      - name: Find Terraform working directories
+        id: terraform-dirs
+        run: |
+          TERRAFORM_DIRS="$(find . \
+            -type f \
+            -name "*.tf" \
+            -not -path "*/.terraform/*" \
+            -exec dirname {} \; | sort -u)"
+
+          if [ -z "$TERRAFORM_DIRS" ]; then
+            echo "Terraform 파일이 아직 없어서 init/validate를 건너뜁니다."
+          else
+            echo "검증 대상 Terraform 디렉토리:"
+            echo "$TERRAFORM_DIRS"
+          fi
+
+          {
+            echo "terraform_dirs<<EOF"
+            echo "$TERRAFORM_DIRS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Terraform init and validate
+        env:
+          TERRAFORM_DIRS: ${{ steps.terraform-dirs.outputs.terraform_dirs }}
+        run: |
+          if [ -z "$TERRAFORM_DIRS" ]; then
+            exit 0
+          fi
+
+          while IFS= read -r dir; do
+            echo "Terraform init: $dir"
+            terraform -chdir="$dir" init -backend=false
+
+            echo "Terraform validate: $dir"
+            terraform -chdir="$dir" validate
+          done <<< "$TERRAFORM_DIRS"

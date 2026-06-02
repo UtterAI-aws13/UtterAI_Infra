@@ -1,0 +1,89 @@
+name: Discord Notify Infra
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+      - develop
+
+  pull_request:
+    types:
+      - opened
+      - reopened
+    branches:
+      - main
+      - dev
+      - develop
+
+  workflow_run:
+    workflows:
+      - Terraform CI
+    types:
+      - completed
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'failure'
+
+    steps:
+      - name: Send Discord notification infra
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_INFRA }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+          BASE_BRANCH: ${{ github.base_ref }}
+          ACTOR: ${{ github.actor }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          COMMIT_URL: ${{ github.event.head_commit.url }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          WORKFLOW_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          WORKFLOW_ACTOR: ${{ github.event.workflow_run.actor.login }}
+          WORKFLOW_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_run" ]; then
+            MESSAGE=$(cat <<EOF
+          🚨 Infra CI 실패 알림
+
+          📦 Repository: $REPOSITORY
+          🧪 Workflow: $WORKFLOW_NAME
+          🌿 Branch: $WORKFLOW_BRANCH
+          👤 Actor: $WORKFLOW_ACTOR
+          ❌ Result: $WORKFLOW_CONCLUSION
+          🔗 Link: $WORKFLOW_URL
+          EOF
+          )
+          elif [ "$EVENT_NAME" = "pull_request" ]; then
+            MESSAGE=$(cat <<EOF
+          🔔 Pull Request 이벤트 발생
+
+          📦 Repository: $REPOSITORY
+          🌿 Branch: $HEAD_BRANCH → $BASE_BRANCH
+          👤 Actor: $ACTOR
+          🔗 Link: $PR_URL
+          EOF
+          )
+          else
+            MESSAGE=$(cat <<EOF
+          🚀 Push 발생
+
+          📦 Repository: $REPOSITORY
+          🌿 Branch: $BRANCH
+          👤 Pusher: $ACTOR
+          📝 Commit: $COMMIT_MESSAGE
+          🔗 Link: $COMMIT_URL
+          EOF
+          )
+          fi
+
+          jq -n --arg content "$MESSAGE" \
+            '{username: "GitHub Actions", content: $content}' > payload.json
+
+          curl -H "Content-Type: application/json" \
+            -d @payload.json \
+            "$DISCORD_WEBHOOK_URL"
