@@ -1,0 +1,136 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: utter-api
+  namespace: utter-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: utter-api
+  template:
+    metadata:
+      labels:
+        app: utter-api
+    spec:
+      serviceAccountName: utter-api-sa
+      nodeSelector:
+        workload: api
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: api
+          effect: NoSchedule
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: utter-api
+      containers:
+        - name: api
+          # ECR URI는 실제 배포 시 교체
+          image: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: utter-api-config
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: backend-api-secret
+                  key: DB_PASSWORD
+            - name: INTERNAL_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: backend-api-secret
+                  key: INTERNAL_SERVICE_TOKEN
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: utter-api-service
+  namespace: utter-api
+spec:
+  type: ClusterIP
+  selector:
+    app: utter-api
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: utter-api-hpa
+  namespace: utter-api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: utter-api
+  minReplicas: 1
+  maxReplicas: 2
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: utter-api-config
+  namespace: utter-api
+data:
+  APP_ENV: "dev"
+  APP_NAME: "utterai-backend"
+  API_BASE_PATH: "/api/v1"
+  LOG_LEVEL: "DEBUG"
+  FRONTEND_ORIGIN: "https://dev.utterai.com"
+  CORS_ALLOW_ORIGINS: "https://dev.utterai.com"
+  DB_HOST: "${AURORA_WRITER_ENDPOINT}"
+  DB_PORT: "5432"
+  DB_NAME: "utterai"
+  DB_USER: "utterai_app"
+  DB_POOL_SIZE: "5"
+  DB_MAX_OVERFLOW: "10"
+  REDIS_HOST: "${REDIS_ENDPOINT}"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  REDIS_TLS_ENABLED: "true"
+  S3_RAW_AUDIO_BUCKET: "utterai-dev-raw-audio"
+  S3_PROCESSED_AUDIO_BUCKET: "utterai-dev-processed-audio"
+  S3_DOCUMENT_BUCKET: "utterai-dev-documents"
+  S3_REPORT_BUCKET: "utterai-dev-reports"
+  S3_ARTIFACT_BUCKET: "utterai-dev-artifacts"
+  SQS_ANALYSIS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-analysis-queue"
+  SQS_ANALYSIS_DLQ_URL: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-analysis-dlq"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.utter-observability.svc.cluster.local:4317"
+  CLOUDWATCH_LOG_GROUP: "/aws/eks/utterai-dev/backend"
