@@ -1,19 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: utter-api
-  namespace: utter-api
+  name: utterai-api
+  namespace: utterai-api
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: utter-api
+      app: utterai-api
   template:
     metadata:
       labels:
-        app: utter-api
+        app: utterai-api
     spec:
-      serviceAccountName: utter-api-sa
+      serviceAccountName: utterai-api-sa
       nodeSelector:
         workload: api
       tolerations:
@@ -27,7 +27,7 @@ spec:
           whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels:
-              app: utter-api
+              app: utterai-api
       containers:
         - name: api
           # ECR URI는 실제 배포 시 교체
@@ -36,7 +36,7 @@ spec:
             - containerPort: 8080
           envFrom:
             - configMapRef:
-                name: utter-api-config
+                name: utterai-api-config
           env:
             - name: DB_PASSWORD
               valueFrom:
@@ -73,12 +73,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: utter-api-service
-  namespace: utter-api
+  name: utterai-api-service
+  namespace: utterai-api
 spec:
   type: ClusterIP
   selector:
-    app: utter-api
+    app: utterai-api
   ports:
     - port: 8080
       targetPort: 8080
@@ -86,13 +86,13 @@ spec:
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: utter-api-hpa
-  namespace: utter-api
+  name: utterai-api-hpa
+  namespace: utterai-api
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: utter-api
+    name: utterai-api
   minReplicas: 1
   maxReplicas: 2
   metrics:
@@ -106,8 +106,8 @@ spec:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: utter-api-config
-  namespace: utter-api
+  name: utterai-api-config
+  namespace: utterai-api
 data:
   APP_ENV: "dev"
   APP_NAME: "utterai-backend"
@@ -132,5 +132,5 @@ data:
   S3_ARTIFACT_BUCKET: "utterai-dev-artifacts"
   SQS_ANALYSIS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-analysis-queue"
   SQS_ANALYSIS_DLQ_URL: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-analysis-dlq"
-  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.utter-observability.svc.cluster.local:4317"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.utterai-observability.svc.cluster.local:4317"
   CLOUDWATCH_LOG_GROUP: "/aws/eks/utterai-dev/backend"

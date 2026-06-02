@@ -2,7 +2,7 @@ apiVersion: keda.sh/v1alpha1
 kind: TriggerAuthentication
 metadata:
   name: keda-aws-auth
-  namespace: utter-ai-gpu
+  namespace: utterai-ai-gpu
 spec:
   podIdentity:
     provider: aws
@@ -10,13 +10,13 @@ spec:
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: gpu-diarization-worker-scaler
-  namespace: utter-ai-gpu
+  name: utterai-gpu-worker-scaler
+  namespace: utterai-ai-gpu
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: gpu-diarization-worker
+    name: utterai-gpu-worker
   minReplicaCount: 0
   # dev: GPU 비용 절감을 위해 최대 1대
   maxReplicaCount: 1

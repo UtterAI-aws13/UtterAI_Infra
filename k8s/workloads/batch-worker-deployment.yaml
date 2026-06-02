@@ -1,19 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: batch-worker
-  namespace: utter-batch
+  name: utterai-batch-worker
+  namespace: utterai-batch
 spec:
   replicas: 0
   selector:
     matchLabels:
-      app: batch-worker
+      app: utterai-batch-worker
   template:
     metadata:
       labels:
-        app: batch-worker
+        app: utterai-batch-worker
     spec:
-      serviceAccountName: batch-worker-sa
+      serviceAccountName: utterai-batch-worker-sa
       nodeSelector:
         workload: batch
       tolerations:

@@ -265,7 +265,7 @@ resource "aws_iam_role" "api" {
       Condition = {
         StringEquals = {
           "${local.oidc_aud}" = "sts.amazonaws.com"
-          "${local.oidc_sub}" = "system:serviceaccount:utter-api:utter-api-sa"
+          "${local.oidc_sub}" = "system:serviceaccount:utterai-api:utterai-api-sa"
         }
       }
     }]
@@ -321,7 +321,7 @@ resource "aws_iam_role" "ai_cpu" {
       Condition = {
         StringEquals = {
           "${local.oidc_aud}" = "sts.amazonaws.com"
-          "${local.oidc_sub}" = "system:serviceaccount:utter-ai-cpu:ai-cpu-worker-sa"
+          "${local.oidc_sub}" = "system:serviceaccount:utterai-ai-cpu:utterai-cpu-worker-sa"
         }
       }
     }]
@@ -368,7 +368,7 @@ resource "aws_iam_role" "ai_gpu" {
       Condition = {
         StringEquals = {
           "${local.oidc_aud}" = "sts.amazonaws.com"
-          "${local.oidc_sub}" = "system:serviceaccount:utter-ai-gpu:ai-gpu-worker-sa"
+          "${local.oidc_sub}" = "system:serviceaccount:utterai-ai-gpu:utterai-gpu-worker-sa"
         }
       }
     }]
@@ -415,7 +415,7 @@ resource "aws_iam_role" "batch" {
       Condition = {
         StringEquals = {
           "${local.oidc_aud}" = "sts.amazonaws.com"
-          "${local.oidc_sub}" = "system:serviceaccount:utter-batch:batch-worker-sa"
+          "${local.oidc_sub}" = "system:serviceaccount:utterai-batch:utterai-batch-worker-sa"
         }
       }
     }]
