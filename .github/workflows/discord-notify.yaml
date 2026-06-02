@@ -8,14 +8,24 @@ on:
       - develop
 
   pull_request:
+    types:
+      - opened
+      - reopened
     branches:
       - main
       - dev
       - develop
 
+  workflow_run:
+    workflows:
+      - Terraform CI
+    types:
+      - completed
+
 jobs:
   notify:
     runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'failure'
 
     steps:
       - name: Send Discord notification infra
@@ -30,8 +40,25 @@ jobs:
           COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
           COMMIT_URL: ${{ github.event.head_commit.url }}
           PR_URL: ${{ github.event.pull_request.html_url }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          WORKFLOW_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          WORKFLOW_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          WORKFLOW_ACTOR: ${{ github.event.workflow_run.actor.login }}
+          WORKFLOW_URL: ${{ github.event.workflow_run.html_url }}
         run: |
-          if [ "$EVENT_NAME" = "pull_request" ]; then
+          if [ "$EVENT_NAME" = "workflow_run" ]; then
+            MESSAGE=$(cat <<EOF
+          🚨 Infra CI 실패 알림
+
+          📦 Repository: $REPOSITORY
+          🧪 Workflow: $WORKFLOW_NAME
+          🌿 Branch: $WORKFLOW_BRANCH
+          👤 Actor: $WORKFLOW_ACTOR
+          ❌ Result: $WORKFLOW_CONCLUSION
+          🔗 Link: $WORKFLOW_URL
+          EOF
+          )
+          elif [ "$EVENT_NAME" = "pull_request" ]; then
             MESSAGE=$(cat <<EOF
           🔔 Pull Request 이벤트 발생
 
