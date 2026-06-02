@@ -65,8 +65,8 @@ module "vpc" {
   vpc_cidr     = var.vpc_cidr
   azs          = var.azs
 
-  public_subnet_cidrs      = var.public_subnet_cidrs
-  private_app_subnet_cidrs = var.private_app_subnet_cidrs
+  public_subnet_cidrs       = var.public_subnet_cidrs
+  private_app_subnet_cidrs  = var.private_app_subnet_cidrs
   private_data_subnet_cidrs = var.private_data_subnet_cidrs
 
   cluster_name = var.cluster_name
@@ -82,8 +82,8 @@ module "eks" {
   cluster_name       = var.cluster_name
   kubernetes_version = var.kubernetes_version
 
-  vpc_id                  = module.vpc.vpc_id
-  private_app_subnet_ids  = module.vpc.private_app_subnet_ids
+  vpc_id                 = module.vpc.vpc_id
+  private_app_subnet_ids = module.vpc.private_app_subnet_ids
 
   system_node_instance_type = var.system_node_instance_type
   system_node_desired_size  = var.system_node_desired_size
@@ -103,13 +103,13 @@ module "eks" {
 module "irsa" {
   source = "../../modules/irsa"
 
-  project_name         = var.project_name
-  environment          = var.environment
-  cluster_name         = var.cluster_name
-  oidc_provider_arn    = module.eks.oidc_provider_arn
-  oidc_provider_url    = module.eks.oidc_provider_url
-  aws_account_id       = data.aws_caller_identity.current.account_id
-  aws_region           = var.aws_region
+  project_name      = var.project_name
+  environment       = var.environment
+  cluster_name      = var.cluster_name
+  oidc_provider_arn = module.eks.oidc_provider_arn
+  oidc_provider_url = module.eks.oidc_provider_url
+  aws_account_id    = data.aws_caller_identity.current.account_id
+  aws_region        = var.aws_region
 
   raw_audio_bucket_arn       = module.s3.raw_audio_bucket_arn
   processed_audio_bucket_arn = module.s3.processed_audio_bucket_arn
@@ -153,13 +153,13 @@ module "aurora" {
   project_name = var.project_name
   environment  = var.environment
 
-  instance_class    = var.aurora_instance_class
-  database_name     = var.aurora_database_name
-  master_username   = var.aurora_master_username
-  backup_retention  = var.aurora_backup_retention
+  instance_class   = var.aurora_instance_class
+  database_name    = var.aurora_database_name
+  master_username  = var.aurora_master_username
+  backup_retention = var.aurora_backup_retention
 
-  vpc_id                   = module.vpc.vpc_id
-  private_data_subnet_ids  = module.vpc.private_data_subnet_ids
+  vpc_id                    = module.vpc.vpc_id
+  private_data_subnet_ids   = module.vpc.private_data_subnet_ids
   allowed_security_group_id = module.eks.node_security_group_id
 }
 
@@ -184,8 +184,8 @@ module "redis" {
 module "s3" {
   source = "../../modules/s3"
 
-  project_name = var.project_name
-  environment  = var.environment
+  project_name    = var.project_name
+  environment     = var.environment
   frontend_domain = "dev.utterai.com"
 }
 

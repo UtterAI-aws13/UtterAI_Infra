@@ -10,7 +10,7 @@ resource "aws_iam_role" "cluster" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = { Service = "eks.amazonaws.com" }
       Action    = "sts:AssumeRole"
     }]
@@ -30,7 +30,7 @@ resource "aws_iam_role" "node" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = { Service = "ec2.amazonaws.com" }
       Action    = "sts:AssumeRole"
     }]
@@ -105,8 +105,8 @@ resource "aws_eks_addon" "vpc_cni" {
 }
 
 resource "aws_eks_addon" "coredns" {
-  cluster_name  = aws_eks_cluster.this.name
-  addon_name    = "coredns"
+  cluster_name = aws_eks_cluster.this.name
+  addon_name   = "coredns"
 
   depends_on = [aws_eks_node_group.system]
 }

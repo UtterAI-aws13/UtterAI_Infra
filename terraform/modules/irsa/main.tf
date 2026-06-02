@@ -13,7 +13,7 @@ resource "aws_iam_role" "lbc" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = { Federated = var.oidc_provider_arn }
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
@@ -44,7 +44,7 @@ resource "aws_iam_role" "karpenter_node" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = { Service = "ec2.amazonaws.com" }
       Action    = "sts:AssumeRole"
     }]
@@ -106,7 +106,7 @@ resource "aws_iam_role" "karpenter_controller" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = { Federated = var.oidc_provider_arn }
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
@@ -137,7 +137,7 @@ resource "aws_iam_role_policy" "karpenter_controller" {
         Resource = ["*"]
         Condition = {
           StringEquals = {
-            "aws:RequestedRegion" = var.aws_region
+            "aws:RequestedRegion"                    = var.aws_region
             "ec2:ResourceTag/karpenter.sh/discovery" = var.cluster_name
           }
         }
@@ -152,7 +152,7 @@ resource "aws_iam_role_policy" "karpenter_controller" {
         Resource = ["*"]
         Condition = {
           StringEquals = {
-            "aws:RequestedRegion" = var.aws_region
+            "aws:RequestedRegion"                     = var.aws_region
             "ec2:ResourceTag/karpenter.sh/managed-by" = var.cluster_name
           }
         }
@@ -174,15 +174,15 @@ resource "aws_iam_role_policy" "karpenter_controller" {
         Resource = ["*"]
       },
       {
-        Sid    = "AllowSSMReadActions"
-        Effect = "Allow"
-        Action = ["ssm:GetParameter"]
+        Sid      = "AllowSSMReadActions"
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameter"]
         Resource = ["arn:aws:ssm:*:*:parameter/aws/service/*"]
       },
       {
-        Sid    = "AllowPassNodeIAMRole"
-        Effect = "Allow"
-        Action = "iam:PassRole"
+        Sid      = "AllowPassNodeIAMRole"
+        Effect   = "Allow"
+        Action   = "iam:PassRole"
         Resource = [aws_iam_role.karpenter_node.arn]
       },
       {
@@ -217,7 +217,7 @@ resource "aws_iam_role" "keda" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = { Federated = var.oidc_provider_arn }
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
@@ -259,7 +259,7 @@ resource "aws_iam_role" "api" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = { Federated = var.oidc_provider_arn }
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
@@ -315,7 +315,7 @@ resource "aws_iam_role" "ai_cpu" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = { Federated = var.oidc_provider_arn }
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
@@ -362,7 +362,7 @@ resource "aws_iam_role" "ai_gpu" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = { Federated = var.oidc_provider_arn }
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
@@ -409,7 +409,7 @@ resource "aws_iam_role" "batch" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = { Federated = var.oidc_provider_arn }
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {

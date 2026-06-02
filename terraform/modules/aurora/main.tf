@@ -39,11 +39,11 @@ resource "aws_rds_cluster_parameter_group" "this" {
 }
 
 resource "aws_rds_cluster" "this" {
-  cluster_identifier      = "${local.prefix}-aurora"
-  engine                  = "aurora-postgresql"
-  engine_version          = "16.4"
-  database_name           = var.database_name
-  master_username         = var.master_username
+  cluster_identifier          = "${local.prefix}-aurora"
+  engine                      = "aurora-postgresql"
+  engine_version              = "16.4"
+  database_name               = var.database_name
+  master_username             = var.master_username
   manage_master_user_password = true
 
   db_subnet_group_name            = aws_db_subnet_group.this.name
@@ -71,7 +71,7 @@ resource "aws_rds_cluster_instance" "writer" {
   engine             = aws_rds_cluster.this.engine
   engine_version     = aws_rds_cluster.this.engine_version
 
-  db_subnet_group_name    = aws_db_subnet_group.this.name
+  db_subnet_group_name       = aws_db_subnet_group.this.name
   auto_minor_version_upgrade = var.environment == "dev" ? true : false
 
   tags = {
