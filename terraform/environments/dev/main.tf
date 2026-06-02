@@ -212,3 +212,6 @@ module "cognito" {
 # ── Data sources ─────────────────────────────────────────────────────────────
 
 data "aws_caller_identity" "current" {}
+
+
+resource "aws_s3_bucket" "broken" {
