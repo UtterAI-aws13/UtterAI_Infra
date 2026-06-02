@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-diarization-worker
+  namespace: utter-ai-gpu
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: gpu-diarization-worker
+  template:
+    metadata:
+      labels:
+        app: gpu-diarization-worker
+    spec:
+      serviceAccountName: ai-gpu-worker-sa
+      nodeSelector:
+        workload: ai-gpu
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: ai-gpu
+          effect: NoSchedule
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      # GPU cold start + 모델 로딩 시간 고려
+      terminationGracePeriodSeconds: 300
+      containers:
+        - name: diarization-worker
+          image: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-gpu:latest
+          env:
+            - name: AWS_REGION
+              value: "ap-northeast-2"
+            - name: SQS_QUEUE_URL
+              value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-analysis-queue"
+            - name: S3_RAW_AUDIO_BUCKET
+              value: "utterai-dev-raw-audio"
+            - name: S3_PROCESSED_AUDIO_BUCKET
+              value: "utterai-dev-processed-audio"
+            - name: S3_ARTIFACTS_BUCKET
+              value: "utterai-dev-artifacts"
+            - name: LOG_LEVEL
+              value: "DEBUG"
+            - name: CUDA_VISIBLE_DEVICES
+              value: "0"
+          resources:
+            requests:
+              cpu: "2"
+              memory: "8Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "4"
+              memory: "16Gi"
+              nvidia.com/gpu: "1"
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]

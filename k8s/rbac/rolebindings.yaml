@@ -1,0 +1,102 @@
+# 각 워크로드 SA에 필요한 최소 K8s 내부 권한 부여
+# AWS 권한은 IRSA(serviceaccounts.yaml annotation)에서 처리
+---
+# utter-api: ConfigMap 읽기 (환경변수 주입용)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: utter-api-role
+  namespace: utter-api
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: utter-api-rolebinding
+  namespace: utter-api
+subjects:
+  - kind: ServiceAccount
+    name: utter-api-sa
+    namespace: utter-api
+roleRef:
+  kind: Role
+  name: utter-api-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# utter-ai-cpu
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ai-cpu-worker-role
+  namespace: utter-ai-cpu
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ai-cpu-worker-rolebinding
+  namespace: utter-ai-cpu
+subjects:
+  - kind: ServiceAccount
+    name: ai-cpu-worker-sa
+    namespace: utter-ai-cpu
+roleRef:
+  kind: Role
+  name: ai-cpu-worker-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# utter-ai-gpu
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ai-gpu-worker-role
+  namespace: utter-ai-gpu
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ai-gpu-worker-rolebinding
+  namespace: utter-ai-gpu
+subjects:
+  - kind: ServiceAccount
+    name: ai-gpu-worker-sa
+    namespace: utter-ai-gpu
+roleRef:
+  kind: Role
+  name: ai-gpu-worker-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# utter-batch
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: batch-worker-role
+  namespace: utter-batch
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: batch-worker-rolebinding
+  namespace: utter-batch
+subjects:
+  - kind: ServiceAccount
+    name: batch-worker-sa
+    namespace: utter-batch
+roleRef:
+  kind: Role
+  name: batch-worker-role
+  apiGroup: rbac.authorization.k8s.io
