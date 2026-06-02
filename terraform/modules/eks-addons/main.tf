@@ -9,30 +9,28 @@ resource "helm_release" "aws_load_balancer_controller" {
 
   create_namespace = true
 
-  set {
-    name  = "clusterName"
-    value = var.cluster_name
-  }
-
-  set {
-    name  = "serviceAccount.create"
-    value = "true"
-  }
-
-  set {
-    name  = "serviceAccount.name"
-    value = "aws-load-balancer-controller"
-  }
-
-  set {
-    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = var.lbc_irsa_role_arn
-  }
-
-  set {
-    name  = "region"
-    value = var.aws_region
-  }
+  set = [
+    {
+      name  = "clusterName"
+      value = var.cluster_name
+    },
+    {
+      name  = "serviceAccount.create"
+      value = "true"
+    },
+    {
+      name  = "serviceAccount.name"
+      value = "aws-load-balancer-controller"
+    },
+    {
+      name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+      value = var.lbc_irsa_role_arn
+    },
+    {
+      name  = "region"
+      value = var.aws_region
+    },
+  ]
 }
 
 # ── Karpenter ─────────────────────────────────────────────────────────────────
@@ -46,60 +44,52 @@ resource "helm_release" "karpenter" {
 
   create_namespace = true
 
-  set {
-    name  = "settings.clusterName"
-    value = var.cluster_name
-  }
-
-  set {
-    name  = "settings.clusterEndpoint"
-    value = var.cluster_endpoint
-  }
-
-  set {
-    name  = "settings.interruptionQueue"
-    value = var.karpenter_sqs_queue_url
-  }
-
-  set {
-    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = var.karpenter_irsa_role_arn
-  }
-
-  set {
-    name  = "controller.resources.requests.cpu"
-    value = "250m"
-  }
-
-  set {
-    name  = "controller.resources.requests.memory"
-    value = "512Mi"
-  }
-
-  set {
-    name  = "controller.resources.limits.cpu"
-    value = "1"
-  }
-
-  set {
-    name  = "controller.resources.limits.memory"
-    value = "1Gi"
-  }
-
-  set {
-    name  = "tolerations[0].key"
-    value = "CriticalAddonsOnly"
-  }
-
-  set {
-    name  = "tolerations[0].operator"
-    value = "Exists"
-  }
-
-  set {
-    name  = "tolerations[0].effect"
-    value = "NoSchedule"
-  }
+  set = [
+    {
+      name  = "settings.clusterName"
+      value = var.cluster_name
+    },
+    {
+      name  = "settings.clusterEndpoint"
+      value = var.cluster_endpoint
+    },
+    {
+      name  = "settings.interruptionQueue"
+      value = var.karpenter_sqs_queue_url
+    },
+    {
+      name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+      value = var.karpenter_irsa_role_arn
+    },
+    {
+      name  = "controller.resources.requests.cpu"
+      value = "250m"
+    },
+    {
+      name  = "controller.resources.requests.memory"
+      value = "512Mi"
+    },
+    {
+      name  = "controller.resources.limits.cpu"
+      value = "1"
+    },
+    {
+      name  = "controller.resources.limits.memory"
+      value = "1Gi"
+    },
+    {
+      name  = "tolerations[0].key"
+      value = "CriticalAddonsOnly"
+    },
+    {
+      name  = "tolerations[0].operator"
+      value = "Exists"
+    },
+    {
+      name  = "tolerations[0].effect"
+      value = "NoSchedule"
+    },
+  ]
 }
 
 # ── KEDA ──────────────────────────────────────────────────────────────────────
@@ -113,35 +103,32 @@ resource "helm_release" "keda" {
 
   create_namespace = true
 
-  set {
-    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = var.keda_irsa_role_arn
-  }
-
-  set {
-    name  = "resources.operator.requests.cpu"
-    value = "100m"
-  }
-
-  set {
-    name  = "resources.operator.requests.memory"
-    value = "256Mi"
-  }
-
-  set {
-    name  = "operator.tolerations[0].key"
-    value = "CriticalAddonsOnly"
-  }
-
-  set {
-    name  = "operator.tolerations[0].operator"
-    value = "Exists"
-  }
-
-  set {
-    name  = "operator.tolerations[0].effect"
-    value = "NoSchedule"
-  }
+  set = [
+    {
+      name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+      value = var.keda_irsa_role_arn
+    },
+    {
+      name  = "resources.operator.requests.cpu"
+      value = "100m"
+    },
+    {
+      name  = "resources.operator.requests.memory"
+      value = "256Mi"
+    },
+    {
+      name  = "operator.tolerations[0].key"
+      value = "CriticalAddonsOnly"
+    },
+    {
+      name  = "operator.tolerations[0].operator"
+      value = "Exists"
+    },
+    {
+      name  = "operator.tolerations[0].effect"
+      value = "NoSchedule"
+    },
+  ]
 }
 
 # ── Metrics Server ────────────────────────────────────────────────────────────
@@ -153,20 +140,20 @@ resource "helm_release" "metrics_server" {
   version    = "3.12.1"
   namespace  = "kube-system"
 
-  set {
-    name  = "tolerations[0].key"
-    value = "CriticalAddonsOnly"
-  }
-
-  set {
-    name  = "tolerations[0].operator"
-    value = "Exists"
-  }
-
-  set {
-    name  = "tolerations[0].effect"
-    value = "NoSchedule"
-  }
+  set = [
+    {
+      name  = "tolerations[0].key"
+      value = "CriticalAddonsOnly"
+    },
+    {
+      name  = "tolerations[0].operator"
+      value = "Exists"
+    },
+    {
+      name  = "tolerations[0].effect"
+      value = "NoSchedule"
+    },
+  ]
 }
 
 # ── NVIDIA Device Plugin ──────────────────────────────────────────────────────
@@ -178,23 +165,22 @@ resource "helm_release" "nvidia_device_plugin" {
   version    = "0.16.2"
   namespace  = "kube-system"
 
-  set {
-    name  = "tolerations[0].key"
-    value = "dedicated"
-  }
-
-  set {
-    name  = "tolerations[0].operator"
-    value = "Equal"
-  }
-
-  set {
-    name  = "tolerations[0].value"
-    value = "ai-gpu"
-  }
-
-  set {
-    name  = "tolerations[0].effect"
-    value = "NoSchedule"
-  }
+  set = [
+    {
+      name  = "tolerations[0].key"
+      value = "dedicated"
+    },
+    {
+      name  = "tolerations[0].operator"
+      value = "Equal"
+    },
+    {
+      name  = "tolerations[0].value"
+      value = "ai-gpu"
+    },
+    {
+      name  = "tolerations[0].effect"
+      value = "NoSchedule"
+    },
+  ]
 }
