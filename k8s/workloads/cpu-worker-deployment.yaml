@@ -4,8 +4,7 @@ metadata:
   name: utterai-cpu-worker
   namespace: utterai-ai-cpu
 spec:
-  # KEDA가 관리하므로 초기 replica=0
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app: utterai-cpu-worker
