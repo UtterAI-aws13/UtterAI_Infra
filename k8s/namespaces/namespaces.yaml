@@ -29,6 +29,13 @@ metadata:
 apiVersion: v1
 kind: Namespace
 metadata:
+  name: utterai-ai-api
+  labels:
+    app.kubernetes.io/part-of: utterai
+---
+apiVersion: v1
+kind: Namespace
+metadata:
   name: utterai-observability
   labels:
     app.kubernetes.io/part-of: utterai
