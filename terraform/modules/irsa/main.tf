@@ -112,7 +112,7 @@ resource "aws_iam_role_policy" "ai_api" {
       {
         Effect   = "Allow"
         Action   = ["sqs:SendMessage", "sqs:GetQueueAttributes", "sqs:GetQueueUrl"]
-        Resource = [var.analysis_queue_arn]
+        Resource = [var.cpu_analysis_queue_arn]
       },
     ]
   })
@@ -158,7 +158,7 @@ resource "aws_iam_role_policy" "api" {
       {
         Effect   = "Allow"
         Action   = ["sqs:SendMessage"]
-        Resource = [var.analysis_queue_arn]
+        Resource = [var.cpu_analysis_queue_arn]
       },
       {
         Effect   = "Allow"
@@ -205,7 +205,12 @@ resource "aws_iam_role_policy" "ai_cpu" {
       {
         Effect   = "Allow"
         Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility", "sqs:GetQueueAttributes"]
-        Resource = [var.analysis_queue_arn]
+        Resource = [var.cpu_analysis_queue_arn]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage"]
+        Resource = [var.audio_ml_queue_arn]
       },
       {
         Effect   = "Allow"
@@ -221,10 +226,10 @@ resource "aws_iam_role_policy" "ai_cpu" {
   })
 }
 
-# ── AI GPU Worker IRSA ────────────────────────────────────────────────────────
+# ── AI ML GPU Worker IRSA ─────────────────────────────────────────────────────
 
-resource "aws_iam_role" "ai_gpu" {
-  name = "${local.prefix}-ai-gpu-irsa-role"
+resource "aws_iam_role" "ai_ml_gpu" {
+  name = "${local.prefix}-ai-ml-gpu-irsa-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -235,16 +240,16 @@ resource "aws_iam_role" "ai_gpu" {
       Condition = {
         StringEquals = {
           "${local.oidc_aud}" = "sts.amazonaws.com"
-          "${local.oidc_sub}" = "system:serviceaccount:utterai-ai-gpu:utterai-gpu-worker-sa"
+          "${local.oidc_sub}" = "system:serviceaccount:utterai-ai-gpu:utterai-ml-gpu-worker-sa"
         }
       }
     }]
   })
 }
 
-resource "aws_iam_role_policy" "ai_gpu" {
-  name = "${local.prefix}-ai-gpu-policy"
-  role = aws_iam_role.ai_gpu.id
+resource "aws_iam_role_policy" "ai_ml_gpu" {
+  name = "${local.prefix}-ai-ml-gpu-policy"
+  role = aws_iam_role.ai_ml_gpu.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -252,7 +257,12 @@ resource "aws_iam_role_policy" "ai_gpu" {
       {
         Effect   = "Allow"
         Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility", "sqs:GetQueueAttributes"]
-        Resource = [var.analysis_queue_arn]
+        Resource = [var.audio_ml_queue_arn]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage"]
+        Resource = [var.llm_queue_arn]
       },
       {
         Effect   = "Allow"
@@ -263,6 +273,58 @@ resource "aws_iam_role_policy" "ai_gpu" {
         Effect   = "Allow"
         Action   = ["s3:PutObject"]
         Resource = ["${var.processed_audio_bucket_arn}/*", "${var.artifacts_bucket_arn}/*"]
+      },
+    ]
+  })
+}
+
+# ── AI LLM GPU Worker IRSA ────────────────────────────────────────────────────
+
+resource "aws_iam_role" "ai_llm_gpu" {
+  name = "${local.prefix}-ai-llm-gpu-irsa-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = var.oidc_provider_arn }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${local.oidc_aud}" = "sts.amazonaws.com"
+          "${local.oidc_sub}" = "system:serviceaccount:utterai-ai-gpu:utterai-llm-gpu-worker-sa"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "ai_llm_gpu" {
+  name = "${local.prefix}-ai-llm-gpu-policy"
+  role = aws_iam_role.ai_llm_gpu.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility", "sqs:GetQueueAttributes"]
+        Resource = [var.llm_queue_arn]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = ["${var.processed_audio_bucket_arn}/*", "${var.artifacts_bucket_arn}/*"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = ["${var.artifacts_bucket_arn}/*", "${var.reports_bucket_arn}/*"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = ["arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:${local.prefix}/*"]
       },
     ]
   })
@@ -299,7 +361,7 @@ resource "aws_iam_role_policy" "batch" {
       {
         Effect   = "Allow"
         Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility", "sqs:GetQueueAttributes"]
-        Resource = [var.analysis_queue_arn, var.dlq_arn]
+        Resource = [var.cpu_analysis_queue_arn, var.cpu_analysis_dlq_arn]
       },
       {
         Effect   = "Allow"

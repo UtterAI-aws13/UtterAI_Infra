@@ -98,16 +98,16 @@ output "frontend_bucket_name" {
 
 # ── SQS ──────────────────────────────────────────────────────────────────────
 
-output "analysis_queue_url" {
-  value = module.sqs.analysis_queue_url
+output "cpu_analysis_queue_url" {
+  value = module.sqs.cpu_analysis_queue_url
 }
 
-output "analysis_queue_arn" {
-  value = module.sqs.analysis_queue_arn
+output "audio_ml_queue_url" {
+  value = module.sqs.audio_ml_queue_url
 }
 
-output "dlq_url" {
-  value = module.sqs.dlq_url
+output "llm_queue_url" {
+  value = module.sqs.llm_queue_url
 }
 
 # ── Cognito ──────────────────────────────────────────────────────────────────

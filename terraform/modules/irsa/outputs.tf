@@ -18,8 +18,12 @@ output "ai_cpu_role_arn" {
   value = aws_iam_role.ai_cpu.arn
 }
 
-output "ai_gpu_role_arn" {
-  value = aws_iam_role.ai_gpu.arn
+output "ai_ml_gpu_role_arn" {
+  value = aws_iam_role.ai_ml_gpu.arn
+}
+
+output "ai_llm_gpu_role_arn" {
+  value = aws_iam_role.ai_llm_gpu.arn
 }
 
 output "batch_role_arn" {

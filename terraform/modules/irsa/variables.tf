@@ -50,11 +50,19 @@ variable "frontend_bucket_arn" {
   type = string
 }
 
-variable "analysis_queue_arn" {
+variable "cpu_analysis_queue_arn" {
   type = string
 }
 
-variable "dlq_arn" {
+variable "audio_ml_queue_arn" {
+  type = string
+}
+
+variable "llm_queue_arn" {
+  type = string
+}
+
+variable "cpu_analysis_dlq_arn" {
   type = string
 }
 

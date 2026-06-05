@@ -1,15 +1,15 @@
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: utterai-gpu-worker-hpa
+  name: utterai-ml-gpu-worker-hpa
   namespace: utterai-ai-gpu
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: utterai-gpu-worker
+    name: utterai-ml-gpu-worker
   minReplicas: 1
-  maxReplicas: 1
+  maxReplicas: 2
   metrics:
     - type: Resource
       resource:
