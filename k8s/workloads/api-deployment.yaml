@@ -115,7 +115,7 @@ data:
   LOG_LEVEL: "DEBUG"
   FRONTEND_ORIGIN: "https://dev.utterai.com"
   CORS_ALLOW_ORIGINS: "https://dev.utterai.com"
-  DB_HOST: "${AURORA_WRITER_ENDPOINT}"
+  DB_HOST: "${RDS_ENDPOINT}"
   DB_PORT: "5432"
   DB_NAME: "utterai"
   DB_USER: "utterai_app"

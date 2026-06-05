@@ -141,18 +141,15 @@ module "eks_addons" {
   depends_on = [module.eks]
 }
 
-# ── Aurora ───────────────────────────────────────────────────────────────────
+# ── RDS ──────────────────────────────────────────────────────────────────────
 
-module "aurora" {
-  source = "../../modules/aurora"
+module "rds" {
+  source = "../../modules/rds"
 
   project_name = var.project_name
   environment  = var.environment
 
-  instance_class   = var.aurora_instance_class
-  database_name    = var.aurora_database_name
-  master_username  = var.aurora_master_username
-  backup_retention = var.aurora_backup_retention
+  instance_class = var.rds_instance_class
 
   vpc_id                    = module.vpc.vpc_id
   private_data_subnet_ids   = module.vpc.private_data_subnet_ids
@@ -192,17 +189,6 @@ module "sqs" {
 
   project_name = var.project_name
   environment  = var.environment
-}
-
-# ── Cognito ──────────────────────────────────────────────────────────────────
-
-module "cognito" {
-  source = "../../modules/cognito"
-
-  project_name = var.project_name
-  environment  = var.environment
-  callback_url = "https://dev.utterai.com/auth/callback"
-  logout_url   = "https://dev.utterai.com/logout"
 }
 
 # ── ECR ──────────────────────────────────────────────────────────────────────
