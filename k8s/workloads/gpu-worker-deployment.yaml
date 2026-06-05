@@ -28,8 +28,16 @@ spec:
       terminationGracePeriodSeconds: 300
       containers:
         - name: gpu-worker
-          image: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-gpu:latest
+          image: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai:latest
+          command: ["python", "-m", "app.workers.analysis_worker"]
           env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: gpu-worker-secret
+                  key: HF_TOKEN
+            - name: HF_HOME
+              value: "/tmp/huggingface"
             - name: AWS_REGION
               value: "ap-northeast-2"
             - name: SQS_QUEUE_URL

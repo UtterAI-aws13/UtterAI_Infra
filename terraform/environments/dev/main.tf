@@ -21,11 +21,11 @@ terraform {
   }
 
   backend "s3" {
-    bucket         = "utterai-dev-terraform-state"
-    key            = "dev/terraform.tfstate"
-    region         = "ap-northeast-2"
-    dynamodb_table = "utterai-dev-terraform-lock"
-    encrypt        = true
+    bucket       = "utterai-dev-terraform-state"
+    key          = "dev/terraform.tfstate"
+    region       = "ap-northeast-2"
+    use_lockfile = true
+    encrypt      = true
   }
 }
 
@@ -202,6 +202,14 @@ module "cognito" {
   environment  = var.environment
   callback_url = "https://dev.utterai.com/auth/callback"
   logout_url   = "https://dev.utterai.com/logout"
+}
+
+# ── ECR ──────────────────────────────────────────────────────────────────────
+
+module "ecr" {
+  source = "../../modules/ecr"
+
+  repository_names = ["utterai-backend", "utterai-ai"]
 }
 
 # ── Data sources ─────────────────────────────────────────────────────────────

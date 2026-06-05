@@ -25,7 +25,8 @@ spec:
       terminationGracePeriodSeconds: 60
       containers:
         - name: worker
-          image: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-cpu:latest
+          image: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai:latest
+          command: ["python", "-m", "app.workers.analysis_worker"]
           env:
             - name: AWS_REGION
               value: "ap-northeast-2"
