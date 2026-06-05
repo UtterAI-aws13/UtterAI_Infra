@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: utterai-batch-worker
+  namespace: utterai-batch
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: utterai-batch-worker
+  template:
+    metadata:
+      labels:
+        app: utterai-batch-worker
+    spec:
+      serviceAccountName: utterai-batch-worker-sa
+      nodeSelector:
+        workload: batch
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: batch
+          effect: NoSchedule
+      # Spot 중단 처리: 현재 작업 완료 후 종료
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: worker
+          image: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai:latest
+          command: ["python", "-m", "app.workers.rag_ingest_worker"]
+          env:
+            - name: AWS_REGION
+              value: "ap-northeast-2"
+            - name: SQS_QUEUE_URL
+              value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-analysis-queue"
+            - name: SQS_DLQ_URL
+              value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-analysis-dlq"
+            - name: S3_REPORTS_BUCKET
+              value: "utterai-dev-reports"
+            - name: DB_SECRET_NAME
+              value: "utterai-dev/db-password"
+            - name: LOG_LEVEL
+              value: "DEBUG"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]

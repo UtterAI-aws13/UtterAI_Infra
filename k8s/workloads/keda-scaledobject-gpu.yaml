@@ -1,0 +1,35 @@
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: keda-aws-auth
+  namespace: utterai-ai-gpu
+spec:
+  podIdentity:
+    provider: aws
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: utterai-gpu-worker-scaler
+  namespace: utterai-ai-gpu
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: utterai-gpu-worker
+  minReplicaCount: 0
+  # dev: GPU 비용 절감을 위해 최대 1대
+  maxReplicaCount: 1
+  pollingInterval: 30
+  # GPU 작업은 처리 시간이 길므로 cooldown 길게
+  cooldownPeriod: 600
+  triggers:
+    - type: aws-sqs-queue
+      authenticationRef:
+        name: keda-aws-auth
+      metadata:
+        # GPU 작업은 메시지 1개당 1 Pod (처리 시간이 길고 비용이 높음)
+        queueURL: https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-analysis-queue
+        queueLength: "1"
+        awsRegion: ap-northeast-2
+        identityOwner: operator

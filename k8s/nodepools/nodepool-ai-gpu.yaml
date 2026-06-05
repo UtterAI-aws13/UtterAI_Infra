@@ -1,0 +1,47 @@
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: ai-gpu
+spec:
+  template:
+    metadata:
+      labels:
+        workload: ai-gpu
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: gpu
+      taints:
+        - key: dedicated
+          value: ai-gpu
+          effect: NoSchedule
+        # NVIDIA Device Plugin이 자동으로 추가하는 taint
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      requirements:
+        - key: karpenter.sh/capacity-type
+          operator: In
+          # dev: Spot 허용 (비용 절감). prod에서는 on-demand만
+          values: ["spot", "on-demand"]
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+        - key: karpenter.k8s.aws/instance-family
+          operator: In
+          values: ["g4dn"]
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values: ["g4dn.xlarge"]
+        - key: topology.kubernetes.io/zone
+          operator: In
+          # GPU 가용성 확인 후 AZ 범위 조정 가능
+          values: ["ap-northeast-2a", "ap-northeast-2c"]
+  limits:
+    cpu: "16"
+    memory: 64Gi
+  disruption:
+    # GPU 작업은 처리 시간이 길므로 consolidation 지연
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 10m

@@ -1,0 +1,36 @@
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: keda-aws-auth
+  namespace: utterai-ai-cpu
+spec:
+  podIdentity:
+    provider: aws
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: utterai-cpu-worker-scaler
+  namespace: utterai-ai-cpu
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: utterai-cpu-worker
+  # dev: 큐가 비면 0으로 줄여 비용 절감
+  minReplicaCount: 0
+  maxReplicaCount: 2
+  # SQS 폴링 간격
+  pollingInterval: 30
+  # Pod 0으로 줄기까지 대기 (초)
+  cooldownPeriod: 300
+  triggers:
+    - type: aws-sqs-queue
+      authenticationRef:
+        name: keda-aws-auth
+      metadata:
+        # 큐 메시지 5개당 Pod 1개 기준
+        queueURL: https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-analysis-queue
+        queueLength: "5"
+        awsRegion: ap-northeast-2
+        identityOwner: operator
