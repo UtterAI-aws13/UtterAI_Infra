@@ -36,72 +36,10 @@ resource "aws_iam_policy" "lbc" {
   policy = file("${path.module}/policies/lbc-policy.json")
 }
 
-# ── Karpenter Node Role (EC2 인스턴스용) ──────────────────────────────────────
+# ── Cluster Autoscaler IRSA ───────────────────────────────────────────────────
 
-resource "aws_iam_role" "karpenter_node" {
-  name = "${local.prefix}-karpenter-node-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "ec2.amazonaws.com" }
-      Action    = "sts:AssumeRole"
-    }]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "karpenter_node_worker" {
-  role       = aws_iam_role.karpenter_node.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-}
-
-resource "aws_iam_role_policy_attachment" "karpenter_node_cni" {
-  role       = aws_iam_role.karpenter_node.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-}
-
-resource "aws_iam_role_policy_attachment" "karpenter_node_ecr" {
-  role       = aws_iam_role.karpenter_node.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-}
-
-resource "aws_iam_role_policy_attachment" "karpenter_node_ssm" {
-  role       = aws_iam_role.karpenter_node.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-
-resource "aws_iam_instance_profile" "karpenter_node" {
-  name = "${local.prefix}-karpenter-node-profile"
-  role = aws_iam_role.karpenter_node.name
-}
-
-# ── Karpenter Controller IRSA ─────────────────────────────────────────────────
-
-resource "aws_sqs_queue" "karpenter_interruption" {
-  name                      = "${local.prefix}-karpenter-interruption"
-  message_retention_seconds = 300
-  sqs_managed_sse_enabled   = true
-}
-
-resource "aws_sqs_queue_policy" "karpenter_interruption" {
-  queue_url = aws_sqs_queue.karpenter_interruption.url
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect    = "Allow"
-        Principal = { Service = ["events.amazonaws.com", "sqs.amazonaws.com"] }
-        Action    = "sqs:SendMessage"
-        Resource  = aws_sqs_queue.karpenter_interruption.arn
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role" "karpenter_controller" {
-  name = "${local.prefix}-karpenter-controller-role"
+resource "aws_iam_role" "cluster_autoscaler" {
+  name = "${local.prefix}-cluster-autoscaler-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -112,144 +50,37 @@ resource "aws_iam_role" "karpenter_controller" {
       Condition = {
         StringEquals = {
           "${local.oidc_aud}" = "sts.amazonaws.com"
-          "${local.oidc_sub}" = "system:serviceaccount:karpenter:karpenter"
+          "${local.oidc_sub}" = "system:serviceaccount:kube-system:cluster-autoscaler"
         }
       }
     }]
   })
 }
 
-resource "aws_iam_role_policy" "karpenter_controller" {
-  name = "${local.prefix}-karpenter-controller-policy"
-  role = aws_iam_role.karpenter_controller.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "AllowScopedEC2InstanceActions"
-        Effect = "Allow"
-        Action = [
-          "ec2:RunInstances",
-          "ec2:CreateFleet",
-          "ec2:CreateLaunchTemplate",
-        ]
-        Resource = ["*"]
-        Condition = {
-          StringEquals = {
-            "aws:RequestedRegion"                    = var.aws_region
-            "ec2:ResourceTag/karpenter.sh/discovery" = var.cluster_name
-          }
-        }
-      },
-      {
-        Sid    = "AllowScopedEC2InstanceTermination"
-        Effect = "Allow"
-        Action = [
-          "ec2:TerminateInstances",
-          "ec2:DeleteLaunchTemplate",
-        ]
-        Resource = ["*"]
-        Condition = {
-          StringEquals = {
-            "aws:RequestedRegion"                     = var.aws_region
-            "ec2:ResourceTag/karpenter.sh/managed-by" = var.cluster_name
-          }
-        }
-      },
-      {
-        Sid    = "AllowEC2ReadActions"
-        Effect = "Allow"
-        Action = [
-          "ec2:DescribeAvailabilityZones",
-          "ec2:DescribeImages",
-          "ec2:DescribeInstances",
-          "ec2:DescribeInstanceTypeOfferings",
-          "ec2:DescribeInstanceTypes",
-          "ec2:DescribeLaunchTemplates",
-          "ec2:DescribeSecurityGroups",
-          "ec2:DescribeSpotPriceHistory",
-          "ec2:DescribeSubnets",
-        ]
-        Resource = ["*"]
-      },
-      {
-        Sid      = "AllowSSMReadActions"
-        Effect   = "Allow"
-        Action   = ["ssm:GetParameter"]
-        Resource = ["arn:aws:ssm:*:*:parameter/aws/service/*"]
-      },
-      {
-        Sid      = "AllowPassNodeIAMRole"
-        Effect   = "Allow"
-        Action   = "iam:PassRole"
-        Resource = [aws_iam_role.karpenter_node.arn]
-      },
-      {
-        Sid    = "AllowInterruptionQueueActions"
-        Effect = "Allow"
-        Action = [
-          "sqs:DeleteMessage",
-          "sqs:GetQueueAttributes",
-          "sqs:GetQueueUrl",
-          "sqs:ReceiveMessage",
-        ]
-        Resource = [aws_sqs_queue.karpenter_interruption.arn]
-      },
-      {
-        Sid    = "AllowEKSReadActions"
-        Effect = "Allow"
-        Action = [
-          "eks:DescribeCluster",
-          "eks:DescribeNodegroup",
-        ]
-        Resource = ["*"]
-      },
-    ]
-  })
-}
-
-# ── KEDA IRSA ─────────────────────────────────────────────────────────────────
-
-resource "aws_iam_role" "keda" {
-  name = "${local.prefix}-keda-irsa-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Federated = var.oidc_provider_arn }
-      Action    = "sts:AssumeRoleWithWebIdentity"
-      Condition = {
-        StringEquals = {
-          "${local.oidc_aud}" = "sts.amazonaws.com"
-          "${local.oidc_sub}" = "system:serviceaccount:keda:keda-operator"
-        }
-      }
-    }]
-  })
-}
-
-resource "aws_iam_role_policy" "keda" {
-  name = "${local.prefix}-keda-policy"
-  role = aws_iam_role.keda.id
+resource "aws_iam_role_policy" "cluster_autoscaler" {
+  name = "${local.prefix}-cluster-autoscaler-policy"
+  role = aws_iam_role.cluster_autoscaler.id
 
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
       Effect = "Allow"
       Action = [
-        "sqs:GetQueueAttributes",
-        "sqs:GetQueueUrl",
-        "sqs:ListQueues",
+        "autoscaling:DescribeAutoScalingGroups",
+        "autoscaling:DescribeAutoScalingInstances",
+        "autoscaling:DescribeLaunchConfigurations",
+        "autoscaling:DescribeScalingActivities",
+        "autoscaling:SetDesiredCapacity",
+        "autoscaling:TerminateInstanceInAutoScalingGroup",
+        "ec2:DescribeImages",
+        "ec2:GetInstanceTypesFromInstanceRequirements",
+        "eks:DescribeNodegroup",
       ]
-      Resource = [
-        var.analysis_queue_arn,
-        var.dlq_arn,
-      ]
+      Resource = ["*"]
     }]
   })
 }
+
 
 # ── API IRSA ──────────────────────────────────────────────────────────────────
 

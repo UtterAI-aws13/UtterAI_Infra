@@ -95,8 +95,8 @@ module "eks" {
   api_node_min_size      = var.api_node_min_size
   api_node_max_size      = var.api_node_max_size
 
-  karpenter_node_role_name = module.irsa.karpenter_node_role_name
 }
+
 
 # ── IRSA ─────────────────────────────────────────────────────────────────────
 
@@ -134,13 +134,8 @@ module "eks_addons" {
   cluster_endpoint = module.eks.cluster_endpoint
   aws_region       = var.aws_region
 
-  lbc_irsa_role_arn       = module.irsa.lbc_role_arn
-  karpenter_irsa_role_arn = module.irsa.karpenter_role_arn
-  keda_irsa_role_arn      = module.irsa.keda_role_arn
-
-  karpenter_node_role_name = module.irsa.karpenter_node_role_name
-  karpenter_sqs_queue_url  = module.irsa.karpenter_sqs_queue_url
-  karpenter_sqs_queue_arn  = module.irsa.karpenter_sqs_queue_arn
+  lbc_irsa_role_arn                = module.irsa.lbc_role_arn
+  cluster_autoscaler_irsa_role_arn = module.irsa.cluster_autoscaler_role_arn
 
   depends_on = [module.eks]
 }

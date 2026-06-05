@@ -155,8 +155,7 @@ resource "aws_security_group" "node" {
   }
 
   tags = {
-    Name                     = "${local.prefix}-eks-node-sg"
-    "karpenter.sh/discovery" = var.cluster_name
+    Name = "${local.prefix}-eks-node-sg"
   }
 }
 
@@ -189,6 +188,11 @@ resource "aws_eks_node_group" "system" {
     key    = "CriticalAddonsOnly"
     value  = "true"
     effect = "NO_SCHEDULE"
+  }
+
+  tags = {
+    "k8s.io/cluster-autoscaler/enabled"              = "true"
+    "k8s.io/cluster-autoscaler/${var.cluster_name}"  = "owned"
   }
 
   depends_on = [
@@ -229,6 +233,95 @@ resource "aws_eks_node_group" "api" {
     key    = "dedicated"
     value  = "api"
     effect = "NO_SCHEDULE"
+  }
+
+  tags = {
+    "k8s.io/cluster-autoscaler/enabled"             = "true"
+    "k8s.io/cluster-autoscaler/${var.cluster_name}" = "owned"
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.node_worker,
+    aws_iam_role_policy_attachment.node_cni,
+    aws_iam_role_policy_attachment.node_ecr,
+    aws_eks_addon.vpc_cni,
+  ]
+}
+
+# ── Worker Managed Node Group (batch + cpu workers) ───────────────────────────
+
+resource "aws_eks_node_group" "worker" {
+  cluster_name    = aws_eks_cluster.this.name
+  node_group_name = "${local.prefix}-worker"
+  node_role_arn   = aws_iam_role.node.arn
+  subnet_ids      = var.private_app_subnet_ids
+
+  instance_types = [var.worker_node_instance_type]
+  capacity_type  = "ON_DEMAND"
+
+  scaling_config {
+    desired_size = var.worker_node_desired_size
+    min_size     = var.worker_node_min_size
+    max_size     = var.worker_node_max_size
+  }
+
+  update_config {
+    max_unavailable = 1
+  }
+
+  labels = {
+    role     = "worker"
+    workload = "worker"
+  }
+
+  tags = {
+    "k8s.io/cluster-autoscaler/enabled"             = "true"
+    "k8s.io/cluster-autoscaler/${var.cluster_name}" = "owned"
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.node_worker,
+    aws_iam_role_policy_attachment.node_cni,
+    aws_iam_role_policy_attachment.node_ecr,
+    aws_eks_addon.vpc_cni,
+  ]
+}
+
+# ── GPU Managed Node Group ────────────────────────────────────────────────────
+
+resource "aws_eks_node_group" "gpu" {
+  cluster_name    = aws_eks_cluster.this.name
+  node_group_name = "${local.prefix}-gpu"
+  node_role_arn   = aws_iam_role.node.arn
+  subnet_ids      = var.private_app_subnet_ids
+
+  instance_types = [var.gpu_node_instance_type]
+  capacity_type  = "ON_DEMAND"
+
+  scaling_config {
+    desired_size = var.gpu_node_desired_size
+    min_size     = var.gpu_node_min_size
+    max_size     = var.gpu_node_max_size
+  }
+
+  update_config {
+    max_unavailable = 1
+  }
+
+  labels = {
+    role     = "gpu"
+    workload = "ai-gpu"
+  }
+
+  taint {
+    key    = "dedicated"
+    value  = "ai-gpu"
+    effect = "NO_SCHEDULE"
+  }
+
+  tags = {
+    "k8s.io/cluster-autoscaler/enabled"             = "true"
+    "k8s.io/cluster-autoscaler/${var.cluster_name}" = "owned"
   }
 
   depends_on = [
