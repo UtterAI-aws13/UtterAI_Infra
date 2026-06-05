@@ -54,6 +54,3 @@ variable "api_node_max_size" {
   type = number
 }
 
-variable "karpenter_node_role_name" {
-  type = string
-}
