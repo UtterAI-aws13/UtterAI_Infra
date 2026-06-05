@@ -209,6 +209,14 @@ module "cognito" {
   logout_url   = "https://dev.utterai.com/logout"
 }
 
+# ── ECR ──────────────────────────────────────────────────────────────────────
+
+module "ecr" {
+  source = "../../modules/ecr"
+
+  repository_names = ["utterai-backend", "utterai-ai"]
+}
+
 # ── Data sources ─────────────────────────────────────────────────────────────
 
 data "aws_caller_identity" "current" {}
