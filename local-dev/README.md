@@ -19,7 +19,7 @@ Grafana
 ## 실행 방법
 
 ```bash
-cd /home/won/utter-ai/UtterAI_Infra/local-dev
+cd UtterAI_Infra/local-dev
 docker compose up -d
 docker compose ps
 ```
@@ -146,7 +146,7 @@ curl "http://localhost:9090/api/v1/query?query=nginx_up"
 PostgreSQL connection 그래프가 실제로 변하는지 확인하려면 다음 명령을 실행합니다.
 
 ```bash
-cd /home/won/utter-ai/UtterAI_Infra/local-dev
+cd UtterAI_Infra/local-dev
 
 docker compose exec -T postgres sh -c 'for i in $(seq 1 10); do psql -U utterai -d utterai -c "select pg_sleep(120);" & done; wait'
 ```
@@ -154,7 +154,7 @@ docker compose exec -T postgres sh -c 'for i in $(seq 1 10); do psql -U utterai 
 명령이 실행되는 동안 다른 터미널에서 현재 connection 수를 확인합니다.
 
 ```bash
-cd /home/won/utter-ai/UtterAI_Infra/local-dev
+cd UtterAI_Infra/local-dev
 
 docker compose exec -T postgres psql -U utterai -d utterai -c "select datname, state, count(*) from pg_stat_activity where datname in ('utterai','postgres') group by datname, state order by datname, state;"
 ```
