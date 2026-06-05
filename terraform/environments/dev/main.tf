@@ -95,7 +95,6 @@ module "eks" {
   api_node_min_size      = var.api_node_min_size
   api_node_max_size      = var.api_node_max_size
 
-  karpenter_node_role_name = module.irsa.karpenter_node_role_name
 }
 
 # ── IRSA ─────────────────────────────────────────────────────────────────────
