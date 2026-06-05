@@ -361,7 +361,7 @@ resource "aws_iam_role_policy" "batch" {
       {
         Effect   = "Allow"
         Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility", "sqs:GetQueueAttributes"]
-        Resource = [var.cpu_analysis_queue_arn, var.cpu_analysis_dlq_arn]
+        Resource = [var.analysis_queue_arn, var.analysis_dlq_arn]
       },
       {
         Effect   = "Allow"

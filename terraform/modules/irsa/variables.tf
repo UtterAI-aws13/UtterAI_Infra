@@ -66,6 +66,14 @@ variable "cpu_analysis_dlq_arn" {
   type = string
 }
 
+variable "analysis_queue_arn" {
+  type = string
+}
+
+variable "analysis_dlq_arn" {
+  type = string
+}
+
 variable "private_app_subnet_ids" {
   type = list(string)
 }

@@ -25,3 +25,15 @@ output "llm_queue_url" {
 output "llm_queue_arn" {
   value = aws_sqs_queue.llm.arn
 }
+
+output "analysis_queue_url" {
+  value = aws_sqs_queue.analysis.url
+}
+
+output "analysis_queue_arn" {
+  value = aws_sqs_queue.analysis.arn
+}
+
+output "analysis_dlq_arn" {
+  value = aws_sqs_queue.analysis_dlq.arn
+}

@@ -121,6 +121,8 @@ module "irsa" {
   audio_ml_queue_arn     = module.sqs.audio_ml_queue_arn
   llm_queue_arn          = module.sqs.llm_queue_arn
   cpu_analysis_dlq_arn   = module.sqs.cpu_analysis_dlq_arn
+  analysis_queue_arn     = module.sqs.analysis_queue_arn
+  analysis_dlq_arn       = module.sqs.analysis_dlq_arn
 
   private_app_subnet_ids = module.vpc.private_app_subnet_ids
   node_security_group_id = module.eks.node_security_group_id

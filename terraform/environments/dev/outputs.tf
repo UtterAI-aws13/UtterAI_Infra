@@ -105,3 +105,7 @@ output "llm_queue_url" {
   value = module.sqs.llm_queue_url
 }
 
+output "analysis_queue_url" {
+  value = module.sqs.analysis_queue_url
+}
+
