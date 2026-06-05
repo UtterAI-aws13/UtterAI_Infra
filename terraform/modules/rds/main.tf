@@ -44,8 +44,8 @@ resource "aws_db_instance" "this" {
   engine_version = "16.4"
   instance_class = var.instance_class
 
-  db_name  = var.database_name
-  username = var.master_username
+  db_name                     = var.database_name
+  username                    = var.master_username
   manage_master_user_password = true
 
   db_subnet_group_name   = aws_db_subnet_group.this.name
@@ -57,12 +57,12 @@ resource "aws_db_instance" "this" {
   storage_type          = "gp3"
   storage_encrypted     = true
 
-  backup_retention_period  = var.backup_retention
-  backup_window            = "03:00-04:00"
-  maintenance_window       = "sun:04:00-sun:05:00"
-  skip_final_snapshot      = true
-  deletion_protection      = false
-  apply_immediately        = true
+  backup_retention_period    = var.backup_retention
+  backup_window              = "03:00-04:00"
+  maintenance_window         = "sun:04:00-sun:05:00"
+  skip_final_snapshot        = true
+  deletion_protection        = false
+  apply_immediately          = true
   auto_minor_version_upgrade = true
 
   tags = {
