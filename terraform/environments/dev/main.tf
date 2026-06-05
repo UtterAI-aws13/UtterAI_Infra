@@ -117,8 +117,12 @@ module "irsa" {
   artifacts_bucket_arn       = module.s3.artifacts_bucket_arn
   frontend_bucket_arn        = module.s3.frontend_bucket_arn
 
-  analysis_queue_arn = module.sqs.analysis_queue_arn
-  dlq_arn            = module.sqs.dlq_arn
+  cpu_analysis_queue_arn = module.sqs.cpu_analysis_queue_arn
+  audio_ml_queue_arn     = module.sqs.audio_ml_queue_arn
+  llm_queue_arn          = module.sqs.llm_queue_arn
+  cpu_analysis_dlq_arn   = module.sqs.cpu_analysis_dlq_arn
+  analysis_queue_arn     = module.sqs.analysis_queue_arn
+  analysis_dlq_arn       = module.sqs.analysis_dlq_arn
 
   private_app_subnet_ids = module.vpc.private_app_subnet_ids
   node_security_group_id = module.eks.node_security_group_id
@@ -133,29 +137,21 @@ module "eks_addons" {
   cluster_endpoint = module.eks.cluster_endpoint
   aws_region       = var.aws_region
 
-  lbc_irsa_role_arn       = module.irsa.lbc_role_arn
-  karpenter_irsa_role_arn = module.irsa.karpenter_role_arn
-  keda_irsa_role_arn      = module.irsa.keda_role_arn
-
-  karpenter_node_role_name = module.irsa.karpenter_node_role_name
-  karpenter_sqs_queue_url  = module.irsa.karpenter_sqs_queue_url
-  karpenter_sqs_queue_arn  = module.irsa.karpenter_sqs_queue_arn
+  lbc_irsa_role_arn                = module.irsa.lbc_role_arn
+  cluster_autoscaler_irsa_role_arn = module.irsa.cluster_autoscaler_role_arn
 
   depends_on = [module.eks]
 }
 
-# ── Aurora ───────────────────────────────────────────────────────────────────
+# ── RDS ──────────────────────────────────────────────────────────────────────
 
-module "aurora" {
-  source = "../../modules/aurora"
+module "rds" {
+  source = "../../modules/rds"
 
   project_name = var.project_name
   environment  = var.environment
 
-  instance_class   = var.aurora_instance_class
-  database_name    = var.aurora_database_name
-  master_username  = var.aurora_master_username
-  backup_retention = var.aurora_backup_retention
+  instance_class = var.rds_instance_class
 
   vpc_id                    = module.vpc.vpc_id
   private_data_subnet_ids   = module.vpc.private_data_subnet_ids
@@ -197,23 +193,12 @@ module "sqs" {
   environment  = var.environment
 }
 
-# ── Cognito ──────────────────────────────────────────────────────────────────
-
-module "cognito" {
-  source = "../../modules/cognito"
-
-  project_name = var.project_name
-  environment  = var.environment
-  callback_url = "https://dev.utterai.com/auth/callback"
-  logout_url   = "https://dev.utterai.com/logout"
-}
-
 # ── ECR ──────────────────────────────────────────────────────────────────────
 
 module "ecr" {
   source = "../../modules/ecr"
 
-  repository_names = ["utterai-backend", "utterai-ai"]
+  repository_names = ["utterai-backend", "utterai-ai-cpu", "utterai-ai-gpu"]
 }
 
 # ── Data sources ─────────────────────────────────────────────────────────────

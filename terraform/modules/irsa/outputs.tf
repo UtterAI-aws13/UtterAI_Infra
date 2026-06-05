@@ -2,24 +2,8 @@ output "lbc_role_arn" {
   value = aws_iam_role.lbc.arn
 }
 
-output "karpenter_role_arn" {
-  value = aws_iam_role.karpenter_controller.arn
-}
-
-output "karpenter_node_role_name" {
-  value = aws_iam_role.karpenter_node.name
-}
-
-output "karpenter_sqs_queue_url" {
-  value = aws_sqs_queue.karpenter_interruption.url
-}
-
-output "karpenter_sqs_queue_arn" {
-  value = aws_sqs_queue.karpenter_interruption.arn
-}
-
-output "keda_role_arn" {
-  value = aws_iam_role.keda.arn
+output "cluster_autoscaler_role_arn" {
+  value = aws_iam_role.cluster_autoscaler.arn
 }
 
 output "ai_api_role_arn" {
@@ -34,8 +18,12 @@ output "ai_cpu_role_arn" {
   value = aws_iam_role.ai_cpu.arn
 }
 
-output "ai_gpu_role_arn" {
-  value = aws_iam_role.ai_gpu.arn
+output "ai_ml_gpu_role_arn" {
+  value = aws_iam_role.ai_ml_gpu.arn
+}
+
+output "ai_llm_gpu_role_arn" {
+  value = aws_iam_role.ai_llm_gpu.arn
 }
 
 output "batch_role_arn" {

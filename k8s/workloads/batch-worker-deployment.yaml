@@ -15,17 +15,12 @@ spec:
     spec:
       serviceAccountName: utterai-batch-worker-sa
       nodeSelector:
-        workload: batch
-      tolerations:
-        - key: dedicated
-          operator: Equal
-          value: batch
-          effect: NoSchedule
+        workload: worker
       # Spot 중단 처리: 현재 작업 완료 후 종료
       terminationGracePeriodSeconds: 60
       containers:
         - name: worker
-          image: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai:latest
+          image: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-cpu:latest
           command: ["python", "-m", "app.workers.rag_ingest_worker"]
           env:
             - name: AWS_REGION

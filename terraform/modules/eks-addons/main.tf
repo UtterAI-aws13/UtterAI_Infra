@@ -35,55 +35,48 @@ resource "helm_release" "aws_load_balancer_controller" {
   }
 }
 
-# ── Karpenter ─────────────────────────────────────────────────────────────────
+# ── Cluster Autoscaler ────────────────────────────────────────────────────────
 
-resource "helm_release" "karpenter" {
-  name       = "karpenter"
-  repository = "oci://public.ecr.aws/karpenter"
-  chart      = "karpenter"
-  version    = "1.0.6"
-  namespace  = "karpenter"
-
-  create_namespace = true
+resource "helm_release" "cluster_autoscaler" {
+  name       = "cluster-autoscaler"
+  repository = "https://kubernetes.github.io/autoscaler"
+  chart      = "cluster-autoscaler"
+  version    = "9.37.0"
+  namespace  = "kube-system"
 
   set {
-    name  = "settings.clusterName"
+    name  = "autoDiscovery.clusterName"
     value = var.cluster_name
   }
 
   set {
-    name  = "settings.clusterEndpoint"
-    value = var.cluster_endpoint
+    name  = "awsRegion"
+    value = var.aws_region
   }
 
   set {
-    name  = "settings.interruptionQueue"
-    value = var.karpenter_sqs_queue_url
+    name  = "rbac.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = var.cluster_autoscaler_irsa_role_arn
   }
 
   set {
-    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = var.karpenter_irsa_role_arn
+    name  = "extraArgs.balance-similar-node-groups"
+    value = "true"
   }
 
   set {
-    name  = "controller.resources.requests.cpu"
-    value = "250m"
+    name  = "extraArgs.skip-nodes-with-system-pods"
+    value = "false"
   }
 
   set {
-    name  = "controller.resources.requests.memory"
-    value = "512Mi"
+    name  = "resources.requests.cpu"
+    value = "100m"
   }
 
   set {
-    name  = "controller.resources.limits.cpu"
-    value = "1"
-  }
-
-  set {
-    name  = "controller.resources.limits.memory"
-    value = "1Gi"
+    name  = "resources.requests.memory"
+    value = "256Mi"
   }
 
   set {
@@ -98,48 +91,6 @@ resource "helm_release" "karpenter" {
 
   set {
     name  = "tolerations[0].effect"
-    value = "NoSchedule"
-  }
-}
-
-# ── KEDA ──────────────────────────────────────────────────────────────────────
-
-resource "helm_release" "keda" {
-  name       = "keda"
-  repository = "https://kedacore.github.io/charts"
-  chart      = "keda"
-  version    = "2.15.1"
-  namespace  = "keda"
-
-  create_namespace = true
-
-  set {
-    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = var.keda_irsa_role_arn
-  }
-
-  set {
-    name  = "resources.operator.requests.cpu"
-    value = "100m"
-  }
-
-  set {
-    name  = "resources.operator.requests.memory"
-    value = "256Mi"
-  }
-
-  set {
-    name  = "operator.tolerations[0].key"
-    value = "CriticalAddonsOnly"
-  }
-
-  set {
-    name  = "operator.tolerations[0].operator"
-    value = "Exists"
-  }
-
-  set {
-    name  = "operator.tolerations[0].effect"
     value = "NoSchedule"
   }
 }

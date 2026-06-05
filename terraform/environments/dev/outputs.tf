@@ -45,27 +45,26 @@ output "ai_cpu_worker_role_arn" {
   value = module.irsa.ai_cpu_role_arn
 }
 
-output "ai_gpu_worker_role_arn" {
-  value = module.irsa.ai_gpu_role_arn
+output "ai_ml_gpu_worker_role_arn" {
+  value = module.irsa.ai_ml_gpu_role_arn
+}
+
+output "ai_llm_gpu_worker_role_arn" {
+  value = module.irsa.ai_llm_gpu_role_arn
 }
 
 output "batch_worker_role_arn" {
   value = module.irsa.batch_role_arn
 }
 
-# ── Aurora ───────────────────────────────────────────────────────────────────
+# ── RDS ──────────────────────────────────────────────────────────────────────
 
-output "aurora_writer_endpoint" {
-  value = module.aurora.writer_endpoint
+output "rds_endpoint" {
+  value = module.rds.endpoint
 }
 
-output "aurora_security_group_id" {
-  value = module.aurora.security_group_id
-}
-
-# ExternalSecret에서 DB 비밀번호 참조 시 이 ARN을 사용
-output "aurora_db_secret_arn" {
-  value = module.aurora.db_secret_arn
+output "rds_db_secret_arn" {
+  value = module.rds.db_secret_arn
 }
 
 # ── Redis ─────────────────────────────────────────────────────────────────────
@@ -98,25 +97,19 @@ output "frontend_bucket_name" {
 
 # ── SQS ──────────────────────────────────────────────────────────────────────
 
+output "cpu_analysis_queue_url" {
+  value = module.sqs.cpu_analysis_queue_url
+}
+
+output "audio_ml_queue_url" {
+  value = module.sqs.audio_ml_queue_url
+}
+
+output "llm_queue_url" {
+  value = module.sqs.llm_queue_url
+}
+
 output "analysis_queue_url" {
   value = module.sqs.analysis_queue_url
 }
 
-output "analysis_queue_arn" {
-  value = module.sqs.analysis_queue_arn
-}
-
-output "dlq_url" {
-  value = module.sqs.dlq_url
-}
-
-# ── Cognito ──────────────────────────────────────────────────────────────────
-
-output "cognito_user_pool_id" {
-  value = module.cognito.user_pool_id
-}
-
-output "cognito_client_id" {
-  value     = module.cognito.client_id
-  sensitive = true
-}

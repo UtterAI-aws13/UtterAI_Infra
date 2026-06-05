@@ -78,25 +78,10 @@ variable "api_node_max_size" {
   type = number
 }
 
-# ── Aurora ───────────────────────────────────────────────────────────────────
+# ── RDS ──────────────────────────────────────────────────────────────────────
 
-variable "aurora_instance_class" {
+variable "rds_instance_class" {
   type = string
-}
-
-variable "aurora_database_name" {
-  type    = string
-  default = "utterai"
-}
-
-variable "aurora_master_username" {
-  type    = string
-  default = "utterai_app"
-}
-
-variable "aurora_backup_retention" {
-  type    = number
-  default = 3
 }
 
 # ── Redis ─────────────────────────────────────────────────────────────────────
