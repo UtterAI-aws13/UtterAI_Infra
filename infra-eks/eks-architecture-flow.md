@@ -717,7 +717,7 @@ Pending 상태의 Pod를 감지해 적합한 EC2 노드를 자동으로 생성�
 - 메시지 감소 시 replica 감소 (0까지 가능)
 
 예시:
-- cpu-analysis-queue 메시지가 50개 쌓이면
+- audio-preprocess-queue 메시지가 50개 쌓이면
   queueLength: 5 기준으로 cpu-worker 10개로 확장
 - 없으면 SQS 기반 자동 확장 불가 (HPA로는 SQS 연동 안 됨)
 ```
@@ -1667,7 +1667,7 @@ AI 작업에 CPU/GPU가 섞이므로 Queue도 분리하는 것이 좋다.
 ```text
 SQS Queues:
 - analysis-request-queue
-- cpu-analysis-queue
+- audio-preprocess-queue
 - gpu-diarization-queue
 - report-generation-queue
 - analysis-dlq
@@ -1676,7 +1676,7 @@ SQS Queues:
 | Queue | 처리 Worker | NodePool |
 | --- | --- | --- |
 | `analysis-request-queue` | API 또는 Dispatcher | `api` 또는 `ai-cpu` |
-| `cpu-analysis-queue` | CPU AI Worker | `ai-cpu` |
+| `audio-preprocess-queue` | CPU AI Worker | `ai-cpu` |
 | `gpu-diarization-queue` | GPU Diarization Worker | `ai-gpu` |
 | `report-generation-queue` | Report Worker | `spot-batch` 또는 `ai-cpu` |
 | `analysis-dlq` | 실패 메시지 보관 | 직접 처리 없음 |
@@ -1699,7 +1699,7 @@ spec:
   triggers:
     - type: aws-sqs-queue
       metadata:
-        queueURL: https://sqs.ap-northeast-2.amazonaws.com/123456789012/cpu-analysis-queue
+        queueURL: https://sqs.ap-northeast-2.amazonaws.com/123456789012/audio-preprocess-queue
         queueLength: "5"
         awsRegion: ap-northeast-2
 ```
@@ -1937,7 +1937,7 @@ Resource request/limit을 명확히 잡아야 하는 이유는 다음과 같다.
 4. API가 분석 요청 생성
 5. API가 analysis-request-queue에 메시지 발행
 6. Dispatcher 또는 CPU Worker가 작업 유형 분리
-7. CPU 전처리 작업은 cpu-analysis-queue로 이동
+7. CPU 전처리 작업은 audio-preprocess-queue로 이동
 8. 화자 분리 작업은 gpu-diarization-queue로 이동
 9. KEDA가 CPU/GPU Worker를 각각 확장
 10. Karpenter가 ai-cpu 또는 ai-gpu Node를 생성
@@ -2181,7 +2181,7 @@ AI CPU 담당에게는 다음 계약을 전달한다.
 ```yaml
 namespace: utter-ai-cpu
 serviceAccount: ai-cpu-worker-sa
-queue: cpu-analysis-queue
+queue: audio-preprocess-queue
 nodeSelector:
   workload: ai-cpu
 resources:

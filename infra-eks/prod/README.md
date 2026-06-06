@@ -206,7 +206,7 @@ spec:
   triggers:
     - type: aws-sqs-queue
       metadata:
-        queueURL: https://sqs.ap-northeast-2.amazonaws.com/{ACCOUNT_ID}/utterai-prod-analysis-queue
+        queueURL: https://sqs.ap-northeast-2.amazonaws.com/{ACCOUNT_ID}/utterai-prod-rag-ingest-queue
         queueLength: "5"
         awsRegion: ap-northeast-2
         identityOwner: operator
@@ -526,13 +526,13 @@ Port: 6379
 
 | 큐 이름 | 타입 | 용도 |
 |---|---|---|
-| `utterai-prod-analysis-queue` | Standard | 분석 요청 메시지 |
+| `utterai-prod-rag-ingest-queue` | Standard | 분석 요청 메시지 |
 | `utterai-prod-analysis-dlq` | Standard | 실패한 분석 요청 보관 |
 
 ### 8.2 큐 설정
 
 ```text
-utterai-prod-analysis-queue:
+utterai-prod-rag-ingest-queue:
 - 메시지 보존 기간: 4일
 - 가시성 타임아웃: 300초 (AI 분석 예상 최대 시간)
 - 최대 메시지 크기: 256KB
@@ -927,7 +927,7 @@ S3_PRESIGNED_UPLOAD_EXPIRES_SECONDS=900
 S3_PRESIGNED_DOWNLOAD_EXPIRES_SECONDS=300
 
 # SQS
-SQS_ANALYSIS_QUEUE_URL=https://sqs.ap-northeast-2.amazonaws.com/{ACCOUNT_ID}/utterai-prod-analysis-queue
+SQS_RAG_INGEST_QUEUE_URL=https://sqs.ap-northeast-2.amazonaws.com/{ACCOUNT_ID}/utterai-prod-rag-ingest-queue
 SQS_ANALYSIS_DLQ_URL=https://sqs.ap-northeast-2.amazonaws.com/{ACCOUNT_ID}/utterai-prod-analysis-dlq
 
 # AI Service
