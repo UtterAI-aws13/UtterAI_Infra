@@ -2,118 +2,118 @@ locals {
   prefix = "${var.project_name}-${var.environment}"
 }
 
-# ── CPU Analysis Queue ────────────────────────────────────────────────────────
+# ── Audio Preprocess Queue ────────────────────────────────────────────────────
 
-resource "aws_sqs_queue" "cpu_analysis_dlq" {
-  name                      = "${local.prefix}-cpu-analysis-dlq"
+resource "aws_sqs_queue" "audio_preprocess_dlq" {
+  name                      = "${local.prefix}-audio-preprocess-dlq"
   message_retention_seconds = 604800
   sqs_managed_sse_enabled   = true
 
   tags = {
-    Name = "${local.prefix}-cpu-analysis-dlq"
+    Name = "${local.prefix}-audio-preprocess-dlq"
   }
 }
 
-resource "aws_sqs_queue" "cpu_analysis" {
-  name                       = "${local.prefix}-cpu-analysis-queue"
+resource "aws_sqs_queue" "audio_preprocess" {
+  name                       = "${local.prefix}-audio-preprocess-queue"
   visibility_timeout_seconds = var.visibility_timeout_seconds
   message_retention_seconds  = var.message_retention_seconds
   max_message_size           = 262144
   sqs_managed_sse_enabled    = true
 
   redrive_policy = jsonencode({
-    deadLetterTargetArn = aws_sqs_queue.cpu_analysis_dlq.arn
+    deadLetterTargetArn = aws_sqs_queue.audio_preprocess_dlq.arn
     maxReceiveCount     = var.max_receive_count
   })
 
   tags = {
-    Name = "${local.prefix}-cpu-analysis-queue"
+    Name = "${local.prefix}-audio-preprocess-queue"
   }
 }
 
-# ── Audio ML Queue ────────────────────────────────────────────────────────────
+# ── GPU Inference Queue ───────────────────────────────────────────────────────
 
-resource "aws_sqs_queue" "audio_ml_dlq" {
-  name                      = "${local.prefix}-audio-ml-dlq"
+resource "aws_sqs_queue" "gpu_inference_dlq" {
+  name                      = "${local.prefix}-gpu-inference-dlq"
   message_retention_seconds = 604800
   sqs_managed_sse_enabled   = true
 
   tags = {
-    Name = "${local.prefix}-audio-ml-dlq"
+    Name = "${local.prefix}-gpu-inference-dlq"
   }
 }
 
-resource "aws_sqs_queue" "audio_ml" {
-  name                       = "${local.prefix}-audio-ml-queue"
+resource "aws_sqs_queue" "gpu_inference" {
+  name                       = "${local.prefix}-gpu-inference-queue"
   visibility_timeout_seconds = 900
   message_retention_seconds  = var.message_retention_seconds
   max_message_size           = 262144
   sqs_managed_sse_enabled    = true
 
   redrive_policy = jsonencode({
-    deadLetterTargetArn = aws_sqs_queue.audio_ml_dlq.arn
+    deadLetterTargetArn = aws_sqs_queue.gpu_inference_dlq.arn
     maxReceiveCount     = var.max_receive_count
   })
 
   tags = {
-    Name = "${local.prefix}-audio-ml-queue"
+    Name = "${local.prefix}-gpu-inference-queue"
   }
 }
 
-# ── Analysis Queue (batch-worker / RAG ingest) ───────────────────────────────
+# ── Report Analysis Queue ─────────────────────────────────────────────────────
 
-resource "aws_sqs_queue" "analysis_dlq" {
-  name                      = "${local.prefix}-analysis-dlq"
+resource "aws_sqs_queue" "report_analysis_dlq" {
+  name                      = "${local.prefix}-report-analysis-dlq"
   message_retention_seconds = 604800
   sqs_managed_sse_enabled   = true
 
   tags = {
-    Name = "${local.prefix}-analysis-dlq"
+    Name = "${local.prefix}-report-analysis-dlq"
   }
 }
 
-resource "aws_sqs_queue" "analysis" {
-  name                       = "${local.prefix}-analysis-queue"
+resource "aws_sqs_queue" "report_analysis" {
+  name                       = "${local.prefix}-report-analysis-queue"
+  visibility_timeout_seconds = 900
+  message_retention_seconds  = var.message_retention_seconds
+  max_message_size           = 262144
+  sqs_managed_sse_enabled    = true
+
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.report_analysis_dlq.arn
+    maxReceiveCount     = var.max_receive_count
+  })
+
+  tags = {
+    Name = "${local.prefix}-report-analysis-queue"
+  }
+}
+
+# ── RAG Ingest Queue ──────────────────────────────────────────────────────────
+
+resource "aws_sqs_queue" "rag_ingest_dlq" {
+  name                      = "${local.prefix}-rag-ingest-dlq"
+  message_retention_seconds = 604800
+  sqs_managed_sse_enabled   = true
+
+  tags = {
+    Name = "${local.prefix}-rag-ingest-dlq"
+  }
+}
+
+resource "aws_sqs_queue" "rag_ingest" {
+  name                       = "${local.prefix}-rag-ingest-queue"
   visibility_timeout_seconds = var.visibility_timeout_seconds
   message_retention_seconds  = var.message_retention_seconds
   max_message_size           = 262144
   sqs_managed_sse_enabled    = true
 
   redrive_policy = jsonencode({
-    deadLetterTargetArn = aws_sqs_queue.analysis_dlq.arn
+    deadLetterTargetArn = aws_sqs_queue.rag_ingest_dlq.arn
     maxReceiveCount     = var.max_receive_count
   })
 
   tags = {
-    Name = "${local.prefix}-analysis-queue"
-  }
-}
-
-# ── LLM Queue ─────────────────────────────────────────────────────────────────
-
-resource "aws_sqs_queue" "llm_dlq" {
-  name                      = "${local.prefix}-llm-dlq"
-  message_retention_seconds = 604800
-  sqs_managed_sse_enabled   = true
-
-  tags = {
-    Name = "${local.prefix}-llm-dlq"
-  }
-}
-
-resource "aws_sqs_queue" "llm" {
-  name                       = "${local.prefix}-llm-queue"
-  visibility_timeout_seconds = 900
-  message_retention_seconds  = var.message_retention_seconds
-  max_message_size           = 262144
-  sqs_managed_sse_enabled    = true
-
-  redrive_policy = jsonencode({
-    deadLetterTargetArn = aws_sqs_queue.llm_dlq.arn
-    maxReceiveCount     = var.max_receive_count
-  })
-
-  tags = {
-    Name = "${local.prefix}-llm-queue"
+    Name = "${local.prefix}-rag-ingest-queue"
   }
 }
