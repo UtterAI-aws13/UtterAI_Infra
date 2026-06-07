@@ -112,7 +112,7 @@ resource "aws_iam_role_policy" "ai_api" {
       {
         Effect   = "Allow"
         Action   = ["sqs:SendMessage", "sqs:GetQueueAttributes", "sqs:GetQueueUrl"]
-        Resource = [var.cpu_analysis_queue_arn]
+        Resource = [var.audio_preprocess_queue_arn]
       },
     ]
   })
@@ -158,7 +158,7 @@ resource "aws_iam_role_policy" "api" {
       {
         Effect   = "Allow"
         Action   = ["sqs:SendMessage"]
-        Resource = [var.cpu_analysis_queue_arn]
+        Resource = [var.audio_preprocess_queue_arn]
       },
       {
         Effect   = "Allow"
@@ -205,22 +205,17 @@ resource "aws_iam_role_policy" "ai_cpu" {
       {
         Effect   = "Allow"
         Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility", "sqs:GetQueueAttributes"]
-        Resource = [var.cpu_analysis_queue_arn]
+        Resource = [var.audio_preprocess_queue_arn, var.audio_preprocess_dlq_arn]
       },
       {
         Effect   = "Allow"
         Action   = ["sqs:SendMessage"]
-        Resource = [var.audio_ml_queue_arn]
+        Resource = [var.gpu_inference_queue_arn]
       },
       {
         Effect   = "Allow"
-        Action   = ["s3:GetObject"]
+        Action   = ["s3:GetObject", "s3:PutObject"]
         Resource = ["${var.raw_audio_bucket_arn}/*"]
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["s3:PutObject"]
-        Resource = ["${var.processed_audio_bucket_arn}/*"]
       },
     ]
   })
@@ -257,22 +252,17 @@ resource "aws_iam_role_policy" "ai_ml_gpu" {
       {
         Effect   = "Allow"
         Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility", "sqs:GetQueueAttributes"]
-        Resource = [var.audio_ml_queue_arn]
+        Resource = [var.gpu_inference_queue_arn]
       },
       {
         Effect   = "Allow"
         Action   = ["sqs:SendMessage"]
-        Resource = [var.llm_queue_arn]
+        Resource = [var.report_analysis_queue_arn]
       },
       {
         Effect   = "Allow"
-        Action   = ["s3:GetObject"]
-        Resource = ["${var.raw_audio_bucket_arn}/*", "${var.processed_audio_bucket_arn}/*"]
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["s3:PutObject"]
-        Resource = ["${var.processed_audio_bucket_arn}/*", "${var.artifacts_bucket_arn}/*"]
+        Action   = ["s3:GetObject", "s3:PutObject"]
+        Resource = ["${var.raw_audio_bucket_arn}/*"]
       },
     ]
   })
@@ -309,17 +299,17 @@ resource "aws_iam_role_policy" "ai_llm_gpu" {
       {
         Effect   = "Allow"
         Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility", "sqs:GetQueueAttributes"]
-        Resource = [var.llm_queue_arn]
+        Resource = [var.report_analysis_queue_arn]
       },
       {
         Effect   = "Allow"
         Action   = ["s3:GetObject"]
-        Resource = ["${var.processed_audio_bucket_arn}/*", "${var.artifacts_bucket_arn}/*"]
+        Resource = ["${var.raw_audio_bucket_arn}/*"]
       },
       {
         Effect   = "Allow"
         Action   = ["s3:PutObject"]
-        Resource = ["${var.artifacts_bucket_arn}/*", "${var.reports_bucket_arn}/*"]
+        Resource = ["${var.reports_bucket_arn}/*"]
       },
       {
         Effect   = "Allow"
@@ -361,7 +351,7 @@ resource "aws_iam_role_policy" "batch" {
       {
         Effect   = "Allow"
         Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility", "sqs:GetQueueAttributes"]
-        Resource = [var.analysis_queue_arn, var.analysis_dlq_arn]
+        Resource = [var.rag_ingest_queue_arn, var.rag_ingest_dlq_arn]
       },
       {
         Effect   = "Allow"

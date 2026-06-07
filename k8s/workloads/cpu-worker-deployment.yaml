@@ -25,23 +25,20 @@ spec:
             - name: AWS_REGION
               value: "ap-northeast-2"
             - name: SQS_CPU_QUEUE_URL
-              value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-cpu-analysis-queue"
+              value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-audio-preprocess-queue"
             - name: SQS_ML_GPU_QUEUE_URL
-              value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-audio-ml-queue"
-            - name: S3_RAW_AUDIO_BUCKET
+              value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-gpu-inference-queue"
+            - name: S3_BUCKET_AUDIO
               value: "utterai-dev-raw-audio"
-            - name: S3_PROCESSED_AUDIO_BUCKET
-              value: "utterai-dev-processed-audio"
             - name: LOG_LEVEL
               value: "DEBUG"
           resources:
             requests:
-              cpu: "1"
-              memory: "2Gi"
-            limits:
               cpu: "2"
               memory: "4Gi"
-          # Spot 중단 신호를 받으면 현재 메시지 처리 후 종료
+            limits:
+              cpu: "4"
+              memory: "8Gi"
           lifecycle:
             preStop:
               exec:

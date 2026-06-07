@@ -97,19 +97,19 @@ output "frontend_bucket_name" {
 
 # ── SQS ──────────────────────────────────────────────────────────────────────
 
-output "cpu_analysis_queue_url" {
-  value = module.sqs.cpu_analysis_queue_url
+output "audio_preprocess_queue_url" {
+  value = module.sqs.audio_preprocess_queue_url
 }
 
-output "audio_ml_queue_url" {
-  value = module.sqs.audio_ml_queue_url
+output "gpu_inference_queue_url" {
+  value = module.sqs.gpu_inference_queue_url
 }
 
-output "llm_queue_url" {
-  value = module.sqs.llm_queue_url
+output "report_analysis_queue_url" {
+  value = module.sqs.report_analysis_queue_url
 }
 
-output "analysis_queue_url" {
-  value = module.sqs.analysis_queue_url
+output "rag_ingest_queue_url" {
+  value = module.sqs.rag_ingest_queue_url
 }
 
