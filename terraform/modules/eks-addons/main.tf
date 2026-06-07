@@ -120,6 +120,23 @@ resource "helm_release" "metrics_server" {
   }
 }
 
+# ── External Secrets Operator ────────────────────────────────────────────────
+
+resource "helm_release" "external_secrets" {
+  name       = "external-secrets"
+  repository = "https://charts.external-secrets.io"
+  chart      = "external-secrets"
+  version    = "0.10.4"
+  namespace  = "external-secrets"
+
+  create_namespace = true
+
+  set {
+    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = var.eso_irsa_role_arn
+  }
+}
+
 # ── NVIDIA Device Plugin ──────────────────────────────────────────────────────
 
 resource "helm_release" "nvidia_device_plugin" {

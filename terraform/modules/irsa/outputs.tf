@@ -29,3 +29,7 @@ output "ai_llm_gpu_role_arn" {
 output "batch_role_arn" {
   value = aws_iam_role.batch.arn
 }
+
+output "eso_role_arn" {
+  value = aws_iam_role.eso.arn
+}

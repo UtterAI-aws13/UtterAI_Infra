@@ -17,3 +17,7 @@ variable "lbc_irsa_role_arn" {
 variable "cluster_autoscaler_irsa_role_arn" {
   type = string
 }
+
+variable "eso_irsa_role_arn" {
+  type = string
+}
