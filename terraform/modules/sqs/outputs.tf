@@ -1,39 +1,39 @@
-output "cpu_analysis_queue_url" {
-  value = aws_sqs_queue.cpu_analysis.url
+output "audio_preprocess_queue_url" {
+  value = aws_sqs_queue.audio_preprocess.url
 }
 
-output "cpu_analysis_queue_arn" {
-  value = aws_sqs_queue.cpu_analysis.arn
+output "audio_preprocess_queue_arn" {
+  value = aws_sqs_queue.audio_preprocess.arn
 }
 
-output "cpu_analysis_dlq_arn" {
-  value = aws_sqs_queue.cpu_analysis_dlq.arn
+output "audio_preprocess_dlq_arn" {
+  value = aws_sqs_queue.audio_preprocess_dlq.arn
 }
 
-output "audio_ml_queue_url" {
-  value = aws_sqs_queue.audio_ml.url
+output "gpu_inference_queue_url" {
+  value = aws_sqs_queue.gpu_inference.url
 }
 
-output "audio_ml_queue_arn" {
-  value = aws_sqs_queue.audio_ml.arn
+output "gpu_inference_queue_arn" {
+  value = aws_sqs_queue.gpu_inference.arn
 }
 
-output "llm_queue_url" {
-  value = aws_sqs_queue.llm.url
+output "report_analysis_queue_url" {
+  value = aws_sqs_queue.report_analysis.url
 }
 
-output "llm_queue_arn" {
-  value = aws_sqs_queue.llm.arn
+output "report_analysis_queue_arn" {
+  value = aws_sqs_queue.report_analysis.arn
 }
 
-output "analysis_queue_url" {
-  value = aws_sqs_queue.analysis.url
+output "rag_ingest_queue_url" {
+  value = aws_sqs_queue.rag_ingest.url
 }
 
-output "analysis_queue_arn" {
-  value = aws_sqs_queue.analysis.arn
+output "rag_ingest_queue_arn" {
+  value = aws_sqs_queue.rag_ingest.arn
 }
 
-output "analysis_dlq_arn" {
-  value = aws_sqs_queue.analysis_dlq.arn
+output "rag_ingest_dlq_arn" {
+  value = aws_sqs_queue.rag_ingest_dlq.arn
 }

@@ -41,13 +41,16 @@ spec:
             - name: AWS_REGION
               value: "ap-northeast-2"
             - name: SQS_LLM_QUEUE_URL
-              value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-llm-queue"
-            - name: S3_PROCESSED_AUDIO_BUCKET
-              value: "utterai-dev-processed-audio"
-            - name: S3_ARTIFACTS_BUCKET
-              value: "utterai-dev-artifacts"
-            - name: S3_REPORTS_BUCKET
+              value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-report-analysis-queue"
+            - name: S3_BUCKET_AUDIO
+              value: "utterai-dev-raw-audio"
+            - name: S3_BUCKET_REPORT
               value: "utterai-dev-reports"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ai-worker-secret
+                  key: DATABASE_URL
             - name: LOG_LEVEL
               value: "DEBUG"
             - name: CUDA_VISIBLE_DEVICES
@@ -59,7 +62,7 @@ spec:
               nvidia.com/gpu: "1"
             limits:
               cpu: "4"
-              memory: "16Gi"
+              memory: "14Gi"
               nvidia.com/gpu: "1"
           lifecycle:
             preStop:

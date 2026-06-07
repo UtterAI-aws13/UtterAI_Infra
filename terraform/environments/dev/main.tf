@@ -117,12 +117,12 @@ module "irsa" {
   artifacts_bucket_arn       = module.s3.artifacts_bucket_arn
   frontend_bucket_arn        = module.s3.frontend_bucket_arn
 
-  cpu_analysis_queue_arn = module.sqs.cpu_analysis_queue_arn
-  audio_ml_queue_arn     = module.sqs.audio_ml_queue_arn
-  llm_queue_arn          = module.sqs.llm_queue_arn
-  cpu_analysis_dlq_arn   = module.sqs.cpu_analysis_dlq_arn
-  analysis_queue_arn     = module.sqs.analysis_queue_arn
-  analysis_dlq_arn       = module.sqs.analysis_dlq_arn
+  audio_preprocess_queue_arn = module.sqs.audio_preprocess_queue_arn
+  gpu_inference_queue_arn    = module.sqs.gpu_inference_queue_arn
+  report_analysis_queue_arn  = module.sqs.report_analysis_queue_arn
+  audio_preprocess_dlq_arn   = module.sqs.audio_preprocess_dlq_arn
+  rag_ingest_queue_arn       = module.sqs.rag_ingest_queue_arn
+  rag_ingest_dlq_arn         = module.sqs.rag_ingest_dlq_arn
 
   private_app_subnet_ids = module.vpc.private_app_subnet_ids
   node_security_group_id = module.eks.node_security_group_id
