@@ -11,7 +11,7 @@ resource "aws_security_group" "rds" {
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
-    security_groups = [var.allowed_security_group_id]
+    security_groups = [var.allowed_security_group_id, var.cluster_security_group_id]
   }
 
   tags = {
@@ -41,7 +41,7 @@ resource "aws_db_parameter_group" "this" {
 resource "aws_db_instance" "this" {
   identifier     = "${local.prefix}-rds"
   engine         = "postgres"
-  engine_version = "16.4"
+  engine_version = "16.9"
   instance_class = var.instance_class
 
   db_name                     = var.database_name

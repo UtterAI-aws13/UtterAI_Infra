@@ -44,14 +44,22 @@ provider "aws" {
 provider "kubernetes" {
   host                   = module.eks.cluster_endpoint
   cluster_ca_certificate = base64decode(module.eks.cluster_ca_certificate)
-  token                  = module.eks.cluster_token
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws"
+    args        = ["eks", "get-token", "--cluster-name", var.cluster_name, "--region", var.aws_region]
+  }
 }
 
 provider "helm" {
   kubernetes {
     host                   = module.eks.cluster_endpoint
     cluster_ca_certificate = base64decode(module.eks.cluster_ca_certificate)
-    token                  = module.eks.cluster_token
+    exec {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      command     = "aws"
+      args        = ["eks", "get-token", "--cluster-name", var.cluster_name, "--region", var.aws_region]
+    }
   }
 }
 
@@ -95,6 +103,9 @@ module "eks" {
   api_node_min_size      = var.api_node_min_size
   api_node_max_size      = var.api_node_max_size
 
+  gpu_node_desired_size = var.gpu_node_desired_size
+  gpu_node_min_size     = var.gpu_node_min_size
+
 }
 
 # ── IRSA ─────────────────────────────────────────────────────────────────────
@@ -110,12 +121,10 @@ module "irsa" {
   aws_account_id    = data.aws_caller_identity.current.account_id
   aws_region        = var.aws_region
 
-  raw_audio_bucket_arn       = module.s3.raw_audio_bucket_arn
-  processed_audio_bucket_arn = module.s3.processed_audio_bucket_arn
-  documents_bucket_arn       = module.s3.documents_bucket_arn
-  reports_bucket_arn         = module.s3.reports_bucket_arn
-  artifacts_bucket_arn       = module.s3.artifacts_bucket_arn
-  frontend_bucket_arn        = module.s3.frontend_bucket_arn
+  raw_audio_bucket_arn = module.s3.raw_audio_bucket_arn
+  documents_bucket_arn = module.s3.documents_bucket_arn
+  reports_bucket_arn   = module.s3.reports_bucket_arn
+  frontend_bucket_arn  = module.s3.frontend_bucket_arn
 
   audio_preprocess_queue_arn = module.sqs.audio_preprocess_queue_arn
   gpu_inference_queue_arn    = module.sqs.gpu_inference_queue_arn
@@ -140,6 +149,7 @@ module "eks_addons" {
   lbc_irsa_role_arn                = module.irsa.lbc_role_arn
   cluster_autoscaler_irsa_role_arn = module.irsa.cluster_autoscaler_role_arn
   eso_irsa_role_arn                = module.irsa.eso_role_arn
+  vpc_id                           = module.vpc.vpc_id
 
   depends_on = [module.eks]
 }
@@ -157,6 +167,7 @@ module "rds" {
   vpc_id                    = module.vpc.vpc_id
   private_data_subnet_ids   = module.vpc.private_data_subnet_ids
   allowed_security_group_id = module.eks.node_security_group_id
+  cluster_security_group_id = module.eks.cluster_security_group_id
 }
 
 # ── Redis ─────────────────────────────────────────────────────────────────────
@@ -173,6 +184,7 @@ module "redis" {
   vpc_id                    = module.vpc.vpc_id
   private_data_subnet_ids   = module.vpc.private_data_subnet_ids
   allowed_security_group_id = module.eks.node_security_group_id
+  cluster_security_group_id = module.eks.cluster_security_group_id
 }
 
 # ── S3 ───────────────────────────────────────────────────────────────────────
@@ -201,6 +213,17 @@ module "secrets" {
 
   project_name = var.project_name
   environment  = var.environment
+}
+
+# ── CloudFront ───────────────────────────────────────────────────────────────
+
+module "cloudfront" {
+  source = "../../modules/cloudfront"
+
+  project_name        = var.project_name
+  environment         = var.environment
+  frontend_bucket_id  = module.s3.frontend_bucket_name
+  frontend_bucket_arn = module.s3.frontend_bucket_arn
 }
 
 # ── ECR ──────────────────────────────────────────────────────────────────────

@@ -8,6 +8,7 @@ resource "helm_release" "aws_load_balancer_controller" {
   namespace  = "ingress-system"
 
   create_namespace = true
+  cleanup_on_fail  = true
 
   set {
     name  = "clusterName"
@@ -33,16 +34,22 @@ resource "helm_release" "aws_load_balancer_controller" {
     name  = "region"
     value = var.aws_region
   }
+
+  set {
+    name  = "vpcId"
+    value = var.vpc_id
+  }
 }
 
 # ── Cluster Autoscaler ────────────────────────────────────────────────────────
 
 resource "helm_release" "cluster_autoscaler" {
-  name       = "cluster-autoscaler"
-  repository = "https://kubernetes.github.io/autoscaler"
-  chart      = "cluster-autoscaler"
-  version    = "9.37.0"
-  namespace  = "kube-system"
+  name            = "cluster-autoscaler"
+  repository      = "https://kubernetes.github.io/autoscaler"
+  chart           = "cluster-autoscaler"
+  version         = "9.37.0"
+  namespace       = "kube-system"
+  cleanup_on_fail = true
 
   set {
     name  = "autoDiscovery.clusterName"
@@ -52,6 +59,11 @@ resource "helm_release" "cluster_autoscaler" {
   set {
     name  = "awsRegion"
     value = var.aws_region
+  }
+
+  set {
+    name  = "rbac.serviceAccount.name"
+    value = "cluster-autoscaler"
   }
 
   set {

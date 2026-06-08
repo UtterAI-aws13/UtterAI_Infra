@@ -21,3 +21,7 @@ variable "cluster_autoscaler_irsa_role_arn" {
 variable "eso_irsa_role_arn" {
   type = string
 }
+
+variable "vpc_id" {
+  type = string
+}

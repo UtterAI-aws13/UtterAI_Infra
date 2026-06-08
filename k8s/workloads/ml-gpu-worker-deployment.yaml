@@ -28,7 +28,7 @@ spec:
       terminationGracePeriodSeconds: 300
       containers:
         - name: ml-gpu-worker
-          image: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-gpu:latest
+          image: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-gpu:${AI_GPU_TAG}
           command: ["python", "-m", "app.workers.ml_gpu_worker"]
           env:
             - name: HF_TOKEN
