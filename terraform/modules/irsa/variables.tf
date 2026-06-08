@@ -30,19 +30,11 @@ variable "raw_audio_bucket_arn" {
   type = string
 }
 
-variable "processed_audio_bucket_arn" {
-  type = string
-}
-
 variable "documents_bucket_arn" {
   type = string
 }
 
 variable "reports_bucket_arn" {
-  type = string
-}
-
-variable "artifacts_bucket_arn" {
   type = string
 }
 

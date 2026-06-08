@@ -73,6 +73,7 @@ resource "aws_iam_role_policy" "cluster_autoscaler" {
         "autoscaling:SetDesiredCapacity",
         "autoscaling:TerminateInstanceInAutoScalingGroup",
         "ec2:DescribeImages",
+        "ec2:DescribeLaunchTemplateVersions",
         "ec2:GetInstanceTypesFromInstanceRequirements",
         "eks:DescribeNodegroup",
       ]
@@ -152,7 +153,6 @@ resource "aws_iam_role_policy" "api" {
         Resource = [
           "${var.raw_audio_bucket_arn}/*",
           "${var.reports_bucket_arn}/*",
-          "${var.artifacts_bucket_arn}/*",
         ]
       },
       {

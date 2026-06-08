@@ -41,7 +41,7 @@ resource "aws_db_parameter_group" "this" {
 resource "aws_db_instance" "this" {
   identifier     = "${local.prefix}-rds"
   engine         = "postgres"
-  engine_version = "16.4"
+  engine_version = "16.9"
   instance_class = var.instance_class
 
   db_name                     = var.database_name
