@@ -11,7 +11,7 @@ resource "aws_security_group" "redis" {
     from_port       = 6379
     to_port         = 6379
     protocol        = "tcp"
-    security_groups = [var.allowed_security_group_id]
+    security_groups = [var.allowed_security_group_id, var.cluster_security_group_id]
   }
 
   tags = {
