@@ -2,12 +2,10 @@ locals {
   prefix = "${var.project_name}-${var.environment}"
 
   buckets = {
-    frontend        = "${local.prefix}-frontend"
-    raw_audio       = "${local.prefix}-raw-audio"
-    processed_audio = "${local.prefix}-processed-audio"
-    documents       = "${local.prefix}-documents"
-    reports         = "${local.prefix}-reports"
-    artifacts       = "${local.prefix}-artifacts"
+    frontend  = "${local.prefix}-frontend"
+    raw_audio = "${local.prefix}-raw-audio"
+    documents = "${local.prefix}-documents"
+    reports   = "${local.prefix}-reports"
   }
 }
 
@@ -50,6 +48,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "raw_audio" {
   rule {
     id     = "expire-raw-audio"
     status = "Enabled"
+
+    filter {}
 
     expiration {
       days = 30

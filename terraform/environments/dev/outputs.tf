@@ -79,20 +79,24 @@ output "raw_audio_bucket_name" {
   value = module.s3.raw_audio_bucket_name
 }
 
-output "processed_audio_bucket_name" {
-  value = module.s3.processed_audio_bucket_name
+output "documents_bucket_name" {
+  value = module.s3.documents_bucket_name
 }
 
 output "reports_bucket_name" {
   value = module.s3.reports_bucket_name
 }
 
-output "artifacts_bucket_name" {
-  value = module.s3.artifacts_bucket_name
-}
-
 output "frontend_bucket_name" {
   value = module.s3.frontend_bucket_name
+}
+
+output "cloudfront_domain_name" {
+  value = module.cloudfront.distribution_domain_name
+}
+
+output "cloudfront_distribution_id" {
+  value = module.cloudfront.distribution_id
 }
 
 # ── SQS ──────────────────────────────────────────────────────────────────────

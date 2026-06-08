@@ -78,6 +78,16 @@ variable "api_node_max_size" {
   type = number
 }
 
+variable "gpu_node_desired_size" {
+  type    = number
+  default = 0
+}
+
+variable "gpu_node_min_size" {
+  type    = number
+  default = 0
+}
+
 # ── RDS ──────────────────────────────────────────────────────────────────────
 
 variable "rds_instance_class" {

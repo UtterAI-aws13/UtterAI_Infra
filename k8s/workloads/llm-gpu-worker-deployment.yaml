@@ -28,7 +28,7 @@ spec:
       terminationGracePeriodSeconds: 300
       containers:
         - name: llm-gpu-worker
-          image: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-gpu:latest
+          image: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-gpu:${AI_GPU_TAG}
           command: ["python", "-m", "app.workers.llm_gpu_worker"]
           env:
             - name: HF_TOKEN
@@ -46,11 +46,31 @@ spec:
               value: "utterai-dev-raw-audio"
             - name: S3_BUCKET_REPORT
               value: "utterai-dev-reports"
-            - name: DATABASE_URL
+            - name: DB_USER
               valueFrom:
                 secretKeyRef:
                   name: ai-worker-secret
-                  key: DATABASE_URL
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ai-worker-secret
+                  key: DB_PASSWORD
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: ai-worker-secret
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: ai-worker-secret
+                  key: DB_PORT
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: ai-worker-secret
+                  key: DB_NAME
             - name: LOG_LEVEL
               value: "DEBUG"
             - name: CUDA_VISIBLE_DEVICES

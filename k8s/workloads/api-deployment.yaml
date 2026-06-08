@@ -31,7 +31,7 @@ spec:
       containers:
         - name: api
           # ECR URI는 실제 배포 시 교체
-          image: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend:latest
+          image: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend:${BACKEND_TAG}
           ports:
             - containerPort: 8080
           envFrom:
