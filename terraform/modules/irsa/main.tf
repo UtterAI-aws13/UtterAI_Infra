@@ -366,3 +366,43 @@ resource "aws_iam_role_policy" "batch" {
     ]
   })
 }
+
+# ── External Secrets Operator IRSA ───────────────────────────────────────────
+
+resource "aws_iam_role" "eso" {
+  name = "${local.prefix}-eso-irsa-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = var.oidc_provider_arn }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${local.oidc_aud}" = "sts.amazonaws.com"
+          "${local.oidc_sub}" = "system:serviceaccount:external-secrets:external-secrets"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "eso" {
+  name = "${local.prefix}-eso-policy"
+  role = aws_iam_role.eso.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret",
+        ]
+        Resource = ["arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:${local.prefix}/*"]
+      },
+    ]
+  })
+}

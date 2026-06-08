@@ -139,6 +139,7 @@ module "eks_addons" {
 
   lbc_irsa_role_arn                = module.irsa.lbc_role_arn
   cluster_autoscaler_irsa_role_arn = module.irsa.cluster_autoscaler_role_arn
+  eso_irsa_role_arn                = module.irsa.eso_role_arn
 
   depends_on = [module.eks]
 }
@@ -188,6 +189,15 @@ module "s3" {
 
 module "sqs" {
   source = "../../modules/sqs"
+
+  project_name = var.project_name
+  environment  = var.environment
+}
+
+# ── Secrets Manager ──────────────────────────────────────────────────────────
+
+module "secrets" {
+  source = "../../modules/secrets"
 
   project_name = var.project_name
   environment  = var.environment
