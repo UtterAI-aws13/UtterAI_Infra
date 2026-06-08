@@ -167,6 +167,7 @@ module "rds" {
   vpc_id                    = module.vpc.vpc_id
   private_data_subnet_ids   = module.vpc.private_data_subnet_ids
   allowed_security_group_id = module.eks.node_security_group_id
+  cluster_security_group_id = module.eks.cluster_security_group_id
 }
 
 # ── Redis ─────────────────────────────────────────────────────────────────────
@@ -183,6 +184,7 @@ module "redis" {
   vpc_id                    = module.vpc.vpc_id
   private_data_subnet_ids   = module.vpc.private_data_subnet_ids
   allowed_security_group_id = module.eks.node_security_group_id
+  cluster_security_group_id = module.eks.cluster_security_group_id
 }
 
 # ── S3 ───────────────────────────────────────────────────────────────────────

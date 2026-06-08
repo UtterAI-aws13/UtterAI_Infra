@@ -23,9 +23,19 @@ export BACKEND_TAG=$(latest_tag "utterai-backend")
 export AI_CPU_TAG=$(latest_tag "utterai-ai-cpu")
 export AI_GPU_TAG=$(latest_tag "utterai-ai-gpu")
 
+# Terraform output에서 RDS/Redis 엔드포인트 조회
+tf_output() {
+  terraform -chdir=terraform/environments/dev output -raw "$1"
+}
+
+export RDS_ENDPOINT=$(tf_output "rds_endpoint")
+export REDIS_ENDPOINT=$(tf_output "redis_endpoint")
+
 echo "utterai-backend  : $BACKEND_TAG"
 echo "utterai-ai-cpu   : $AI_CPU_TAG"
 echo "utterai-ai-gpu   : $AI_GPU_TAG"
+echo "RDS endpoint     : $RDS_ENDPOINT"
+echo "Redis endpoint   : $REDIS_ENDPOINT"
 
 apply() {
   envsubst < "$1" | kubectl apply -f -
