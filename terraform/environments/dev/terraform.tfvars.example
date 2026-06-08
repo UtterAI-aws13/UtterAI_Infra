@@ -1,0 +1,63 @@
+# dev 환경 Terraform 입력값 예시입니다.
+# 실제 실행 시 이 파일을 terraform.tfvars로 복사한 뒤 팀 인프라 기준에 맞게 값을 조정합니다.
+# terraform.tfvars는 .gitignore 대상이므로 secret 또는 환경별 실제 값이 Git에 올라가지 않습니다.
+
+# ── 기본 정보 ────────────────────────────────────────────────────────────────
+
+aws_region  = "ap-northeast-2"
+project_name = "utterai"
+environment  = "dev"
+
+# ── Network ─────────────────────────────────────────────────────────────────
+
+vpc_cidr = "10.10.0.0/16"
+
+azs = [
+  "ap-northeast-2a",
+  "ap-northeast-2c"
+]
+
+public_subnet_cidrs = [
+  "10.10.0.0/24",
+  "10.10.1.0/24"
+]
+
+private_app_subnet_cidrs = [
+  "10.10.10.0/24",
+  "10.10.11.0/24"
+]
+
+private_data_subnet_cidrs = [
+  "10.10.20.0/24",
+  "10.10.21.0/24"
+]
+
+# ── EKS ─────────────────────────────────────────────────────────────────────
+
+cluster_name       = "utterai-dev"
+kubernetes_version = "1.31"
+
+# system node는 Argo CD, controller, core add-on 같은 기본 컴포넌트용입니다.
+system_node_instance_type = "t3.medium"
+system_node_desired_size  = 1
+system_node_min_size      = 1
+system_node_max_size      = 2
+
+# api node는 backend API Pod 배치용입니다.
+# TODO: 실제 dev 비용 정책에 따라 min/desired/max 값을 팀과 확정합니다.
+api_node_instance_type = "t3.medium"
+api_node_desired_size  = 1
+api_node_min_size      = 0
+api_node_max_size      = 2
+
+# ── Aurora ──────────────────────────────────────────────────────────────────
+
+aurora_instance_class    = "db.t4g.medium"
+aurora_database_name     = "utterai"
+aurora_master_username   = "utterai_app"
+aurora_backup_retention  = 3
+
+# ── Redis ───────────────────────────────────────────────────────────────────
+
+redis_node_type       = "cache.t4g.micro"
+redis_num_cache_nodes = 1
