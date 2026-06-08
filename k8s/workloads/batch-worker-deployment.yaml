@@ -28,11 +28,31 @@ spec:
               value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-rag-ingest-queue"
             - name: S3_BUCKET_RAG
               value: "utterai-dev-documents"
-            - name: DATABASE_URL
+            - name: DB_USER
               valueFrom:
                 secretKeyRef:
                   name: ai-worker-secret
-                  key: DATABASE_URL
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ai-worker-secret
+                  key: DB_PASSWORD
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: ai-worker-secret
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: ai-worker-secret
+                  key: DB_PORT
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: ai-worker-secret
+                  key: DB_NAME
             - name: LOG_LEVEL
               value: "DEBUG"
           resources:
