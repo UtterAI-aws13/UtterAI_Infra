@@ -178,3 +178,25 @@ resource "helm_release" "nvidia_device_plugin" {
     value = "NoSchedule"
   }
 }
+
+# ── ArgoCD ──────────────────────────────────────────────────────
+
+resource "helm_release" "argocd" {
+  name       = "argocd"
+  repository = "https://argoproj.github.io/argo-helm"
+  chart      = "argo-cd"
+  version    = "9.5.20"
+  namespace  = "argocd"
+
+  create_namespace = true
+
+  values = [
+    yamlencode({
+      server = {
+        service = {
+          type = "ClusterIP"
+        }
+      }
+    })
+  ]
+}
