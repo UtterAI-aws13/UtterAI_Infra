@@ -29,6 +29,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   update-image:
@@ -85,6 +86,11 @@ jobs:
             exit 1
           fi
 
+          if [[ "$ECR_REGISTRY" == */* ]]; then
+            echo "ECR_REGISTRY에는 repository 이름을 포함하지 않습니다. 예: 032886669461.dkr.ecr.ap-northeast-2.amazonaws.com"
+            exit 1
+          fi
+
           if [ -z "$ECR_REPOSITORY" ]; then
             echo "ECR_BACKEND_REPOSITORY GitHub Variable 또는 workflow 입력이 필요합니다."
             exit 1
@@ -137,19 +143,40 @@ jobs:
           kubectl kustomize "$OVERLAY_PATH" > /tmp/backend-rendered.yaml
           grep "image:" /tmp/backend-rendered.yaml
 
-      - name: Commit and push GitOps change
+      - name: Create GitOps update pull request
         env:
           TARGET_ENV: ${{ steps.meta.outputs.target_env }}
+          TARGET_BRANCH: ${{ steps.meta.outputs.target_branch }}
           IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          UPDATE_BRANCH="ci/backend-${TARGET_ENV}-${IMAGE_TAG}-${GITHUB_RUN_ID}"
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           if git diff --quiet; then
-            echo "변경 사항이 없어 commit을 생성하지 않습니다."
+            echo "변경 사항이 없어 PR을 생성하지 않습니다."
             exit 0
           fi
 
+          git checkout -b "$UPDATE_BRANCH"
           git add k8s/apps/backend/overlays
           git commit -m "ci(backend): update $TARGET_ENV image tag to $IMAGE_TAG"
-          git push
+          git push origin "$UPDATE_BRANCH"
+
+          gh pr create \
+            --base "$TARGET_BRANCH" \
+            --head "$UPDATE_BRANCH" \
+            --title "ci(backend): update $TARGET_ENV image tag to $IMAGE_TAG" \
+            --body "Backend image tag를 \`$IMAGE_TAG\`로 갱신합니다.
+
+          변경 대상:
+          - 환경: \`$TARGET_ENV\`
+          - 기준 브랜치: \`$TARGET_BRANCH\`
+          - image tag: \`$IMAGE_TAG\`
+
+          이 PR은 보호 브랜치에 직접 push하지 않고 GitOps image tag 변경을 리뷰 가능한 PR로 남기기 위해 생성되었습니다."
+        
+        # TODO: 인프라 Repo에 Github App 을 통해 브랜치 예외규정설정 -> Dev 브랜치에 한해 자동으로 이미지 태그 변경이 반영될 수 있도록 함.
+        
