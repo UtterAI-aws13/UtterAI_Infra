@@ -1,7 +1,7 @@
 apiVersion: 1
 
 providers:
-  - name: UtterAI Local Dev
+  - name: UtterAI Observability
     orgId: 1
     folder: UtterAI
     type: file
