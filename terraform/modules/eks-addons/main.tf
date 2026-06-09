@@ -9,6 +9,8 @@ resource "helm_release" "aws_load_balancer_controller" {
 
   create_namespace = true
   cleanup_on_fail  = true
+  wait             = true
+  wait_for_jobs    = true
 
   set {
     name  = "clusterName"
@@ -50,6 +52,8 @@ resource "helm_release" "cluster_autoscaler" {
   version         = "9.37.0"
   namespace       = "kube-system"
   cleanup_on_fail = true
+
+  depends_on = [helm_release.aws_load_balancer_controller]
 
   set {
     name  = "autoDiscovery.clusterName"
@@ -116,6 +120,8 @@ resource "helm_release" "metrics_server" {
   version    = "3.12.1"
   namespace  = "kube-system"
 
+  depends_on = [helm_release.aws_load_balancer_controller]
+
   set {
     name  = "tolerations[0].key"
     value = "CriticalAddonsOnly"
@@ -143,6 +149,8 @@ resource "helm_release" "external_secrets" {
 
   create_namespace = true
 
+  depends_on = [helm_release.aws_load_balancer_controller]
+
   set {
     name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
     value = var.eso_irsa_role_arn
@@ -157,6 +165,8 @@ resource "helm_release" "nvidia_device_plugin" {
   chart      = "nvidia-device-plugin"
   version    = "0.16.2"
   namespace  = "kube-system"
+
+  depends_on = [helm_release.aws_load_balancer_controller]
 
   set {
     name  = "tolerations[0].key"
@@ -189,6 +199,8 @@ resource "helm_release" "argocd" {
   namespace  = "argocd"
 
   create_namespace = true
+
+  depends_on = [helm_release.aws_load_balancer_controller]
 
   values = [
     yamlencode({
