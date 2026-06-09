@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: utterai-backend-prod
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: utterai-backend
+    app.kubernetes.io/part-of: utterai
+    utterai.io/environment: prod
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/UtterAI-aws13/UtterAI_Infra
+    targetRevision: main
+    path: k8s/apps/backend/overlays/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: utterai-prod-api
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true

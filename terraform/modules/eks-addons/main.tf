@@ -8,6 +8,7 @@ resource "helm_release" "aws_load_balancer_controller" {
   namespace  = "ingress-system"
 
   create_namespace = true
+  cleanup_on_fail  = true
 
   set {
     name  = "clusterName"
@@ -33,57 +34,61 @@ resource "helm_release" "aws_load_balancer_controller" {
     name  = "region"
     value = var.aws_region
   }
-}
-
-# ── Karpenter ─────────────────────────────────────────────────────────────────
-
-resource "helm_release" "karpenter" {
-  name       = "karpenter"
-  repository = "oci://public.ecr.aws/karpenter"
-  chart      = "karpenter"
-  version    = "1.0.6"
-  namespace  = "karpenter"
-
-  create_namespace = true
 
   set {
-    name  = "settings.clusterName"
+    name  = "vpcId"
+    value = var.vpc_id
+  }
+}
+
+# ── Cluster Autoscaler ────────────────────────────────────────────────────────
+
+resource "helm_release" "cluster_autoscaler" {
+  name            = "cluster-autoscaler"
+  repository      = "https://kubernetes.github.io/autoscaler"
+  chart           = "cluster-autoscaler"
+  version         = "9.37.0"
+  namespace       = "kube-system"
+  cleanup_on_fail = true
+
+  set {
+    name  = "autoDiscovery.clusterName"
     value = var.cluster_name
   }
 
   set {
-    name  = "settings.clusterEndpoint"
-    value = var.cluster_endpoint
+    name  = "awsRegion"
+    value = var.aws_region
   }
 
   set {
-    name  = "settings.interruptionQueue"
-    value = var.karpenter_sqs_queue_url
+    name  = "rbac.serviceAccount.name"
+    value = "cluster-autoscaler"
   }
 
   set {
-    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = var.karpenter_irsa_role_arn
+    name  = "rbac.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = var.cluster_autoscaler_irsa_role_arn
   }
 
   set {
-    name  = "controller.resources.requests.cpu"
-    value = "250m"
+    name  = "extraArgs.balance-similar-node-groups"
+    value = "true"
   }
 
   set {
-    name  = "controller.resources.requests.memory"
-    value = "512Mi"
+    name  = "extraArgs.skip-nodes-with-system-pods"
+    value = "false"
   }
 
   set {
-    name  = "controller.resources.limits.cpu"
-    value = "1"
+    name  = "resources.requests.cpu"
+    value = "100m"
   }
 
   set {
-    name  = "controller.resources.limits.memory"
-    value = "1Gi"
+    name  = "resources.requests.memory"
+    value = "256Mi"
   }
 
   set {
@@ -98,48 +103,6 @@ resource "helm_release" "karpenter" {
 
   set {
     name  = "tolerations[0].effect"
-    value = "NoSchedule"
-  }
-}
-
-# ── KEDA ──────────────────────────────────────────────────────────────────────
-
-resource "helm_release" "keda" {
-  name       = "keda"
-  repository = "https://kedacore.github.io/charts"
-  chart      = "keda"
-  version    = "2.15.1"
-  namespace  = "keda"
-
-  create_namespace = true
-
-  set {
-    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = var.keda_irsa_role_arn
-  }
-
-  set {
-    name  = "resources.operator.requests.cpu"
-    value = "100m"
-  }
-
-  set {
-    name  = "resources.operator.requests.memory"
-    value = "256Mi"
-  }
-
-  set {
-    name  = "operator.tolerations[0].key"
-    value = "CriticalAddonsOnly"
-  }
-
-  set {
-    name  = "operator.tolerations[0].operator"
-    value = "Exists"
-  }
-
-  set {
-    name  = "operator.tolerations[0].effect"
     value = "NoSchedule"
   }
 }
@@ -166,6 +129,23 @@ resource "helm_release" "metrics_server" {
   set {
     name  = "tolerations[0].effect"
     value = "NoSchedule"
+  }
+}
+
+# ── External Secrets Operator ────────────────────────────────────────────────
+
+resource "helm_release" "external_secrets" {
+  name       = "external-secrets"
+  repository = "https://charts.external-secrets.io"
+  chart      = "external-secrets"
+  version    = "0.10.4"
+  namespace  = "external-secrets"
+
+  create_namespace = true
+
+  set {
+    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = var.eso_irsa_role_arn
   }
 }
 
@@ -197,4 +177,26 @@ resource "helm_release" "nvidia_device_plugin" {
     name  = "tolerations[0].effect"
     value = "NoSchedule"
   }
+}
+
+# ── ArgoCD ──────────────────────────────────────────────────────
+
+resource "helm_release" "argocd" {
+  name       = "argocd"
+  repository = "https://argoproj.github.io/argo-helm"
+  chart      = "argo-cd"
+  version    = "9.5.20"
+  namespace  = "argocd"
+
+  create_namespace = true
+
+  values = [
+    yamlencode({
+      server = {
+        service = {
+          type = "ClusterIP"
+        }
+      }
+    })
+  ]
 }

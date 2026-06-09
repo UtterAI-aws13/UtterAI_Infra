@@ -30,10 +30,6 @@ variable "raw_audio_bucket_arn" {
   type = string
 }
 
-variable "processed_audio_bucket_arn" {
-  type = string
-}
-
 variable "documents_bucket_arn" {
   type = string
 }
@@ -42,19 +38,31 @@ variable "reports_bucket_arn" {
   type = string
 }
 
-variable "artifacts_bucket_arn" {
-  type = string
-}
-
 variable "frontend_bucket_arn" {
   type = string
 }
 
-variable "analysis_queue_arn" {
+variable "audio_preprocess_queue_arn" {
   type = string
 }
 
-variable "dlq_arn" {
+variable "gpu_inference_queue_arn" {
+  type = string
+}
+
+variable "report_analysis_queue_arn" {
+  type = string
+}
+
+variable "audio_preprocess_dlq_arn" {
+  type = string
+}
+
+variable "rag_ingest_queue_arn" {
+  type = string
+}
+
+variable "rag_ingest_dlq_arn" {
   type = string
 }
 
