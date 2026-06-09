@@ -1,3 +1,12 @@
+# HPA — 메인 백엔드 API 자동 스케일링
+#
+# CPU 평균 사용률이 70%를 초과하면 Pod를 추가한다.
+# scaleUp   stabilizationWindow 60s  — 짧은 트래픽 스파이크에도 빠르게 대응
+# scaleDown stabilizationWindow 300s — 트래픽 감소 후 5분간 관찰 후 축소 (플래핑 방지)
+#
+# 주의: api-deployment.yaml 안에도 HPA가 정의되어 있으므로
+#       이 파일과 중복 적용되지 않도록 배포 시 하나만 apply할 것
+
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:

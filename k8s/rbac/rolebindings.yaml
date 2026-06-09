@@ -1,4 +1,11 @@
+# RBAC Role/RoleBinding — 최소 권한 원칙 적용
+#
+# 각 워크로드는 자신의 네임스페이스 안에서 ConfigMap/Secret 조회 권한만 갖는다.
+# AWS 리소스 접근은 ServiceAccount의 IRSA가 담당하므로 여기서는 k8s 내부 권한만 제어한다.
+# API는 Secret(DB 비밀번호, JWT 키)도 읽어야 하므로 secrets 리소스를 추가로 허용한다.
+
 ---
+# 메인 백엔드 API — ConfigMap(앱 설정) + Secret(DB 비밀번호, JWT 키) 조회 필요
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -23,6 +30,7 @@ roleRef:
   name: utterai-api-role
   apiGroup: rbac.authorization.k8s.io
 ---
+# CPU 워커 — ConfigMap(SQS URL, S3 버킷명) 조회만 필요. Secret 불필요
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -47,6 +55,8 @@ roleRef:
   name: utterai-cpu-worker-role
   apiGroup: rbac.authorization.k8s.io
 ---
+# GPU 워커 공용 Role — ML/LLM 두 워커가 utterai-ai-gpu 네임스페이스를 공유하므로
+# Role 하나에 RoleBinding 두 개로 각 ServiceAccount를 연결한다.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -85,6 +95,7 @@ roleRef:
   name: utterai-gpu-worker-role
   apiGroup: rbac.authorization.k8s.io
 ---
+# 배치 워커 — ConfigMap(SQS URL, S3 버킷명) 조회만 필요
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
