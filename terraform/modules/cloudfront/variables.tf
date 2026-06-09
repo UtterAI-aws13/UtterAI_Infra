@@ -13,3 +13,9 @@ variable "frontend_bucket_id" {
 variable "frontend_bucket_arn" {
   type = string
 }
+
+variable "alb_dns_name" {
+  type        = string
+  default     = ""
+  description = "ALB DNS name for API proxy behavior (/api/*). Leave empty to skip."
+}

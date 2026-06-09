@@ -49,4 +49,5 @@ module "cloudfront" {
   environment         = var.environment
   frontend_bucket_id  = data.terraform_remote_state.services.outputs.frontend_bucket_name
   frontend_bucket_arn = data.terraform_remote_state.services.outputs.frontend_bucket_arn
+  alb_dns_name        = var.alb_dns_name
 }
