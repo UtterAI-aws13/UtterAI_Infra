@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: utterai-ai-ml-gpu-worker
+  labels:
+    app.kubernetes.io/name: utterai-ai-ml-gpu-worker
+    app.kubernetes.io/part-of: utterai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: utterai-ai-ml-gpu-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: utterai-ai-ml-gpu-worker
+        app.kubernetes.io/part-of: utterai
+        worker-type: ml-gpu
+    spec:
+      serviceAccountName: utterai-ai-ml-gpu-worker-sa
+      nodeSelector:
+        workload: ai-gpu
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: ai-gpu
+          effect: NoSchedule
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      terminationGracePeriodSeconds: 300
+      containers:
+        - name: ml-gpu-worker
+          image: utterai-ai-gpu:dev-placeholder
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-c", "from app.workers.ml_gpu_worker import start_worker; start_worker()"]
+          envFrom:
+            - configMapRef:
+                name: utterai-ai-worker-config
+          env:
+            - name: WORKER_TYPE
+              value: "ml-gpu"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: utterai-ai-gpu-secret
+                  key: HF_TOKEN
+            - name: HF_HOME
+              value: "/tmp/huggingface"
+            - name: CUDA_VISIBLE_DEVICES
+              value: "0"
+          resources:
+            requests:
+              cpu: "2"
+              memory: "8Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "4"
+              memory: "14Gi"
+              nvidia.com/gpu: "1"
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]

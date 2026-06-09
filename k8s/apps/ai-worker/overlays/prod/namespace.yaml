@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: utterai-prod-ai-worker
+  labels:
+    app.kubernetes.io/part-of: utterai
+    utterai.io/environment: prod

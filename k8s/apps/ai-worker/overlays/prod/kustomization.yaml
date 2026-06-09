@@ -1,0 +1,22 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: utterai-prod-ai-worker
+
+resources:
+  - namespace.yaml
+  - ../../base
+
+# TODO: prod 배포 승인 이후 CD에서 prod-{short_sha} 또는 prod-v{semver}로 갱신합니다.
+images:
+  - name: utterai-ai-cpu
+    newName: 000000000000.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-cpu
+    newTag: prod-placeholder
+  - name: utterai-ai-gpu
+    newName: 000000000000.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-gpu
+    newTag: prod-placeholder
+
+patches:
+  - path: patch-configmap.yaml
+  - path: patch-deployment.yaml
+  - path: patch-serviceaccount.yaml
