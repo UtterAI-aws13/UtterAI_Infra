@@ -1,0 +1,209 @@
+name: AI CD Update Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: "배포 대상 환경입니다. dev 또는 prod만 허용합니다."
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+      image_tag:
+        description: "ECR에 이미 push된 AI image tag입니다. CPU/GPU에 같은 tag를 적용합니다."
+        required: true
+        type: string
+      ecr_registry:
+        description: "선택 입력입니다. 비워두면 GitHub Variables의 ECR_REGISTRY를 사용합니다."
+        required: false
+        type: string
+      cpu_repository:
+        description: "선택 입력입니다. 비워두면 GitHub Variables의 ECR_AI_CPU_REPOSITORY를 사용합니다."
+        required: false
+        type: string
+      gpu_repository:
+        description: "선택 입력입니다. 비워두면 GitHub Variables의 ECR_AI_GPU_REPOSITORY를 사용합니다."
+        required: false
+        type: string
+
+  repository_dispatch:
+    types:
+      - ai-image-pushed
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-image:
+    name: Update AI image tag
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event.inputs.target_env || github.event.client_payload.target_env }}
+
+    env:
+      INPUT_TARGET_ENV: ${{ github.event.inputs.target_env || github.event.client_payload.target_env }}
+      INPUT_IMAGE_TAG: ${{ github.event.inputs.image_tag || github.event.client_payload.image_tag }}
+      INPUT_ECR_REGISTRY: ${{ github.event.inputs.ecr_registry || github.event.client_payload.ecr_registry }}
+      INPUT_CPU_REPOSITORY: ${{ github.event.inputs.cpu_repository || github.event.client_payload.cpu_repository }}
+      INPUT_GPU_REPOSITORY: ${{ github.event.inputs.gpu_repository || github.event.client_payload.gpu_repository }}
+      DEFAULT_ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+      DEFAULT_CPU_REPOSITORY: ${{ vars.ECR_AI_CPU_REPOSITORY }}
+      DEFAULT_GPU_REPOSITORY: ${{ vars.ECR_AI_GPU_REPOSITORY }}
+
+    steps:
+      - name: Prepare deployment metadata
+        id: meta
+        run: |
+          TARGET_ENV="$INPUT_TARGET_ENV"
+          IMAGE_TAG="$INPUT_IMAGE_TAG"
+          ECR_REGISTRY="${INPUT_ECR_REGISTRY:-$DEFAULT_ECR_REGISTRY}"
+          CPU_REPOSITORY="${INPUT_CPU_REPOSITORY:-$DEFAULT_CPU_REPOSITORY}"
+          GPU_REPOSITORY="${INPUT_GPU_REPOSITORY:-$DEFAULT_GPU_REPOSITORY}"
+
+          if [ "$TARGET_ENV" = "dev" ]; then
+            TARGET_BRANCH="dev"
+            OVERLAY_PATH="k8s/apps/ai-worker/overlays/dev"
+            EXPECTED_TAG_PREFIX="dev-"
+          elif [ "$TARGET_ENV" = "prod" ]; then
+            TARGET_BRANCH="main"
+            OVERLAY_PATH="k8s/apps/ai-worker/overlays/prod"
+            EXPECTED_TAG_PREFIX="prod-"
+          else
+            echo "target_env는 dev 또는 prod만 허용합니다."
+            exit 1
+          fi
+
+          if [ -z "$IMAGE_TAG" ]; then
+            echo "image_tag 입력이 필요합니다."
+            exit 1
+          fi
+
+          case "$IMAGE_TAG" in
+            "$EXPECTED_TAG_PREFIX"*) ;;
+            *)
+              echo "$TARGET_ENV 환경 image_tag는 $EXPECTED_TAG_PREFIX 로 시작해야 합니다."
+              exit 1
+              ;;
+          esac
+
+          if [ -z "$ECR_REGISTRY" ]; then
+            echo "ECR_REGISTRY GitHub Variable 또는 workflow 입력이 필요합니다."
+            exit 1
+          fi
+
+          if [[ "$ECR_REGISTRY" == */* ]]; then
+            echo "ECR_REGISTRY에는 repository 이름을 포함하지 않습니다. 예: 032886669461.dkr.ecr.ap-northeast-2.amazonaws.com"
+            exit 1
+          fi
+
+          if [ -z "$CPU_REPOSITORY" ]; then
+            echo "ECR_AI_CPU_REPOSITORY GitHub Variable 또는 workflow 입력이 필요합니다."
+            exit 1
+          fi
+
+          if [ -z "$GPU_REPOSITORY" ]; then
+            echo "ECR_AI_GPU_REPOSITORY GitHub Variable 또는 workflow 입력이 필요합니다."
+            exit 1
+          fi
+
+          {
+            echo "target_env=$TARGET_ENV"
+            echo "target_branch=$TARGET_BRANCH"
+            echo "overlay_path=$OVERLAY_PATH"
+            echo "image_tag=$IMAGE_TAG"
+            echo "ecr_registry=$ECR_REGISTRY"
+            echo "cpu_repository=$CPU_REPOSITORY"
+            echo "gpu_repository=$GPU_REPOSITORY"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout GitOps repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.target_branch }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Update Kustomize images
+        env:
+          OVERLAY_PATH: ${{ steps.meta.outputs.overlay_path }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+          ECR_REGISTRY: ${{ steps.meta.outputs.ecr_registry }}
+          CPU_REPOSITORY: ${{ steps.meta.outputs.cpu_repository }}
+          GPU_REPOSITORY: ${{ steps.meta.outputs.gpu_repository }}
+        run: |
+          KUSTOMIZATION_FILE="$OVERLAY_PATH/kustomization.yaml"
+          export KUSTOMIZATION_FILE
+
+          if [ ! -f "$KUSTOMIZATION_FILE" ]; then
+            echo "$KUSTOMIZATION_FILE 파일을 찾을 수 없습니다."
+            exit 1
+          fi
+
+          ruby -ryaml -e '
+            file = ENV.fetch("KUSTOMIZATION_FILE")
+            data = YAML.load_file(file)
+            images = data.fetch("images")
+
+            images.each do |image|
+              case image["name"]
+              when "utterai-ai-cpu"
+                image["newName"] = "#{ENV.fetch("ECR_REGISTRY")}/#{ENV.fetch("CPU_REPOSITORY")}"
+                image["newTag"] = ENV.fetch("IMAGE_TAG")
+              when "utterai-ai-gpu"
+                image["newName"] = "#{ENV.fetch("ECR_REGISTRY")}/#{ENV.fetch("GPU_REPOSITORY")}"
+                image["newTag"] = ENV.fetch("IMAGE_TAG")
+              end
+            end
+
+            File.write(file, data.to_yaml)
+          '
+
+          echo "Updated $KUSTOMIZATION_FILE"
+          grep -A8 "name: utterai-ai-cpu" "$KUSTOMIZATION_FILE"
+          grep -A8 "name: utterai-ai-gpu" "$KUSTOMIZATION_FILE"
+
+      - name: Validate Kustomize render
+        env:
+          OVERLAY_PATH: ${{ steps.meta.outputs.overlay_path }}
+        run: |
+          kubectl kustomize "$OVERLAY_PATH" > /tmp/ai-worker-rendered.yaml
+          grep "image:" /tmp/ai-worker-rendered.yaml
+
+      - name: Create GitOps update pull request
+        env:
+          TARGET_ENV: ${{ steps.meta.outputs.target_env }}
+          TARGET_BRANCH: ${{ steps.meta.outputs.target_branch }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          UPDATE_BRANCH="ci/ai-${TARGET_ENV}-${IMAGE_TAG}-${GITHUB_RUN_ID}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet; then
+            echo "변경 사항이 없어 PR을 생성하지 않습니다."
+            exit 0
+          fi
+
+          git checkout -b "$UPDATE_BRANCH"
+          git add k8s/apps/ai-worker/overlays
+          git commit -m "ci(ai): update $TARGET_ENV image tag to $IMAGE_TAG"
+          git push origin "$UPDATE_BRANCH"
+
+          gh pr create \
+            --base "$TARGET_BRANCH" \
+            --head "$UPDATE_BRANCH" \
+            --title "ci(ai): update $TARGET_ENV image tag to $IMAGE_TAG" \
+            --body "AI CPU/GPU image tag를 \`$IMAGE_TAG\`로 갱신합니다.
+
+          변경 대상:
+          - 환경: \`$TARGET_ENV\`
+          - 기준 브랜치: \`$TARGET_BRANCH\`
+          - CPU image tag: \`$IMAGE_TAG\`
+          - GPU image tag: \`$IMAGE_TAG\`
+
+          이 PR은 보호 브랜치에 직접 push하지 않고 GitOps image tag 변경을 리뷰 가능한 PR로 남기기 위해 생성되었습니다."
