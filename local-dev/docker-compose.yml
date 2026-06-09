@@ -1,4 +1,4 @@
-5sservices:
+services:
   nginx:
     image: nginx:1.27-alpine
     container_name: utterai-local-nginx
@@ -9,6 +9,7 @@
     depends_on:
       - prometheus
       - grafana
+      - tempo
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -71,6 +72,7 @@
     container_name: utterai-local-prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
       - "--web.external-url=http://localhost:8080/prometheus/"
       - "--web.route-prefix=/"
     ports:
@@ -78,6 +80,36 @@
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.103.0
+    container_name: utterai-local-otel-collector
+    command:
+      - "--config=/etc/otelcol/config.yaml"
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "8888:8888"
+      - "8889:8889"
+    volumes:
+      - ./otel-collector/config.yaml:/etc/otelcol/config.yaml:ro
+    depends_on:
+      - tempo
+
+  tempo:
+    image: grafana/tempo:2.5.0
+    container_name: utterai-local-tempo
+    user: "0"
+    command:
+      - "-config.file=/etc/tempo.yaml"
+    ports:
+      - "3200:3200"
+      - "4319:4317"
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo_data:/tmp/tempo
 
   grafana:
     image: grafana/grafana:11.3.0
@@ -90,14 +122,18 @@
       GF_SERVER_SERVE_FROM_SUB_PATH: "false"
     ports:
       - "3000:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
     depends_on:
       - prometheus
+      - tempo
 
 volumes:
   postgres_data:
   prometheus_data:
   grafana_data:
+  tempo_data:

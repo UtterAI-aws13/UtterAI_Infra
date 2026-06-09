@@ -40,6 +40,8 @@ spec:
               value: "/tmp/huggingface"
             - name: AWS_REGION
               value: "ap-northeast-2"
+            - name: APP_ENV
+              value: "dev"
             - name: SQS_QUEUE_URL
               value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-analysis-queue"
             - name: S3_RAW_AUDIO_BUCKET
@@ -50,6 +52,20 @@ spec:
               value: "utterai-dev-artifacts"
             - name: LOG_LEVEL
               value: "DEBUG"
+            - name: OTEL_SERVICE_NAME
+              value: "gpu-worker"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector.utterai-observability.svc.cluster.local:4318"
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "http/protobuf"
+            - name: OTEL_METRICS_EXPORTER
+              value: "otlp"
+            - name: OTEL_TRACES_EXPORTER
+              value: "otlp"
+            - name: OTEL_LOGS_EXPORTER
+              value: "none"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "deployment.environment=dev,team=utterai"
             - name: CUDA_VISIBLE_DEVICES
               value: "0"
           resources:
