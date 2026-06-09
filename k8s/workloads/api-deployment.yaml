@@ -1,3 +1,21 @@
+# 메인 백엔드 API — Deployment + Service + HPA + ConfigMap
+#
+# 외부 사용자 요청을 처리하는 REST API 서버.
+# ALB Ingress → utterai-api-service → 이 Deployment로 트래픽이 흐른다.
+#
+# 노드 배치 전략:
+#   nodeSelector workload=api  — API 전용 노드풀(utterai-dev-api)에만 배치
+#   toleration dedicated=api   — 해당 노드의 NoSchedule taint 허용
+#   topologySpreadConstraints  — 가용 영역(AZ)별로 Pod를 고르게 분산해 AZ 장애 대응
+#
+# 환경변수 구조:
+#   envFrom(ConfigMap)  — 비민감 앱 설정 (DB 호스트, Redis 호스트, 버킷명 등)
+#   env(Secret)         — 민감 값 (DB 비밀번호, JWT 키 등) ExternalSecret이 동기화한 Secret 참조
+#
+# Health Probe:
+#   readiness /health/ready — DB/Redis 연결 포함한 실제 서비스 가능 여부 확인
+#   liveness  /health/live  — 프로세스 생존 여부만 확인 (DB 연결 불포함)
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,6 +39,7 @@ spec:
           operator: Equal
           value: api
           effect: NoSchedule
+      # AZ 간 최대 1개 차이로 Pod 분산 — 특정 AZ 장애 시 서비스 지속 가능
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: topology.kubernetes.io/zone
@@ -30,24 +49,36 @@ spec:
               app: utterai-api
       containers:
         - name: api
-          # ECR URI는 실제 배포 시 교체
-          image: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend:latest
+          # ${BACKEND_TAG}: k8s-deploy.sh에서 ECR 최신 이미지 태그로 envsubst 치환
+          image: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend:${BACKEND_TAG}
           ports:
             - containerPort: 8080
+          # 비민감 설정 전체를 ConfigMap에서 일괄 로드
           envFrom:
             - configMapRef:
                 name: utterai-api-config
+          # 민감 값만 Secret에서 개별 주입 (envFrom으로 Secret 전체를 노출하지 않음)
           env:
             - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: backend-api-secret
                   key: DB_PASSWORD
-            - name: INTERNAL_SERVICE_TOKEN
+            - name: JWT_SECRET_KEY
               valueFrom:
                 secretKeyRef:
                   name: backend-api-secret
-                  key: INTERNAL_SERVICE_TOKEN
+                  key: JWT_SECRET_KEY
+            - name: INTERNAL_CALLBACK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: backend-api-secret
+                  key: INTERNAL_CALLBACK_TOKEN
+            - name: INTERNAL_CALLBACK_HMAC_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: backend-api-secret
+                  key: INTERNAL_CALLBACK_HMAC_SECRET
           resources:
             requests:
               cpu: "250m"
@@ -55,6 +86,7 @@ spec:
             limits:
               cpu: "1"
               memory: "1Gi"
+          # ready: DB/Redis 연결 확인 포함 — 실패 시 트래픽 차단
           readinessProbe:
             httpGet:
               path: /health/ready
@@ -62,6 +94,7 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 10
             failureThreshold: 3
+          # live: 프로세스 응답 여부만 확인 — 실패 시 Pod 재시작
           livenessProbe:
             httpGet:
               path: /health/live
@@ -70,6 +103,7 @@ spec:
             periodSeconds: 20
             failureThreshold: 3
 ---
+# ClusterIP Service — ALB Ingress의 백엔드 타겟
 apiVersion: v1
 kind: Service
 metadata:
@@ -83,6 +117,8 @@ spec:
     - port: 8080
       targetPort: 8080
 ---
+# HPA — CPU 70% 초과 시 최대 2개까지 자동 스케일아웃
+# (hpa-api.yaml의 독립 HPA와 중복이므로 둘 중 하나만 유지 필요)
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -103,6 +139,8 @@ spec:
           type: Utilization
           averageUtilization: 70
 ---
+# ConfigMap — 비민감 앱 설정
+# ${RDS_ENDPOINT}, ${REDIS_ENDPOINT}, ${AWS_ACCOUNT_ID}는 k8s-deploy.sh envsubst가 치환
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -115,7 +153,7 @@ data:
   LOG_LEVEL: "DEBUG"
   FRONTEND_ORIGIN: "https://dev.utterai.com"
   CORS_ALLOW_ORIGINS: "https://dev.utterai.com"
-  DB_HOST: "${AURORA_WRITER_ENDPOINT}"
+  DB_HOST: "${RDS_ENDPOINT}"
   DB_PORT: "5432"
   DB_NAME: "utterai"
   DB_USER: "utterai_app"
@@ -124,14 +162,11 @@ data:
   REDIS_HOST: "${REDIS_ENDPOINT}"
   REDIS_PORT: "6379"
   REDIS_DB: "0"
+  # TLS 활성화: ElastiCache는 in-transit 암호화가 기본 활성화되어 있음
   REDIS_TLS_ENABLED: "true"
-  S3_RAW_AUDIO_BUCKET: "utterai-dev-raw-audio"
-  S3_PROCESSED_AUDIO_BUCKET: "utterai-dev-processed-audio"
-  S3_DOCUMENT_BUCKET: "utterai-dev-documents"
-  S3_REPORT_BUCKET: "utterai-dev-reports"
-  S3_ARTIFACT_BUCKET: "utterai-dev-artifacts"
-  SQS_ANALYSIS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-analysis-queue"
-  SQS_ANALYSIS_DLQ_URL: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-analysis-dlq"
+  RAW_AUDIO_BUCKET: "utterai-dev-raw-audio"
+  SQS_AUDIO_PREPROCESS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-audio-preprocess-queue"
+  # OTEL Collector는 utterai-observability 네임스페이스에서 실행 중
   OTEL_SERVICE_NAME: "backend"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.utterai-observability.svc.cluster.local:4318"
   OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"

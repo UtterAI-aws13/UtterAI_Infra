@@ -26,3 +26,7 @@ variable "private_data_subnet_ids" {
 variable "allowed_security_group_id" {
   type = string
 }
+
+variable "cluster_security_group_id" {
+  type = string
+}

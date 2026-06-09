@@ -78,25 +78,20 @@ variable "api_node_max_size" {
   type = number
 }
 
-# ── Aurora ───────────────────────────────────────────────────────────────────
-
-variable "aurora_instance_class" {
-  type = string
-}
-
-variable "aurora_database_name" {
-  type    = string
-  default = "utterai"
-}
-
-variable "aurora_master_username" {
-  type    = string
-  default = "utterai_app"
-}
-
-variable "aurora_backup_retention" {
+variable "gpu_node_desired_size" {
   type    = number
-  default = 3
+  default = 0
+}
+
+variable "gpu_node_min_size" {
+  type    = number
+  default = 0
+}
+
+# ── RDS ──────────────────────────────────────────────────────────────────────
+
+variable "rds_instance_class" {
+  type = string
 }
 
 # ── Redis ─────────────────────────────────────────────────────────────────────
