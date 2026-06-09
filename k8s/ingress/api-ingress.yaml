@@ -1,10 +1,19 @@
+# ALB Ingress — 외부 트래픽을 메인 백엔드 API로 라우팅
+#
+# AWS Load Balancer Controller가 이 Ingress를 감지해 ALB를 자동 생성/관리한다.
+# group.name: utterai-dev 로 여러 Ingress가 하나의 ALB를 공유한다 (비용 절감).
+# HTTP(80) 요청은 HTTPS(443)로 자동 리다이렉트된다.
+# ${ACM_CERTIFICATE_ARN}은 k8s-deploy.sh에서 envsubst로 치환된다.
+
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: utterai-api-ingress
   namespace: utterai-api
   annotations:
+    # internet-facing: 외부 인터넷에서 접근 가능한 ALB 생성
     alb.ingress.kubernetes.io/scheme: internet-facing
+    # ip 모드: Pod IP로 직접 라우팅 (instance 모드 대비 홉 감소)
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/healthcheck-path: /health/ready
     alb.ingress.kubernetes.io/healthcheck-interval-seconds: "15"
@@ -12,9 +21,11 @@ metadata:
     alb.ingress.kubernetes.io/healthy-threshold-count: "2"
     alb.ingress.kubernetes.io/unhealthy-threshold-count: "3"
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    # HTTP → HTTPS 강제 리다이렉트
     alb.ingress.kubernetes.io/ssl-redirect: "443"
-    # ACM 인증서 ARN: terraform output 또는 콘솔에서 확인 후 교체
+    # ACM 인증서 ARN: k8s-deploy.sh 실행 시 envsubst가 실제 값으로 치환
     alb.ingress.kubernetes.io/certificate-arn: ${ACM_CERTIFICATE_ARN}
+    # 동일 ALB를 공유할 다른 Ingress와 그룹 일치 필요
     alb.ingress.kubernetes.io/group.name: utterai-dev
 spec:
   ingressClassName: alb

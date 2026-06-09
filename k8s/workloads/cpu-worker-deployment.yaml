@@ -1,3 +1,9 @@
+# CPU Worker Deployment — 음성 전처리 파이프라인
+#
+# SQS audio-preprocess-queue에서 메시지를 소비해 S3 원본 음성을 전처리하고
+# 결과를 SQS gpu-inference-queue로 전달하는 워커.
+# CPU 집약적 작업(음성 디코딩, 노이즈 제거 등)으로 높은 CPU/메모리 리소스를 요구한다.
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -16,6 +22,7 @@ spec:
       serviceAccountName: utterai-cpu-worker-sa
       nodeSelector:
         workload: worker
+      # SQS 메시지 처리 중 강제 종료를 막기 위해 60초 유예 설정
       terminationGracePeriodSeconds: 60
       containers:
         - name: worker
@@ -24,14 +31,17 @@ spec:
           env:
             - name: AWS_REGION
               value: "ap-northeast-2"
+            # 소비 큐: 백엔드 API가 음성 업로드 후 enqueue
             - name: SQS_CPU_QUEUE_URL
               value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-audio-preprocess-queue"
+            # 생산 큐: 전처리 완료 후 GPU 추론 워커로 전달
             - name: SQS_ML_GPU_QUEUE_URL
               value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-gpu-inference-queue"
             - name: S3_BUCKET_AUDIO
               value: "utterai-dev-raw-audio"
             - name: LOG_LEVEL
               value: "DEBUG"
+          # 음성 파일 로딩 및 전처리에 충분한 CPU/메모리 확보
           resources:
             requests:
               cpu: "2"
@@ -40,6 +50,7 @@ spec:
               cpu: "4"
               memory: "8Gi"
           lifecycle:
+            # preStop: SIGTERM 전 5초 대기 — 처리 중인 음성 파일 S3 업로드 완료 보장
             preStop:
               exec:
                 command: ["/bin/sh", "-c", "sleep 5"]
