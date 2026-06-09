@@ -732,7 +732,7 @@
   "schemaVersion": 40,
   "tags": [
     "utterai",
-    "local-dev"
+    "observability"
   ],
   "templating": {
     "list": []
@@ -743,8 +743,8 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "UtterAI Local Dev Overview",
-  "uid": "utterai-local-dev-overview",
+  "title": "UtterAI Observability Overview",
+  "uid": "utterai-observability-overview",
   "version": 1,
   "weekStart": ""
 }

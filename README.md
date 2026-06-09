@@ -1,41 +1,56 @@
-# UtterAI_Infra
+# UtterAI Infra
 
-UtterAI Infra repository.
+UtterAI 인프라 구성과 로컬 관측성 환경을 관리하는 저장소입니다.
 
-현재 저장소는 인프라 구성을 위한 코드를 관리한다.
+현재 주요 범위는 EKS 인프라 구성과 로컬 observability Docker Compose입니다.
 
-## repository structure
+## Repository Structure
 
-```
-infra-repo/
-├── .github/
-│   ├── pull_request_template.md
-│   └── ISSUE_TEMPLATE/
-│       ├── infra-change.yml
-│       ├── infra-bug.yml
-│       └── config.yml
-├── envs/
+```text
+UtterAI_Infra/
+├── infra-eks/
 │   ├── dev/
-│   └── prod/
-├── modules/
-│   ├── network/
-│   ├── eks/
-│   ├── karpenter/
-│   ├── security/
-│   ├── database/
-│   └── observability/
-├── helm/
-├── scripts/
+│   ├── prod/
+│   └── README.md
+├── observability/
+│   ├── docker-compose.yml
+│   ├── grafana/
+│   ├── nginx/
+│   ├── otel-collector/
+│   ├── postgres/
+│   ├── prometheus/
+│   ├── tempo/
+│   └── README.md
 └── README.md
 ```
 
 ## Main Documents
 
-- 
+| 문서 | 용도 |
+| --- | --- |
+| `observability/README.md` | 로컬 observability stack 실행 방법 |
+| `infra-eks/README.md` | EKS 인프라 구성 진입점 |
 
-## Implementation Reference
+## Local Observability
 
-구현 시 다음 아키텍처를 기준으로 사용한다.
+```bash
+cd observability
+docker compose up -d
+docker compose ps
+```
+
+주요 접속 URL:
+
+```text
+Nginx entry:    http://localhost:8080
+Prometheus:     http://localhost:9090/graph
+Grafana:        http://localhost:3000
+Tempo API:      http://localhost:3200
+OTLP gRPC:      localhost:4317
+OTLP HTTP:      http://localhost:4318
+```
+
+Grafana 기본 로그인은 `admin / admin`입니다.
 
 ## Branch Strategy
 
