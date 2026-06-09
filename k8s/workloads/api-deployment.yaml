@@ -167,5 +167,11 @@ data:
   RAW_AUDIO_BUCKET: "utterai-dev-raw-audio"
   SQS_AUDIO_PREPROCESS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-audio-preprocess-queue"
   # OTEL Collector는 utterai-observability 네임스페이스에서 실행 중
-  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.utterai-observability.svc.cluster.local:4317"
+  OTEL_SERVICE_NAME: "backend"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.utterai-observability.svc.cluster.local:4318"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+  OTEL_METRICS_EXPORTER: "otlp"
+  OTEL_TRACES_EXPORTER: "otlp"
+  OTEL_LOGS_EXPORTER: "none"
+  OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=dev,team=utterai"
   CLOUDWATCH_LOG_GROUP: "/aws/eks/utterai-dev/backend"

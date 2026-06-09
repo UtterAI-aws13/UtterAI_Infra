@@ -53,6 +53,8 @@ spec:
               value: "/tmp/huggingface"
             - name: AWS_REGION
               value: "ap-northeast-2"
+            - name: APP_ENV
+              value: "dev"
             # 소비 큐: CPU 워커가 전처리 완료 후 enqueue
             - name: SQS_ML_GPU_QUEUE_URL
               value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-gpu-inference-queue"
@@ -63,6 +65,20 @@ spec:
               value: "utterai-dev-raw-audio"
             - name: LOG_LEVEL
               value: "DEBUG"
+            - name: OTEL_SERVICE_NAME
+              value: "ml-gpu-worker"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector.utterai-observability.svc.cluster.local:4318"
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "http/protobuf"
+            - name: OTEL_METRICS_EXPORTER
+              value: "otlp"
+            - name: OTEL_TRACES_EXPORTER
+              value: "otlp"
+            - name: OTEL_LOGS_EXPORTER
+              value: "none"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "deployment.environment=dev,team=utterai"
             # GPU 0번만 사용 — 멀티 GPU 노드에서 LLM 워커와 GPU 충돌 방지
             - name: CUDA_VISIBLE_DEVICES
               value: "0"
