@@ -56,7 +56,7 @@ module "s3" {
 
   project_name    = var.project_name
   environment     = var.environment
-  frontend_domain = "dev.utterai.com"
+  frontend_domain = "d4kxfdssuth29.cloudfront.net"
 }
 
 # ── SQS ──────────────────────────────────────────────────────────────────────

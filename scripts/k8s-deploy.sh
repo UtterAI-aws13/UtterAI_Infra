@@ -31,11 +31,35 @@ tf_output() {
 export RDS_ENDPOINT=$(tf_output "rds_endpoint")
 export REDIS_ENDPOINT=$(tf_output "redis_endpoint")
 
-echo "utterai-backend  : $BACKEND_TAG"
-echo "utterai-ai-cpu   : $AI_CPU_TAG"
-echo "utterai-ai-gpu   : $AI_GPU_TAG"
-echo "RDS endpoint     : $RDS_ENDPOINT"
-echo "Redis endpoint   : $REDIS_ENDPOINT"
+# ACM 인증서 ARN 자동 조회 — 수동 export 없이도 동작
+# 이미 export된 값이 있으면 그대로 사용, 없으면 AWS에서 조회
+if [[ -z "${ACM_CERTIFICATE_ARN:-}" ]]; then
+  export ACM_CERTIFICATE_ARN=$(aws acm list-certificates \
+    --region "$AWS_REGION" \
+    --query 'CertificateSummaryList[?DomainName==`*.dev.utterai.com`].CertificateArn' \
+    --output text)
+fi
+
+# ACM 인증서 상태 확인 — 없거나 ISSUED가 아니면 경고만 출력하고 계속 진행
+# (커스텀 도메인 없이 CloudFront 기본 도메인으로 운영 중인 경우 무시 가능)
+if [[ -z "$ACM_CERTIFICATE_ARN" ]]; then
+  echo "WARN: *.dev.utterai.com ACM 인증서 없음 — Ingress는 HTTP 전용으로 동작합니다."
+else
+  CERT_STATUS=$(aws acm describe-certificate \
+    --certificate-arn "$ACM_CERTIFICATE_ARN" \
+    --region "$AWS_REGION" \
+    --query 'Certificate.Status' --output text)
+  if [[ "$CERT_STATUS" != "ISSUED" ]]; then
+    echo "WARN: ACM 인증서 상태 $CERT_STATUS — Ingress는 HTTP 전용으로 동작합니다."
+  fi
+fi
+
+echo "utterai-backend      : $BACKEND_TAG"
+echo "utterai-ai-cpu       : $AI_CPU_TAG"
+echo "utterai-ai-gpu       : $AI_GPU_TAG"
+echo "RDS endpoint         : $RDS_ENDPOINT"
+echo "Redis endpoint       : $REDIS_ENDPOINT"
+echo "ACM certificate ARN  : $ACM_CERTIFICATE_ARN"
 
 apply() {
   envsubst < "$1" | kubectl apply -f -

@@ -21,6 +21,21 @@ resource "aws_cloudfront_distribution" "frontend" {
     origin_path              = "/current"
   }
 
+  # ALB API origin — alb_dns_name이 설정된 경우에만 생성
+  dynamic "origin" {
+    for_each = var.alb_dns_name != "" ? [var.alb_dns_name] : []
+    content {
+      domain_name = origin.value
+      origin_id   = "ALB-API"
+      custom_origin_config {
+        http_port              = 80
+        https_port             = 443
+        origin_protocol_policy = "http-only"
+        origin_ssl_protocols   = ["TLSv1.2"]
+      }
+    }
+  }
+
   default_cache_behavior {
     target_origin_id       = "S3-${var.frontend_bucket_id}"
     viewer_protocol_policy = "redirect-to-https"
@@ -38,6 +53,33 @@ resource "aws_cloudfront_distribution" "frontend" {
     min_ttl     = 0
     default_ttl = 3600
     max_ttl     = 86400
+  }
+
+  # /api/* 요청을 ALB로 프록시 — alb_dns_name이 설정된 경우에만 생성
+  dynamic "ordered_cache_behavior" {
+    for_each = var.alb_dns_name != "" ? [var.alb_dns_name] : []
+    content {
+      path_pattern           = "/api/*"
+      target_origin_id       = "ALB-API"
+      viewer_protocol_policy = "redirect-to-https"
+      allowed_methods        = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+      cached_methods         = ["GET", "HEAD"]
+      compress               = false
+
+      # API 응답은 캐시하지 않음
+      min_ttl     = 0
+      default_ttl = 0
+      max_ttl     = 0
+
+      forwarded_values {
+        # Authorization, Content-Type 등 API 헤더 전달
+        headers      = ["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"]
+        query_string = true
+        cookies {
+          forward = "all"
+        }
+      }
+    }
   }
 
   # SPA 라우팅 — 404를 index.html로 처리

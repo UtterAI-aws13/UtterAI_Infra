@@ -47,6 +47,19 @@ spec:
           labelSelector:
             matchLabels:
               app: utterai-api
+      initContainers:
+        - name: db-migrate
+          image: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend:${BACKEND_TAG}
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef:
+                name: utterai-api-config
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: backend-api-secret
+                  key: DB_PASSWORD
       containers:
         - name: api
           # ${BACKEND_TAG}: k8s-deploy.sh에서 ECR 최신 이미지 태그로 envsubst 치환
@@ -151,8 +164,8 @@ data:
   APP_NAME: "utterai-backend"
   API_BASE_PATH: "/api/v1"
   LOG_LEVEL: "DEBUG"
-  FRONTEND_ORIGIN: "https://dev.utterai.com"
-  CORS_ALLOW_ORIGINS: "https://dev.utterai.com"
+  FRONTEND_ORIGIN: "https://d4kxfdssuth29.cloudfront.net"
+  CORS_ALLOW_ORIGINS: "https://d4kxfdssuth29.cloudfront.net"
   DB_HOST: "${RDS_ENDPOINT}"
   DB_PORT: "5432"
   DB_NAME: "utterai"
