@@ -44,8 +44,10 @@ apply() {
 # 1. 네임스페이스
 kubectl apply -f k8s/namespaces/
 
-# 2. RBAC
-kubectl apply -f k8s/rbac/
+# 2. RBAC (serviceaccounts.yaml에 ${AWS_ACCOUNT_ID} 플레이스홀더가 있으므로 envsubst 필요)
+for f in k8s/rbac/*.yaml; do
+  apply "$f"
+done
 
 # 3. External Secrets
 kubectl apply -f k8s/secrets/cluster-secret-store.yaml

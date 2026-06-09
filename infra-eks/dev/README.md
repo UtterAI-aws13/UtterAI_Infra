@@ -34,10 +34,15 @@
 
 ```text
 User → Route 53 → CloudFront → ALB Ingress → EKS
-                                               ├── API Pod         (api NodePool, MNG + HPA)
-                                               ├── CPU AI Worker   (ai-cpu NodePool, KEDA)
-                                               ├── GPU AI Worker   (ai-gpu NodePool, KEDA)
-                                               └── Batch Worker    (spot-batch NodePool, KEDA)
+                                               ├── API Pod          (api NodePool, MNG + HPA)
+                                               ├── AI API Pod       (ai-api NodePool, 내부 전용)
+                                               ├── CPU AI Worker    (ai-cpu NodePool, HPA)
+                                               ├── GPU AI Worker    (ai-gpu NodePool, HPA)
+                                               └── Batch Worker     (utterai-batch, HPA)
+
+SQS 파이프라인:
+  audio-preprocess-queue → gpu-inference-queue → report-analysis-queue
+  rag-ingest-queue (RAG 문서 ingest 전용)
 ```
 
 ---
@@ -51,12 +56,14 @@ User → Route 53 → CloudFront → ALB Ingress → EKS
 | `vpc` | `terraform/modules/vpc/` | VPC, Public/Private-App/Private-Data 서브넷(2AZ), NAT GW 1개, VPC Endpoint 5개 |
 | `eks` | `terraform/modules/eks/` | EKS 클러스터, system/api Managed NodeGroup, OIDC Provider, Cluster Addons |
 | `eks-addons` | `terraform/modules/eks-addons/` | LBC, Karpenter, KEDA, metrics-server, nvidia-device-plugin (Helm) |
-| `irsa` | `terraform/modules/irsa/` | IAM Role 7개 + Karpenter Interruption Queue(SQS) |
-| `aurora` | `terraform/modules/aurora/` | Aurora PostgreSQL 16, Single-AZ, Writer 1개, 비밀번호 Secrets Manager 자동 관리 |
+| `irsa` | `terraform/modules/irsa/` | IAM Role 7개 (LBC, Karpenter, ESO, backend, ai-worker, gpu-worker, batch-worker) |
+| `rds` | `terraform/modules/rds/` | RDS PostgreSQL 16, Single-AZ, 비밀번호 Secrets Manager 자동 관리 |
 | `redis` | `terraform/modules/redis/` | ElastiCache Redis 7, 단일 노드, TLS 활성화 |
 | `s3` | `terraform/modules/s3/` | 버킷 6개 (frontend, raw-audio, processed-audio, documents, reports, artifacts) |
-| `sqs` | `terraform/modules/sqs/` | analysis-queue + DLQ |
-| `cognito` | `terraform/modules/cognito/` | User Pool + App Client |
+| `sqs` | `terraform/modules/sqs/` | 큐 4개 + DLQ 4개: audio-preprocess, gpu-inference, report-analysis, rag-ingest |
+| `secrets` | `terraform/modules/secrets/` | Secrets Manager 정책 및 접근 설정 |
+| `cloudfront` | `terraform/modules/cloudfront/` | 프론트엔드 S3 배포 |
+| `ecr` | `terraform/modules/ecr/` | ECR 리포지토리 |
 
 > **VPC는 별도 사전 작업 없음.** `terraform apply` 한 번으로 VPC부터 EKS까지 모두 생성된다.
 
@@ -64,24 +71,26 @@ User → Route 53 → CloudFront → ALB Ingress → EKS
 
 | 디렉토리 | 파일 | 내용 |
 |---|---|---|
-| `k8s/namespaces/` | `namespaces.yaml` | utter-api, utter-ai-cpu, utter-ai-gpu, utter-batch, utter-observability |
-| `k8s/nodepools/` | `ec2nodeclass-default.yaml` | general/api/ai-cpu/batch 공용 EC2NodeClass |
-| `k8s/nodepools/` | `ec2nodeclass-gpu.yaml` | ai-gpu 전용 EC2NodeClass (100GB 볼륨) |
-| `k8s/nodepools/` | `nodepool-general.yaml` | On-Demand+Spot, m6i/c6i |
-| `k8s/nodepools/` | `nodepool-api.yaml` | On-Demand, taint: dedicated=api |
-| `k8s/nodepools/` | `nodepool-ai-cpu.yaml` | On-Demand, m/c/r 계열 |
-| `k8s/nodepools/` | `nodepool-ai-gpu.yaml` | Spot 허용(dev), g4dn.xlarge |
-| `k8s/nodepools/` | `nodepool-spot-batch.yaml` | Spot only |
-| `k8s/rbac/` | `serviceaccounts.yaml` | SA 4개 + IRSA role-arn annotation |
+| `k8s/namespaces/` | `namespaces.yaml` | utterai-api, utterai-ai-api, utterai-ai-cpu, utterai-ai-gpu, utterai-batch, utterai-observability |
+| `k8s/rbac/` | `serviceaccounts.yaml` | SA 5개 + IRSA role-arn annotation (`${AWS_ACCOUNT_ID}` 치환 필요) |
 | `k8s/rbac/` | `rolebindings.yaml` | 각 SA에 K8s 내부 최소 권한 |
+| `k8s/secrets/` | `cluster-secret-store.yaml` | ClusterSecretStore: `aws-secrets-manager` |
+| `k8s/secrets/` | `backend-api-external-secret.yaml` | utterai-api 네임스페이스 — DB_PASSWORD, JWT_SECRET_KEY, INTERNAL_CALLBACK_TOKEN, INTERNAL_CALLBACK_HMAC_SECRET |
+| `k8s/secrets/` | `ai-worker-external-secret.yaml` | utterai-ai-gpu + utterai-batch — DB_USER/PASSWORD/HOST/PORT/NAME |
+| `k8s/secrets/` | `gpu-worker-external-secret.yaml` | utterai-ai-gpu — HF_TOKEN |
 | `k8s/ingress/` | `api-ingress.yaml` | ALB internet-facing, HTTPS 리다이렉트 |
-| `k8s/workloads/` | `api-deployment.yaml` | Deployment + Service + HPA + ConfigMap |
-| `k8s/workloads/` | `cpu-worker-deployment.yaml` | replicas: 0, KEDA 제어 |
-| `k8s/workloads/` | `gpu-worker-deployment.yaml` | nvidia.com/gpu: 1, replicas: 0 |
-| `k8s/workloads/` | `batch-worker-deployment.yaml` | Spot 노드 대상, replicas: 0 |
-| `k8s/workloads/` | `keda-scaledobject-cpu.yaml` | queueLength: 5, min: 0, max: 2 |
-| `k8s/workloads/` | `keda-scaledobject-gpu.yaml` | queueLength: 1, min: 0, max: 1 |
-| `k8s/workloads/` | `keda-scaledobject-batch.yaml` | queueLength: 10, min: 0, max: 5 |
+| `k8s/workloads/` | `api-deployment.yaml` | 메인 백엔드 API Deployment + Service |
+| `k8s/workloads/` | `ai-api-deployment.yaml` | AI 내부 API Deployment + Service |
+| `k8s/workloads/` | `cpu-worker-deployment.yaml` | CPU 음성 전처리 워커 |
+| `k8s/workloads/` | `llm-gpu-worker-deployment.yaml` | LLM 추론 GPU 워커 (report-analysis-queue 소비) |
+| `k8s/workloads/` | `ml-gpu-worker-deployment.yaml` | ML STT/화자분리 GPU 워커 (gpu-inference-queue 소비) |
+| `k8s/workloads/` | `batch-worker-deployment.yaml` | RAG ingest 배치 워커 |
+| `k8s/workloads/` | `hpa-api.yaml` | API HPA (CPU 70%) |
+| `k8s/workloads/` | `hpa-cpu-worker.yaml` | CPU 워커 HPA |
+| `k8s/workloads/` | `hpa-llm-gpu-worker.yaml` | LLM GPU 워커 HPA (maxReplicas: 2) |
+| `k8s/workloads/` | `hpa-ml-gpu-worker.yaml` | ML GPU 워커 HPA (maxReplicas: 2) |
+| `k8s/workloads/` | `hpa-batch-worker.yaml` | 배치 워커 HPA |
+| `k8s/apps/backend/` | `base/` + `overlays/dev/` | Kustomize 구조 (별도 배포 — `kubectl apply -k`) |
 
 ---
 
@@ -102,18 +111,25 @@ UtterAI_Infra/
 │       ├── eks-addons/
 │       ├── irsa/
 │       │   └── policies/lbc-policy.json
-│       ├── aurora/
+│       ├── rds/
 │       ├── redis/
 │       ├── s3/
 │       ├── sqs/
-│       └── cognito/
+│       ├── secrets/
+│       ├── cloudfront/
+│       └── ecr/
 │
-└── k8s/
-    ├── namespaces/
-    ├── nodepools/     ← Karpenter EC2NodeClass + NodePool
-    ├── rbac/          ← ServiceAccount + RoleBinding
-    ├── ingress/       ← ALB Ingress
-    └── workloads/     ← Deployment + KEDA ScaledObject
+├── k8s/
+│   ├── namespaces/     ← 네임스페이스 정의
+│   ├── rbac/           ← ServiceAccount + RoleBinding
+│   ├── secrets/        ← ClusterSecretStore + ExternalSecret
+│   ├── ingress/        ← ALB Ingress
+│   ├── workloads/      ← Deployment + HPA
+│   └── apps/
+│       └── backend/    ← Kustomize base/overlays (별도 배포)
+│
+└── scripts/
+    └── k8s-deploy.sh   ← 워크로드 배포 자동화 (namespaces ~ ingress 일괄 적용)
 ```
 
 ---
@@ -167,8 +183,7 @@ aws dynamodb create-table \
 Docker 이미지를 올릴 리포지토리를 미리 만든다. 이미지 이름은 팀과 협의 후 확정.
 
 ```bash
-# 현재 임시 이름. 팀 협의 후 수정 가능
-for repo in utterai-backend utterai-ai-cpu utterai-ai-gpu utterai-batch; do
+for repo in utterai-backend utterai-ai-cpu utterai-ai-gpu; do
   aws ecr create-repository \
     --repository-name $repo \
     --region ap-northeast-2 \
@@ -201,7 +216,7 @@ aws acm list-certificates --region ap-northeast-2 \
 
 ### 4.5 Docker 이미지 빌드 및 ECR 푸시
 
-**Workload 배포(STEP 9) 전까지 완료**되어야 한다. 이미지가 없으면 Pod가 `ImagePullBackOff` 상태가 된다.
+**Workload 배포(STEP 5) 전까지 완료**되어야 한다. 이미지가 없으면 Pod가 `ImagePullBackOff` 상태가 된다.
 
 ```bash
 export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
@@ -229,11 +244,6 @@ docker push ${ECR_REGISTRY}/utterai-ai-cpu:latest
 docker build -t ${ECR_REGISTRY}/utterai-ai-gpu:${GIT_SHA} <AI GPU repo 경로>
 docker push ${ECR_REGISTRY}/utterai-ai-gpu:${GIT_SHA}
 docker push ${ECR_REGISTRY}/utterai-ai-gpu:latest
-
-# Batch Worker 이미지
-docker build -t ${ECR_REGISTRY}/utterai-batch:${GIT_SHA} <Batch repo 경로>
-docker push ${ECR_REGISTRY}/utterai-batch:${GIT_SHA}
-docker push ${ECR_REGISTRY}/utterai-batch:latest
 ```
 
 > **GPU 이미지 주의**: CUDA, PyTorch, 화자 분리 모델 포함 시 이미지가 수 GB에 달할 수 있다.  
@@ -241,24 +251,49 @@ docker push ${ECR_REGISTRY}/utterai-batch:latest
 
 ### 4.6 Secrets Manager 수동 시크릿 생성
 
-`terraform apply` 후에 생성한다. Aurora DB 비밀번호는 Terraform이 자동 생성하지만, 나머지 두 개는 수동으로 만들어야 한다.
+`terraform apply` 후에 생성한다. 아래 3개 시크릿을 수동으로 만들어야 한다.
 
 ```bash
-# Redis AUTH 토큰 (임의의 강력한 문자열 사용)
+# 1. 백엔드 API 시크릿 — JWT 키, 내부 콜백 토큰
+# DB_PASSWORD: RDS 마스터 비밀번호 (terraform output rds_db_secret_arn으로 확인 가능)
 aws secretsmanager create-secret \
-  --name "utterai-dev/redis-auth-token" \
-  --secret-string '{"REDIS_AUTH_TOKEN":"<강력한_랜덤_문자열>"}' \
+  --name "utterai-dev/backend-api-secret" \
+  --secret-string '{
+    "DB_PASSWORD": "<RDS 마스터 비밀번호>",
+    "JWT_SECRET_KEY": "<강력한_랜덤_문자열>",
+    "INTERNAL_CALLBACK_TOKEN": "<강력한_랜덤_문자열>",
+    "INTERNAL_CALLBACK_HMAC_SECRET": "<강력한_랜덤_문자열>"
+  }' \
   --region ap-northeast-2
 
-# 백엔드-AI 서버 간 내부 통신 토큰
+# 2. AI/배치 워커 DB 접속 정보 — GPU/배치 워커가 DB에 직접 접속할 때 사용
+export RDS_ENDPOINT=$(cd terraform/environments/dev && terraform output -raw rds_endpoint)
 aws secretsmanager create-secret \
-  --name "utterai-dev/internal-service-token" \
-  --secret-string '{"INTERNAL_SERVICE_TOKEN":"<강력한_랜덤_문자열>"}' \
+  --name "utterai-dev/ai-worker-secret" \
+  --secret-string "{
+    \"DB_USER\": \"utterai\",
+    \"DB_PASSWORD\": \"<AI 워커용 DB 비밀번호>\",
+    \"DB_HOST\": \"${RDS_ENDPOINT}\",
+    \"DB_PORT\": \"5432\",
+    \"DB_NAME\": \"utterai\"
+  }" \
+  --region ap-northeast-2
+
+# 3. GPU 워커 HuggingFace 토큰
+aws secretsmanager create-secret \
+  --name "utterai-dev/gpu-worker-secret" \
+  --secret-string '{"HF_TOKEN": "<HuggingFace Access Token>"}' \
   --region ap-northeast-2
 ```
 
-> Aurora DB 비밀번호(`utterai-dev/db-password`)는 Terraform aurora 모듈의  
-> `manage_master_user_password = true` 설정으로 **자동 생성**된다.
+> **RDS 마스터 비밀번호 확인 방법**:  
+> Terraform `rds` 모듈의 `manage_master_user_password = true` 설정으로 RDS가 자동 생성한 시크릿(ARN: `terraform output -raw rds_db_secret_arn`)에서 확인한다.
+
+```bash
+# 생성 확인
+aws secretsmanager list-secrets --region ap-northeast-2 \
+  --query 'SecretList[?starts_with(Name, `utterai-dev`)].Name'
+```
 
 ---
 
@@ -266,7 +301,7 @@ aws secretsmanager create-secret \
 
 ### STEP 1 — Terraform apply (VPC · EKS · 전체 AWS 리소스)
 
-VPC, 서브넷, EKS 클러스터, Aurora, Redis, S3, SQS, Cognito, IAM Role 등  
+VPC, 서브넷, EKS 클러스터, RDS, Redis, S3, SQS, IAM Role 등  
 **모든 AWS 리소스가 이 한 번의 apply로 생성**된다.
 
 ```bash
@@ -281,21 +316,32 @@ terraform apply  # 완료까지 약 20~30분 소요
 
 ```bash
 export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-export AURORA_WRITER_ENDPOINT=$(terraform output -raw aurora_writer_endpoint)
-export AURORA_DB_SECRET_ARN=$(terraform output -raw aurora_db_secret_arn)
+export RDS_ENDPOINT=$(terraform output -raw rds_endpoint)
+export RDS_DB_SECRET_ARN=$(terraform output -raw rds_db_secret_arn)
 export REDIS_ENDPOINT=$(terraform output -raw redis_endpoint)
 export ACM_CERTIFICATE_ARN="<4.4에서 발급한 ARN>"
+
+# SQS 큐 URL 확인 (참고용)
+terraform output audio_preprocess_queue_url
+terraform output gpu_inference_queue_url
+terraform output report_analysis_queue_url
+terraform output rag_ingest_queue_url
 ```
 
 ### STEP 2 — Secrets Manager 시크릿 생성
 
-`terraform apply` 후 Aurora가 준비되면 수동 시크릿을 생성한다. (사전 준비 4.6 참고)
+`terraform apply` 후 RDS가 준비되면 수동 시크릿을 생성한다. (사전 준비 4.6 참고)
 
 ```bash
 # 생성 확인
 aws secretsmanager list-secrets --region ap-northeast-2 \
   --query 'SecretList[?starts_with(Name, `utterai-dev`)].Name'
 ```
+
+다음 3개가 모두 있어야 한다:
+- `utterai-dev/backend-api-secret`
+- `utterai-dev/ai-worker-secret`
+- `utterai-dev/gpu-worker-secret`
 
 ### STEP 3 — kubeconfig 업데이트
 
@@ -308,31 +354,12 @@ kubectl get nodes  # system 노드 2개 이상 Ready 확인
 kubectl get pods -n kube-system  # CoreDNS, kube-proxy 정상 확인
 ```
 
-### STEP 4 — Namespace
-
-```bash
-kubectl apply -f k8s/namespaces/namespaces.yaml
-kubectl get ns | grep utter
-```
-
-### STEP 5 — RBAC (ServiceAccount + RoleBinding)
-
-```bash
-# ${AWS_ACCOUNT_ID} 치환 후 적용
-envsubst < k8s/rbac/serviceaccounts.yaml | kubectl apply -f -
-kubectl apply -f k8s/rbac/rolebindings.yaml
-
-# 확인
-kubectl get sa -A | grep -E "utter|ai-|batch"
-```
-
-### STEP 6 — External Secrets Operator 설치
+### STEP 4 — External Secrets Operator 설치
 
 Workload의 Deployment가 Secrets Manager에서 값을 가져오는 K8s Secret을 참조한다.  
-**이 단계가 없으면 STEP 9에서 Pod가 시작되지 않는다.**
+**이 단계가 없으면 STEP 5에서 Pod가 시작되지 않는다.**
 
 ```bash
-# Helm으로 설치
 helm repo add external-secrets https://charts.external-secrets.io
 helm repo update
 
@@ -341,116 +368,52 @@ helm install external-secrets external-secrets/external-secrets \
   --create-namespace \
   --set installCRDs=true
 
-# 설치 확인
-kubectl get pods -n external-secrets
+# 설치 확인 (pod가 Running이 될 때까지 대기)
+kubectl get pods -n external-secrets -w
 ```
 
-설치 후 ClusterSecretStore와 ExternalSecret을 생성한다.
+### STEP 5 — k8s 워크로드 일괄 배포
+
+`scripts/k8s-deploy.sh`가 다음 작업을 자동으로 수행한다:
+
+1. AWS 계정 ID 및 ECR 최신 이미지 태그 조회 (`BACKEND_TAG`, `AI_CPU_TAG`, `AI_GPU_TAG`)
+2. Terraform output에서 `RDS_ENDPOINT`, `REDIS_ENDPOINT` 자동 조회
+3. `k8s/namespaces/`, `k8s/rbac/`, `k8s/secrets/`, `k8s/workloads/`, `k8s/ingress/` 순서로 `envsubst | kubectl apply`
 
 ```bash
-# ClusterSecretStore — Secrets Manager 연결 설정
-# IRSA를 사용하므로 별도 Access Key 불필요
-cat <<EOF | kubectl apply -f -
-apiVersion: external-secrets.io/v1beta1
-kind: ClusterSecretStore
-metadata:
-  name: aws-secrets-store
-spec:
-  provider:
-    aws:
-      service: SecretsManager
-      region: ap-northeast-2
-      auth:
-        jwt:
-          serviceAccountRef:
-            name: external-secrets
-            namespace: external-secrets
-EOF
-
-# ExternalSecret — utter-api 네임스페이스용
-#
-# DB 비밀번호는 Aurora가 manage_master_user_password=true로 자동 생성한 시크릿을 사용.
-# 이름이 "rds!cluster-xxx" 형태라 예측 불가 → terraform output aurora_db_secret_arn 사용.
-# 시크릿 구조: {"username":"...", "password":"...", "host":"...", "port":5432, ...}
-cat <<EOF | kubectl apply -f -
-apiVersion: external-secrets.io/v1beta1
-kind: ExternalSecret
-metadata:
-  name: backend-api-secret
-  namespace: utter-api
-spec:
-  refreshInterval: 1h
-  secretStoreRef:
-    name: aws-secrets-store
-    kind: ClusterSecretStore
-  target:
-    name: backend-api-secret
-  data:
-    - secretKey: DB_PASSWORD
-      remoteRef:
-        key: "${AURORA_DB_SECRET_ARN}"
-        property: password
-    - secretKey: INTERNAL_SERVICE_TOKEN
-      remoteRef:
-        key: utterai-dev/internal-service-token
-        property: INTERNAL_SERVICE_TOKEN
-    - secretKey: REDIS_AUTH_TOKEN
-      remoteRef:
-        key: utterai-dev/redis-auth-token
-        property: REDIS_AUTH_TOKEN
-EOF
-
-# Secret 생성 확인
-kubectl get secret backend-api-secret -n utter-api
+# 프로젝트 루트에서 실행
+export ACM_CERTIFICATE_ARN="<4.4에서 발급한 ARN>"
+bash scripts/k8s-deploy.sh
 ```
 
-### STEP 7 — Karpenter NodePool
-
-Terraform이 생성한 `utterai-dev-karpenter-node-role`과 서브넷 태그가 있어야 한다.
+배포 후 확인:
 
 ```bash
-# EC2NodeClass 먼저 (NodePool이 참조함)
-kubectl apply -f k8s/nodepools/ec2nodeclass-default.yaml
-kubectl apply -f k8s/nodepools/ec2nodeclass-gpu.yaml
+# 네임스페이스
+kubectl get ns | grep utterai
 
-# NodePool 5개
-kubectl apply -f k8s/nodepools/nodepool-general.yaml
-kubectl apply -f k8s/nodepools/nodepool-api.yaml
-kubectl apply -f k8s/nodepools/nodepool-ai-cpu.yaml
-kubectl apply -f k8s/nodepools/nodepool-ai-gpu.yaml
-kubectl apply -f k8s/nodepools/nodepool-spot-batch.yaml
+# Pod 상태
+kubectl get pods -n utterai-api -w
+kubectl get pods -n utterai-ai-cpu
+kubectl get pods -n utterai-ai-gpu
 
-# 확인
-kubectl get nodepools
-kubectl get ec2nodeclasses
-```
-
-### STEP 8 — Ingress
-
-ALB가 생성되려면 AWS Load Balancer Controller가 karpenter namespace에서 정상 실행 중이어야 한다.
-
-```bash
-# LBC 정상 확인
-kubectl get pods -n ingress-system
-
-# Ingress 적용
-envsubst < k8s/ingress/api-ingress.yaml | kubectl apply -f -
+# ExternalSecret 동기화 상태
+kubectl get externalsecret -A
 
 # ALB 생성 확인 (1~3분 소요)
-kubectl get ingress -n utter-api
-# ADDRESS 컬럼에 ALB DNS가 채워지면 완료
-
-# ALB DNS 저장
-export ALB_DNS=$(kubectl get ingress utter-api-ingress -n utter-api \
-  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-echo "ALB DNS: ${ALB_DNS}"
+kubectl get ingress -n utterai-api
 ```
 
-### STEP 9 — Route 53 레코드 생성
+### STEP 6 — Route 53 레코드 생성
 
 ALB DNS가 확인되면 즉시 등록한다. 이 단계가 없으면 `api.dev.utterai.com`으로 접근 불가.
 
 ```bash
+# ALB DNS 확인
+export ALB_DNS=$(kubectl get ingress utterai-api-ingress -n utterai-api \
+  -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+echo "ALB DNS: ${ALB_DNS}"
+
 # Hosted Zone ID 확인
 export HOSTED_ZONE_ID=$(aws route53 list-hosted-zones \
   --query "HostedZones[?Name=='dev.utterai.com.'].Id" \
@@ -476,48 +439,28 @@ aws route53 change-resource-record-sets \
   }"
 ```
 
-### STEP 10 — Workload 배포
-
-**4.5 이미지 빌드 완료 후** 진행한다.
-
-```bash
-# API Deployment + Service + HPA + ConfigMap
-envsubst < k8s/workloads/api-deployment.yaml | kubectl apply -f -
-
-# Worker Deployment (replicas: 0 → KEDA가 제어)
-envsubst < k8s/workloads/cpu-worker-deployment.yaml | kubectl apply -f -
-envsubst < k8s/workloads/gpu-worker-deployment.yaml | kubectl apply -f -
-envsubst < k8s/workloads/batch-worker-deployment.yaml | kubectl apply -f -
-
-# API Pod 기동 확인
-kubectl get pods -n utter-api -w
-# STATUS가 Running이 되면 Ctrl+C
-```
-
-### STEP 11 — KEDA ScaledObject
-
-```bash
-envsubst < k8s/workloads/keda-scaledobject-cpu.yaml | kubectl apply -f -
-envsubst < k8s/workloads/keda-scaledobject-gpu.yaml | kubectl apply -f -
-envsubst < k8s/workloads/keda-scaledobject-batch.yaml | kubectl apply -f -
-
-kubectl get scaledobject -A
-# READY가 True이면 정상
-```
-
 ---
 
 ## 6. 플레이스홀더 치환 목록
 
-`envsubst`로 치환 후 적용한다. `export` 로 환경변수를 먼저 설정해야 한다.
+`scripts/k8s-deploy.sh`가 자동으로 주입하는 값과 수동으로 export해야 하는 값을 구분한다.
+
+### 자동 주입 (k8s-deploy.sh가 처리)
 
 | 변수 | 사용 위치 | 값 출처 |
 |---|---|---|
-| `${AWS_ACCOUNT_ID}` | serviceaccounts.yaml, 모든 Deployment, KEDA | `aws sts get-caller-identity --query Account --output text` |
-| `${ACM_CERTIFICATE_ARN}` | api-ingress.yaml | `aws acm list-certificates` |
-| `${AURORA_WRITER_ENDPOINT}` | api-deployment.yaml ConfigMap | `terraform output -raw aurora_writer_endpoint` |
-| `${AURORA_DB_SECRET_ARN}` | ExternalSecret (STEP 6) | `terraform output -raw aurora_db_secret_arn` |
+| `${AWS_ACCOUNT_ID}` | serviceaccounts.yaml, 모든 Deployment | `aws sts get-caller-identity` |
+| `${BACKEND_TAG}` | api-deployment.yaml, ai-api-deployment.yaml | ECR 최신 이미지 태그 |
+| `${AI_CPU_TAG}` | cpu-worker-deployment.yaml | ECR 최신 이미지 태그 |
+| `${AI_GPU_TAG}` | llm-gpu-worker-deployment.yaml, ml-gpu-worker-deployment.yaml | ECR 최신 이미지 태그 |
+| `${RDS_ENDPOINT}` | api-deployment.yaml ConfigMap | `terraform output -raw rds_endpoint` |
 | `${REDIS_ENDPOINT}` | api-deployment.yaml ConfigMap | `terraform output -raw redis_endpoint` |
+
+### 수동 export 필요
+
+| 변수 | 사용 위치 | 값 출처 |
+|---|---|---|
+| `${ACM_CERTIFICATE_ARN}` | api-ingress.yaml | `aws acm list-certificates` |
 
 ---
 
@@ -537,6 +480,20 @@ kubectl get pods -n ingress-system
 kubectl get pods -n external-secrets
 ```
 
+### API 엔드포인트
+
+```bash
+# Pod 상태
+kubectl get pods -n utterai-api
+kubectl get pods -n utterai-ai-cpu
+kubectl get pods -n utterai-ai-gpu
+kubectl get pods -n utterai-batch
+
+# 헬스체크 (Route 53 등록 후)
+curl https://api.dev.utterai.com/health/ready
+curl https://api.dev.utterai.com/health/live
+```
+
 ### NodePool 배치 테스트
 
 ```bash
@@ -548,37 +505,10 @@ kubectl run test-api --image=nginx \
       "tolerations":[{"key":"dedicated","operator":"Equal","value":"api","effect":"NoSchedule"}]
     }
   }' \
-  --namespace utter-api
+  --namespace utterai-api
 
-kubectl get pod test-api -n utter-api -o wide  # NODE 컬럼이 api 노드여야 함
-kubectl delete pod test-api -n utter-api
-```
-
-### API 엔드포인트
-
-```bash
-# Pod 상태
-kubectl get pods -n utter-api
-
-# 헬스체크 (Route 53 등록 후)
-curl https://api.dev.utterai.com/health/ready
-curl https://api.dev.utterai.com/health/live
-```
-
-### KEDA 스케일 테스트
-
-```bash
-# SQS 메시지 전송
-aws sqs send-message \
-  --queue-url $(cd terraform/environments/dev && terraform output -raw analysis_queue_url) \
-  --message-body '{"job_id":"test-001","type":"cpu"}' \
-  --region ap-northeast-2
-
-# CPU Worker Pod scale-out 감시
-kubectl get pods -n utter-ai-cpu -w
-
-# Karpenter 노드 생성 감시
-kubectl get nodes -L workload -w
+kubectl get pod test-api -n utterai-api -o wide  # NODE 컬럼이 api 노드여야 함
+kubectl delete pod test-api -n utterai-api
 ```
 
 ### GPU
@@ -597,11 +527,28 @@ kubectl get daemonset -n kube-system | grep nvidia
 ### Secret 주입 확인
 
 ```bash
-# ExternalSecret 상태
+# ExternalSecret 상태 (READY가 True이어야 함)
 kubectl get externalsecret -A
 
 # Secret 내용 확인 (디버깅용)
-kubectl get secret backend-api-secret -n utter-api -o jsonpath='{.data.DB_PASSWORD}' | base64 -d
+kubectl get secret backend-api-secret -n utterai-api -o jsonpath='{.data.DB_PASSWORD}' | base64 -d
+kubectl get secret ai-worker-secret -n utterai-ai-gpu -o jsonpath='{.data.DB_HOST}' | base64 -d
+```
+
+### SQS 파이프라인 테스트
+
+```bash
+# audio-preprocess 큐에 테스트 메시지 전송
+aws sqs send-message \
+  --queue-url $(cd terraform/environments/dev && terraform output -raw audio_preprocess_queue_url) \
+  --message-body '{"job_id":"test-001","type":"preprocess"}' \
+  --region ap-northeast-2
+
+# CPU Worker Pod scale-out 감시
+kubectl get pods -n utterai-ai-cpu -w
+
+# Karpenter 노드 생성 감시
+kubectl get nodes -L workload -w
 ```
 
 ---
@@ -612,22 +559,22 @@ kubectl get secret backend-api-secret -n utter-api -o jsonpath='{.data.DB_PASSWO
 
 | 항목 | 이유 |
 |---|---|
-| **External Secrets IRSA** | ESO가 Secrets Manager에 접근하려면 별도 IAM Role 필요. 현재 Terraform irsa 모듈에 미포함 |
+| **Karpenter NodePool / EC2NodeClass** | `k8s/nodepools/` 미구성. 현재 Managed NodeGroup만 사용. Karpenter 동적 스케일링이 필요하면 EC2NodeClass + NodePool 추가 필요 |
 | **Bastion Host** | Dev DB 직접 접근용. sg-dev-bastion SG + EC2 생성 필요 |
-| **CloudWatch 알람** | `dev-backend-5xx-rate`, `dev-aurora-cpu`, `dev-sqs-dlq-count` |
+| **CloudWatch 알람** | `dev-backend-5xx-rate`, `dev-rds-cpu`, `dev-sqs-dlq-count` |
 
 ### 8.2 CI/CD — 미구현
 
 | 항목 | 설명 |
 |---|---|
-| GitHub Actions `dev-deploy.yaml` | `develop` 브랜치 push → Docker 빌드 → ECR push → ConfigMap 이미지 태그 업데이트 |
+| GitHub Actions `dev-deploy.yaml` | `develop` 브랜치 push → Docker 빌드 → ECR push → `scripts/k8s-deploy.sh` 실행 |
 | ArgoCD Application | dev 클러스터 Auto-Sync 설정 (Shared Tooling Account에서 구성) |
 
 ### 8.3 선택 구현
 
 | 항목 | 설명 |
 |---|---|
-| CloudFront | 프론트엔드 S3 연결 (프론트엔드팀 준비 후) |
+| KEDA ScaledObject | SQS 큐 깊이 기반 자동 스케일링. 현재 CPU 기반 HPA로만 운영 중 |
 | Observability | OpenTelemetry Collector, Prometheus/Grafana 기본 구성 |
 | NetworkPolicy | Namespace 간 트래픽 격리 |
 | GPU warm-up 전략 | 데모 전 GPU Node 1개 미리 기동 |
@@ -637,11 +584,10 @@ kubectl get secret backend-api-secret -n utter-api -o jsonpath='{.data.DB_PASSWO
 | 항목 | 협의 대상 | 현재 설정값 |
 |---|---|---|
 | API container port | 백엔드팀 | `8080` (임시) |
-| health check path | 백엔드팀 | `/health/ready`, `/health/live` (임시) |
+| health check path | 백엔드팀 | `/health/ready`, `/health/live` |
 | ECR 리포지토리 이름 확정 | 전체 팀 | `utterai-backend` 등 (임시) |
 | SQS 메시지 payload 구조 | AI팀 + 백엔드팀 | 미정 |
 | GPU 이미지 모델 포함 여부 | AI팀 | 미정 (이미지 크기에 큰 영향) |
-| GPU Diarization 전용 큐 분리 여부 | AI팀 | 현재 analysis-queue 공용 |
 
 ---
 
