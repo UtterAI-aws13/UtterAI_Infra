@@ -177,3 +177,6 @@ jobs:
           - image tag: \`$IMAGE_TAG\`
 
           이 PR은 보호 브랜치에 직접 push하지 않고 GitOps image tag 변경을 리뷰 가능한 PR로 남기기 위해 생성되었습니다."
+        
+        # TODO: 인프라 Repo에 Github App 을 통해 브랜치 예외규정설정 -> Dev 브랜치에 한해 자동으로 이미지 태그 변경이 반영될 수 있도록 함.
+        
