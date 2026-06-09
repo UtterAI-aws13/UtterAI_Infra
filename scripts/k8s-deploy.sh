@@ -23,9 +23,9 @@ export BACKEND_TAG=$(latest_tag "utterai-backend")
 export AI_CPU_TAG=$(latest_tag "utterai-ai-cpu")
 export AI_GPU_TAG=$(latest_tag "utterai-ai-gpu")
 
-# Terraform output에서 RDS/Redis 엔드포인트 조회
+# Terraform output에서 RDS/Redis 엔드포인트 조회 (03-services 레이어)
 tf_output() {
-  terraform -chdir=terraform/environments/dev output -raw "$1"
+  terraform -chdir=terraform/environments/dev/03-services output -raw "$1"
 }
 
 export RDS_ENDPOINT=$(tf_output "rds_endpoint")
@@ -60,7 +60,9 @@ for f in k8s/workloads/*.yaml; do
   apply "$f"
 done
 
-# 5. Ingress
-kubectl apply -f k8s/ingress/
+# 5. Ingress (ACM_CERTIFICATE_ARN 치환 필요)
+for f in k8s/ingress/*.yaml; do
+  apply "$f"
+done
 
 echo "배포 완료"
