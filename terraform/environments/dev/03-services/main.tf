@@ -54,9 +54,10 @@ module "redis" {
 module "s3" {
   source = "../../../modules/s3"
 
-  project_name    = var.project_name
-  environment     = var.environment
-  frontend_domain = "d4kxfdssuth29.cloudfront.net"
+  project_name          = var.project_name
+  environment           = var.environment
+  frontend_domain       = "d4kxfdssuth29.cloudfront.net"
+  allowed_extra_origins = ["http://localhost:5173"]
 }
 
 # ── SQS ──────────────────────────────────────────────────────────────────────

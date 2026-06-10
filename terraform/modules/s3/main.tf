@@ -63,7 +63,7 @@ resource "aws_s3_bucket_cors_configuration" "raw_audio" {
   cors_rule {
     allowed_headers = ["*"]
     allowed_methods = ["GET", "PUT", "POST"]
-    allowed_origins = ["https://${var.frontend_domain}"]
+    allowed_origins = concat(["https://${var.frontend_domain}"], var.allowed_extra_origins)
     expose_headers  = ["ETag"]
     max_age_seconds = 3000
   }
