@@ -649,4 +649,5 @@ terraform apply
 - Dev vs Prod 환경 비교: [`docs/README.md`](../README.md)
 - Dev 보안 전체 현황: [`docs/dev/security-overview.md`](./security-overview.md)
 - Dev 보안 수정 이력: [`docs/dev/security-hardening.md`](./security-hardening.md)
+- 부하 테스트 시나리오: [`docs/dev/load-test-scenarios.md`](./load-test-scenarios.md)
 - 브랜치/커밋 규칙: [`CONTRIBUTING.md`](../../CONTRIBUTING.md)
