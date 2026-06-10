@@ -135,10 +135,6 @@ condition: "StringEquals"
 | `utterai-dev-ai-ml-gpu-irsa-role` | `utterai-ai-gpu/utterai-ml-gpu-worker-sa` | gpu-inference SQS | ReceiveMessage, DeleteMessage, ChangeMessageVisibility |
 | | | report-analysis SQS | SendMessage |
 | | | raw-audio S3 | GetObject, PutObject |
-| `utterai-dev-ai-llm-gpu-irsa-role` | `utterai-ai-gpu/utterai-llm-gpu-worker-sa` | report-analysis SQS | ReceiveMessage, DeleteMessage, ChangeMessageVisibility |
-| | | raw-audio S3 | GetObject |
-| | | reports S3 | PutObject |
-| | | `utterai-dev/*` Secrets | GetSecretValue |
 | `utterai-dev-batch-irsa-role` | `utterai-batch/utterai-batch-worker-sa` | rag-ingest SQS + DLQ | ReceiveMessage, DeleteMessage, ChangeMessageVisibility |
 | | | reports S3 | PutObject |
 | | | `utterai-dev/db-password*` Secrets | GetSecretValue |
@@ -186,7 +182,7 @@ condition: "StringEquals"
 | 시크릿 경로 | 포함 키 | 접근 역할 |
 |------------|---------|----------|
 | `utterai-dev/backend-api-secret` | DB_PASSWORD, JWT_SECRET_KEY, INTERNAL_CALLBACK_TOKEN, INTERNAL_CALLBACK_HMAC_SECRET | api-irsa, eso-irsa |
-| `utterai-dev/ai-worker-secret` | DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME | llm-gpu-irsa, batch-irsa, eso-irsa |
+| `utterai-dev/ai-worker-secret` | DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME | batch-irsa, eso-irsa |
 | `utterai-dev/gpu-worker-secret` | HF_TOKEN | eso-irsa |
 
 **RDS 마스터 비밀번호**: `manage_master_user_password = true` → Secrets Manager 자동 관리, Terraform 상태에 평문 미포함
@@ -228,7 +224,6 @@ Pod 컨테이너 환경 변수
 | utterai-ai-api-sa | utterai-ai-api | utterai-dev-ai-api-irsa-role |
 | utterai-cpu-worker-sa | utterai-ai-cpu | utterai-dev-ai-cpu-irsa-role |
 | utterai-ml-gpu-worker-sa | utterai-ai-gpu | utterai-dev-ai-ml-gpu-irsa-role |
-| utterai-llm-gpu-worker-sa | utterai-ai-gpu | utterai-dev-ai-llm-gpu-irsa-role |
 | utterai-batch-worker-sa | utterai-batch | utterai-dev-batch-irsa-role |
 
 ### Kubernetes Role 권한 범위
@@ -349,7 +344,6 @@ GPU 워커는 추가로 `nvidia.com/gpu: "1"` 요청 → GPU 없는 노드에는
 | ai-api | 250m / 1 | 512Mi / 1Gi | — |
 | cpu-worker | 2 / 4 | 4Gi / 8Gi | — |
 | ml-gpu-worker | 2 / 4 | 8Gi / 14Gi | 1 |
-| llm-gpu-worker | 2 / 4 | 8Gi / 14Gi | 1 |
 | batch-worker | 1 / 2 | 2Gi / 4Gi | — |
 
 ### Health Probe (비정상 Pod 자동 격리)
@@ -390,7 +384,7 @@ spec:
               drop: ["ALL"]                   # Linux capability 전체 제거
 ```
 
-적용 대상: `backend`, `ai-api`, `cpu-worker`, `ml-gpu-worker`, `llm-gpu-worker`
+적용 대상: `backend`, `ai-api`, `cpu-worker`, `ml-gpu-worker`
 
 ---
 

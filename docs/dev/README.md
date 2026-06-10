@@ -82,7 +82,7 @@ SQS 파이프라인:
 | `k8s/secrets/` | `ai-worker-external-secret.yaml` | utterai-ai-gpu + utterai-batch — DB 접속 정보 |
 | `k8s/secrets/` | `gpu-worker-external-secret.yaml` | utterai-ai-gpu — HF_TOKEN |
 | `k8s/ingress/` | `api-ingress.yaml` | ALB internet-facing, HTTPS 리다이렉트 |
-| `k8s/workloads/` | `*-deployment.yaml` | API, AI API, CPU Worker, LLM GPU Worker, ML GPU Worker, Batch Worker |
+| `k8s/workloads/` | `*-deployment.yaml` | API, AI API, CPU Worker, ML GPU Worker, Batch Worker |
 | `k8s/workloads/` | `hpa-*.yaml` | 각 워크로드 HPA |
 | `k8s-demo/apps/backend/` | `base/` + `overlays/dev/` | Kustomize 구조 (별도 배포) |
 
@@ -487,7 +487,7 @@ kubectl apply -k k8s-demo/apps/backend/overlays/dev
 | `${AWS_ACCOUNT_ID}` | serviceaccounts.yaml, 모든 Deployment | `aws sts get-caller-identity` |
 | `${BACKEND_TAG}` | api-deployment.yaml, ai-api-deployment.yaml | ECR 최신 이미지 태그 |
 | `${AI_CPU_TAG}` | cpu-worker-deployment.yaml | ECR 최신 이미지 태그 |
-| `${AI_GPU_TAG}` | llm/ml-gpu-worker-deployment.yaml | ECR 최신 이미지 태그 |
+| `${AI_GPU_TAG}` | ml-gpu-worker-deployment.yaml | ECR 최신 이미지 태그 |
 | `${RDS_ENDPOINT}` | api-deployment.yaml ConfigMap | `terraform output -raw rds_endpoint` (03-services) |
 | `${REDIS_ENDPOINT}` | api-deployment.yaml ConfigMap | `terraform output -raw redis_endpoint` (03-services) |
 
