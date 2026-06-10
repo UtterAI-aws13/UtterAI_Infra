@@ -37,6 +37,7 @@ UtterAI_Infra/
 | `docs/dev/README.md` | Dev 환경 배포 가이드 |
 | `docs/dev/security-overview.md` | Dev 환경 전체 보안 구현 현황 |
 | `docs/dev/security-hardening.md` | 보안 수정 이력 |
+| `docs/dev/load-test-scenarios.md` | CA+HPA / Karpenter+KEDA 부하 테스트 시나리오 |
 
 ## Local Observability
 

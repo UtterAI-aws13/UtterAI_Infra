@@ -1,9 +1,16 @@
 """
-API 부하 테스트 스크립트 (Phase 1: CA+HPA 기준)
+API 부하 테스트 스크립트 (Phase 1: CA+HPA / Phase 2: Karpenter+KEDA 공용)
+
+목적:
+  Backend API HPA를 트리거하기 위한 HTTP 부하 투입.
+
+엔드포인트 선택:
+  /health     — CPU 부하 거의 없음. HPA 트리거 안 됨. 연결 확인용으로만 사용.
+  /api/v1/... — 실제 DB/Redis 조회가 발생하는 엔드포인트를 사용해야 CPU 부하 발생.
 
 사용법:
   pip install requests
-  python generate_api_load.py --url http://<ALB_DNS>/health --rps 50 --duration 300
+  python generate_api_load.py --url http://<ALB_DNS>/api/v1/<엔드포인트> --rps 50 --duration 300
 """
 import argparse
 import time
@@ -52,7 +59,7 @@ def run_load(url: str, rps: int, duration: int):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--url", required=True, help="API 엔드포인트 URL")
+    parser.add_argument("--url", required=True, help="API 엔드포인트 URL (CPU 부하가 발생하는 실제 엔드포인트 권장)")
     parser.add_argument("--rps", type=int, default=50, help="초당 요청 수 (기본: 50)")
     parser.add_argument("--duration", type=int, default=300, help="테스트 시간(초) (기본: 300)")
     args = parser.parse_args()
