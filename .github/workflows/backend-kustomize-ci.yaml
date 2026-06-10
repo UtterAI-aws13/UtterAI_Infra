@@ -3,20 +3,18 @@ name: Backend Kustomize CI
 on:
   pull_request:
     branches:
-      - dev
       - main
     paths:
-      - "k8s/apps/backend/**"
+      - "k8s-demo/apps/backend/**"
       - "deploy/argocd/**"
       - ".github/workflows/backend-kustomize-ci.yaml"
 
   push:
     branches:
-      - dev
       - main
       - "feature/**"
     paths:
-      - "k8s/apps/backend/**"
+      - "k8s-demo/apps/backend/**"
       - "deploy/argocd/**"
       - ".github/workflows/backend-kustomize-ci.yaml"
 
@@ -37,12 +35,12 @@ jobs:
 
       - name: Render dev overlay
         run: |
-          kubectl kustomize k8s/apps/backend/overlays/dev > /tmp/backend-dev.yaml
+          kubectl kustomize k8s-demo/apps/backend/overlays/dev > /tmp/backend-dev.yaml
           grep "namespace: utterai-dev-api" /tmp/backend-dev.yaml
           grep "image:" /tmp/backend-dev.yaml
 
       - name: Render prod overlay
         run: |
-          kubectl kustomize k8s/apps/backend/overlays/prod > /tmp/backend-prod.yaml
+          kubectl kustomize k8s-demo/apps/backend/overlays/prod > /tmp/backend-prod.yaml
           grep "namespace: utterai-prod-api" /tmp/backend-prod.yaml
           grep "image:" /tmp/backend-prod.yaml

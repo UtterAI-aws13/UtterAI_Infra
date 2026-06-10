@@ -1,8 +1,8 @@
-# CPU Worker Deployment — 음성 전처리 파이프라인
+# CPU Worker Deployment — 음성 전처리 및 Bedrock 리포트 생성 파이프라인
 #
-# SQS audio-preprocess-queue에서 메시지를 소비해 S3 원본 음성을 전처리하고
-# 결과를 SQS gpu-inference-queue로 전달하는 워커.
-# CPU 집약적 작업(음성 디코딩, 노이즈 제거 등)으로 높은 CPU/메모리 리소스를 요구한다.
+# 역할 1: SQS audio-preprocess-queue 소비 → 전처리 → gpu-inference-queue로 전달
+# 역할 2: SQS report-analysis-queue 소비 → AWS Bedrock InvokeModel → S3(reports) 저장
+# LLM 추론을 Bedrock으로 위임해 GPU 없이 리포트를 생성한다.
 
 apiVersion: apps/v1
 kind: Deployment
@@ -29,6 +29,14 @@ spec:
           image: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-cpu:${AI_CPU_TAG}
           command: ["python", "-m", "app.workers.cpu_worker"]
           env:
+            # HuggingFace Hub 인증 토큰 — ExternalSecret(cpu-worker-secret)에서 주입
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cpu-worker-secret
+                  key: HF_TOKEN
+            - name: HF_HOME
+              value: "/tmp/huggingface"
             - name: AWS_REGION
               value: "ap-northeast-2"
             - name: APP_ENV
@@ -39,6 +47,13 @@ spec:
             # 생산 큐: 전처리 완료 후 GPU 추론 워커로 전달
             - name: SQS_ML_GPU_QUEUE_URL
               value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-gpu-inference-queue"
+            # 소비 큐: ml-gpu-worker 추론 완료 후 Bedrock 분석 단계
+            - name: SQS_REPORT_ANALYSIS_QUEUE_URL
+              value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-report-analysis-queue"
+            - name: S3_BUCKET_REPORT
+              value: "utterai-dev-reports"
+            - name: BEDROCK_REGION
+              value: "ap-northeast-2"
             - name: S3_BUCKET_AUDIO
               value: "utterai-dev-raw-audio"
             - name: LOG_LEVEL

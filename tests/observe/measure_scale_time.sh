@@ -1,5 +1,5 @@
 #!/bin/bash
-# 스케일링 소요 시간 측정 스크립트
+# 스케일링 소요 시간 측정 스크립트 (Phase 1 / Phase 2 공용)
 #
 # 부하 투입 시점부터 다음 단계까지 시간을 측정:
 #   1) Pod Pending 최초 감지
@@ -7,15 +7,23 @@
 #   3) Pending Pod → Running
 #
 # 사용법:
-#   ./measure_scale_time.sh --namespace utterai-batch --deployment utterai-batch-worker
+#   ./measure_scale_time.sh <namespace> <deployment>
+#
+# 예시:
+#   ./measure_scale_time.sh utterai-ai-cpu utterai-cpu-worker
+#   ./measure_scale_time.sh utterai-batch  utterai-batch-worker
+#   ./measure_scale_time.sh utterai-ai-gpu utterai-ml-gpu-worker
 
 NAMESPACE=${1:-utterai-batch}
 DEPLOYMENT=${2:-utterai-batch-worker}
 
 START=$(date +%s)
 echo "[$(date)] 측정 시작 — $NAMESPACE/$DEPLOYMENT"
-echo "초기 노드 수: $(kubectl get nodes --no-headers | wc -l)"
-echo "초기 파드 수: $(kubectl get pods -n "$NAMESPACE" --no-headers | wc -l)"
+
+# 루프 진입 전 초기값 고정 (루프 안에서 갱신하면 증가하는 노드 수를 따라가 감지 불가)
+INITIAL_NODES=$(kubectl get nodes --no-headers 2>/dev/null | wc -l)
+echo "초기 노드 수: ${INITIAL_NODES}"
+echo "초기 파드 수: $(kubectl get pods -n "$NAMESPACE" --no-headers 2>/dev/null | wc -l)"
 echo ""
 
 PENDING_TIME=""
@@ -35,11 +43,10 @@ while true; do
     fi
   fi
 
-  # 새 노드 Ready 감지 (초기 노드보다 증가)
+  # 새 노드 Ready 감지 (시작 시점 노드 수보다 Ready 노드가 증가한 경우)
   if [ -z "$NODE_READY_TIME" ] && [ -n "$PENDING_TIME" ]; then
     READY_NODES=$(kubectl get nodes --no-headers 2>/dev/null | grep -c " Ready")
-    INITIAL_NODES=$(kubectl get nodes --no-headers 2>/dev/null | wc -l)
-    if [ "$READY_NODES" -gt "$INITIAL_NODES" ] 2>/dev/null; then
+    if [ "$READY_NODES" -gt "$INITIAL_NODES" ]; then
       NODE_READY_TIME=$ELAPSED
       echo "[+${ELAPSED}s] 신규 노드 Ready (노드 추가 소요: $((ELAPSED - PENDING_TIME))초)"
     fi

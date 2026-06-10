@@ -4,7 +4,6 @@ on:
   pull_request:
     branches:
       - main
-      - dev
     paths:
       - "**/*.tf"
       - "**/*.tfvars"
@@ -13,7 +12,6 @@ on:
   push:
     branches:
       - main
-      - dev
       - "feature/**"
     paths:
       - "**/*.tf"
@@ -70,4 +68,3 @@ jobs:
               terraform -chdir="$dir" init -backend=false
               terraform -chdir="$dir" validate
             done <<< "$TERRAFORM_DIRS"
-

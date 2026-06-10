@@ -2,10 +2,11 @@
 
 ## Branch Rules
 
-- `main`은 프로덕션 기준 브랜치다. ArgoCD가 이 브랜치를 트래킹하여 클러스터에 자동 sync한다.
-- `dev`는 기본 개발 브랜치다. 새 작업은 `dev`에서 분기한다.
-- `dev`로의 PR 생성 시 GitHub Actions가 `terraform plan` 및 lint를 자동 실행한다.
-- `dev` → `main` PR은 Terraform apply 또는 ArgoCD sync 전 최종 검토 기준이 된다.
+- `main`은 Infra repo의 단일 기준 브랜치다.
+- dev/prod 환경 분리는 브랜치가 아니라 Kustomize overlay path로 관리한다.
+- 새 작업은 `main`에서 분기하고, PR base도 `main`으로 둔다.
+- `main`으로의 PR 생성 시 GitHub Actions가 Terraform/Kustomize 검증을 실행한다.
+- Argo CD는 같은 `main` 브랜치에서 `overlays/dev`, `overlays/prod` 경로를 각각 트래킹한다.
 - 브랜치 네이밍 규칙:
   - `feature/<issue-number>-<short-name>` — 신규 리소스/모듈/앱 추가
   - `fix/<issue-number>-<short-name>` — 인프라 버그 수정
@@ -80,8 +81,8 @@
 
 ## Pull Request Rules
 
-- `feature/*`, `fix/*`, `ci/*` 브랜치의 PR base는 `dev`다.
-- `dev` → `main` PR은 Terraform apply 또는 ArgoCD sync 전 최종 배포 검토다.
+- `feature/*`, `fix/*`, `ci/*`, `docs/*`, `chore/*` 브랜치의 PR base는 `main`이다.
+- dev/prod 배포 차이는 PR base가 아니라 변경되는 Kustomize overlay path와 GitHub Environment approval로 구분한다.
 - PR 하나에는 하나의 논리적 변경만 담는다.
 - 초안 상태에서는 `Draft PR`을 사용한다.
 - PR 본문에는 변경 내용, 검증 결과, 영향 범위, 리뷰 포인트를 적는다.

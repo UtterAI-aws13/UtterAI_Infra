@@ -37,7 +37,7 @@
 
 ## Checklist
 
-- [ ] base branch가 올바르다 (`feature/*` → `dev`, `dev` → `main`)
+- [ ] base branch가 올바르다 (Infra repo는 `feature/*` → `main`)
 - [ ] 관련 이슈를 연결했다
 - [ ] tfstate, kubeconfig, access key, secret 값이 포함되지 않았다
 - [ ] IAM / Security Group 설정이 최소 권한 원칙을 따른다

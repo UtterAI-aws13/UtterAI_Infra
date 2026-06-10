@@ -26,6 +26,16 @@ on:
         description: "선택 입력입니다. 비워두면 GitHub Variables의 ECR_AI_GPU_REPOSITORY를 사용합니다."
         required: false
         type: string
+      build_cpu:
+        description: "CPU image tag를 갱신할지 여부입니다."
+        required: false
+        default: true
+        type: boolean
+      build_gpu:
+        description: "GPU image tag를 갱신할지 여부입니다."
+        required: false
+        default: true
+        type: boolean
 
   repository_dispatch:
     types:
@@ -48,6 +58,8 @@ jobs:
       INPUT_ECR_REGISTRY: ${{ github.event.inputs.ecr_registry || github.event.client_payload.ecr_registry }}
       INPUT_CPU_REPOSITORY: ${{ github.event.inputs.cpu_repository || github.event.client_payload.cpu_repository }}
       INPUT_GPU_REPOSITORY: ${{ github.event.inputs.gpu_repository || github.event.client_payload.gpu_repository }}
+      INPUT_BUILD_CPU: ${{ github.event_name == 'workflow_dispatch' && toJSON(inputs.build_cpu) || github.event.client_payload.build_cpu || 'true' }}
+      INPUT_BUILD_GPU: ${{ github.event_name == 'workflow_dispatch' && toJSON(inputs.build_gpu) || github.event.client_payload.build_gpu || 'true' }}
       DEFAULT_ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
       DEFAULT_CPU_REPOSITORY: ${{ vars.ECR_AI_CPU_REPOSITORY }}
       DEFAULT_GPU_REPOSITORY: ${{ vars.ECR_AI_GPU_REPOSITORY }}
@@ -61,14 +73,28 @@ jobs:
           ECR_REGISTRY="${INPUT_ECR_REGISTRY:-$DEFAULT_ECR_REGISTRY}"
           CPU_REPOSITORY="${INPUT_CPU_REPOSITORY:-$DEFAULT_CPU_REPOSITORY}"
           GPU_REPOSITORY="${INPUT_GPU_REPOSITORY:-$DEFAULT_GPU_REPOSITORY}"
+          BUILD_CPU="$INPUT_BUILD_CPU"
+          BUILD_GPU="$INPUT_BUILD_GPU"
+
+          sanitize_single_line() {
+            printf '%s' "$1" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+          }
+
+          TARGET_ENV="$(sanitize_single_line "$TARGET_ENV")"
+          IMAGE_TAG="$(sanitize_single_line "$IMAGE_TAG")"
+          ECR_REGISTRY="$(sanitize_single_line "$ECR_REGISTRY")"
+          CPU_REPOSITORY="$(sanitize_single_line "$CPU_REPOSITORY")"
+          GPU_REPOSITORY="$(sanitize_single_line "$GPU_REPOSITORY")"
+          BUILD_CPU="$(sanitize_single_line "$BUILD_CPU")"
+          BUILD_GPU="$(sanitize_single_line "$BUILD_GPU")"
 
           if [ "$TARGET_ENV" = "dev" ]; then
-            TARGET_BRANCH="dev"
-            OVERLAY_PATH="k8s/apps/ai-worker/overlays/dev"
+            TARGET_BRANCH="main"
+            OVERLAY_PATH="k8s-demo/apps/ai-worker/overlays/dev"
             EXPECTED_TAG_PREFIX="dev-"
           elif [ "$TARGET_ENV" = "prod" ]; then
             TARGET_BRANCH="main"
-            OVERLAY_PATH="k8s/apps/ai-worker/overlays/prod"
+            OVERLAY_PATH="k8s-demo/apps/ai-worker/overlays/prod"
             EXPECTED_TAG_PREFIX="prod-"
           else
             echo "target_env는 dev 또는 prod만 허용합니다."
@@ -77,6 +103,21 @@ jobs:
 
           if [ -z "$IMAGE_TAG" ]; then
             echo "image_tag 입력이 필요합니다."
+            exit 1
+          fi
+
+          if [ "$BUILD_CPU" != "true" ] && [ "$BUILD_CPU" != "false" ]; then
+            echo "build_cpu는 true 또는 false만 허용합니다."
+            exit 1
+          fi
+
+          if [ "$BUILD_GPU" != "true" ] && [ "$BUILD_GPU" != "false" ]; then
+            echo "build_gpu는 true 또는 false만 허용합니다."
+            exit 1
+          fi
+
+          if [ "$BUILD_CPU" != "true" ] && [ "$BUILD_GPU" != "true" ]; then
+            echo "CPU/GPU 중 최소 하나는 갱신해야 합니다."
             exit 1
           fi
 
@@ -98,12 +139,12 @@ jobs:
             exit 1
           fi
 
-          if [ -z "$CPU_REPOSITORY" ]; then
+          if [ "$BUILD_CPU" = "true" ] && [ -z "$CPU_REPOSITORY" ]; then
             echo "ECR_AI_CPU_REPOSITORY GitHub Variable 또는 workflow 입력이 필요합니다."
             exit 1
           fi
 
-          if [ -z "$GPU_REPOSITORY" ]; then
+          if [ "$BUILD_GPU" = "true" ] && [ -z "$GPU_REPOSITORY" ]; then
             echo "ECR_AI_GPU_REPOSITORY GitHub Variable 또는 workflow 입력이 필요합니다."
             exit 1
           fi
@@ -116,6 +157,8 @@ jobs:
             echo "ecr_registry=$ECR_REGISTRY"
             echo "cpu_repository=$CPU_REPOSITORY"
             echo "gpu_repository=$GPU_REPOSITORY"
+            echo "build_cpu=$BUILD_CPU"
+            echo "build_gpu=$BUILD_GPU"
           } >> "$GITHUB_OUTPUT"
 
       - name: Checkout GitOps repository
@@ -133,6 +176,8 @@ jobs:
           ECR_REGISTRY: ${{ steps.meta.outputs.ecr_registry }}
           CPU_REPOSITORY: ${{ steps.meta.outputs.cpu_repository }}
           GPU_REPOSITORY: ${{ steps.meta.outputs.gpu_repository }}
+          BUILD_CPU: ${{ steps.meta.outputs.build_cpu }}
+          BUILD_GPU: ${{ steps.meta.outputs.build_gpu }}
         run: |
           KUSTOMIZATION_FILE="$OVERLAY_PATH/kustomization.yaml"
           export KUSTOMIZATION_FILE
@@ -146,15 +191,21 @@ jobs:
             file = ENV.fetch("KUSTOMIZATION_FILE")
             data = YAML.load_file(file)
             images = data.fetch("images")
+            build_cpu = ENV.fetch("BUILD_CPU") == "true"
+            build_gpu = ENV.fetch("BUILD_GPU") == "true"
 
             images.each do |image|
               case image["name"]
               when "utterai-ai-cpu"
-                image["newName"] = "#{ENV.fetch("ECR_REGISTRY")}/#{ENV.fetch("CPU_REPOSITORY")}"
-                image["newTag"] = ENV.fetch("IMAGE_TAG")
+                if build_cpu
+                  image["newName"] = "#{ENV.fetch("ECR_REGISTRY")}/#{ENV.fetch("CPU_REPOSITORY")}"
+                  image["newTag"] = ENV.fetch("IMAGE_TAG")
+                end
               when "utterai-ai-gpu"
-                image["newName"] = "#{ENV.fetch("ECR_REGISTRY")}/#{ENV.fetch("GPU_REPOSITORY")}"
-                image["newTag"] = ENV.fetch("IMAGE_TAG")
+                if build_gpu
+                  image["newName"] = "#{ENV.fetch("ECR_REGISTRY")}/#{ENV.fetch("GPU_REPOSITORY")}"
+                  image["newTag"] = ENV.fetch("IMAGE_TAG")
+                end
               end
             end
 
@@ -162,8 +213,12 @@ jobs:
           '
 
           echo "Updated $KUSTOMIZATION_FILE"
-          grep -A8 "name: utterai-ai-cpu" "$KUSTOMIZATION_FILE"
-          grep -A8 "name: utterai-ai-gpu" "$KUSTOMIZATION_FILE"
+          if [ "$BUILD_CPU" = "true" ]; then
+            grep -A8 "name: utterai-ai-cpu" "$KUSTOMIZATION_FILE"
+          fi
+          if [ "$BUILD_GPU" = "true" ]; then
+            grep -A8 "name: utterai-ai-gpu" "$KUSTOMIZATION_FILE"
+          fi
 
       - name: Validate Kustomize render
         env:
@@ -177,9 +232,22 @@ jobs:
           TARGET_ENV: ${{ steps.meta.outputs.target_env }}
           TARGET_BRANCH: ${{ steps.meta.outputs.target_branch }}
           IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+          BUILD_CPU: ${{ steps.meta.outputs.build_cpu }}
+          BUILD_GPU: ${{ steps.meta.outputs.build_gpu }}
           GH_TOKEN: ${{ github.token }}
         run: |
           UPDATE_BRANCH="ci/ai-${TARGET_ENV}-${IMAGE_TAG}-${GITHUB_RUN_ID}"
+          UPDATED_IMAGES=""
+
+          if [ "$BUILD_CPU" = "true" ]; then
+            UPDATED_IMAGES="$UPDATED_IMAGES
+          - CPU image tag: \`$IMAGE_TAG\`"
+          fi
+
+          if [ "$BUILD_GPU" = "true" ]; then
+            UPDATED_IMAGES="$UPDATED_IMAGES
+          - GPU image tag: \`$IMAGE_TAG\`"
+          fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -190,7 +258,7 @@ jobs:
           fi
 
           git checkout -b "$UPDATE_BRANCH"
-          git add k8s/apps/ai-worker/overlays
+          git add k8s-demo/apps/ai-worker/overlays
           git commit -m "ci(ai): update $TARGET_ENV image tag to $IMAGE_TAG"
           git push origin "$UPDATE_BRANCH"
 
@@ -203,7 +271,6 @@ jobs:
           변경 대상:
           - 환경: \`$TARGET_ENV\`
           - 기준 브랜치: \`$TARGET_BRANCH\`
-          - CPU image tag: \`$IMAGE_TAG\`
-          - GPU image tag: \`$IMAGE_TAG\`
+          $UPDATED_IMAGES
 
           이 PR은 보호 브랜치에 직접 push하지 않고 GitOps image tag 변경을 리뷰 가능한 PR로 남기기 위해 생성되었습니다."
