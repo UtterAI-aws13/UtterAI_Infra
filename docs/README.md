@@ -113,8 +113,8 @@ User
 | 브랜치 | 배포 환경 | 배포 방식 |
 |---|---|---|
 | `feature/*` | 없음 | PR 테스트만 |
-| `develop` | Dev | 자동 배포 (Auto-Sync) |
-| `main` | Prod | 수동 배포 (Argo CD 수동 Sync) |
+| `main` + `overlays/dev` | Dev | 자동 배포 (Auto-Sync) |
+| `main` + `overlays/prod` | Prod | 수동 배포 (Argo CD 수동 Sync) |
 
 ---
 
