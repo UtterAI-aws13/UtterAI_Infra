@@ -645,6 +645,8 @@ terraform apply
 
 ## 참고
 
-- EKS 아키텍처 상세 설계: [`infra-eks/eks-architecture-flow.md`](../eks-architecture-flow.md)
-- Dev vs Prod 환경 비교: [`infra-eks/README.md`](../README.md)
+- EKS 아키텍처 상세 설계: [`docs/eks-architecture-flow.md`](../eks-architecture-flow.md)
+- Dev vs Prod 환경 비교: [`docs/README.md`](../README.md)
+- Dev 보안 전체 현황: [`docs/dev/security-overview.md`](./security-overview.md)
+- Dev 보안 수정 이력: [`docs/dev/security-hardening.md`](./security-hardening.md)
 - 브랜치/커밋 규칙: [`CONTRIBUTING.md`](../../CONTRIBUTING.md)

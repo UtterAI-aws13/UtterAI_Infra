@@ -31,6 +31,9 @@ module "rds" {
   private_data_subnet_ids   = data.terraform_remote_state.network.outputs.private_data_subnet_ids
   allowed_security_group_id = data.terraform_remote_state.eks.outputs.node_security_group_id
   cluster_security_group_id = data.terraform_remote_state.eks.outputs.cluster_security_group_id
+
+  skip_final_snapshot = true
+  deletion_protection  = false
 }
 
 # ── Redis ─────────────────────────────────────────────────────────────────────
