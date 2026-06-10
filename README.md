@@ -8,9 +8,13 @@ UtterAI 인프라 구성과 로컬 관측성 환경을 관리하는 저장소입
 
 ```text
 UtterAI_Infra/
-├── infra-eks/
+├── docs/
 │   ├── dev/
+│   │   ├── README.md
+│   │   └── security-hardening.md
 │   ├── prod/
+│   │   └── README.md
+│   ├── eks-architecture-flow.md
 │   └── README.md
 ├── observability/
 │   ├── docker-compose.yml
@@ -29,7 +33,10 @@ UtterAI_Infra/
 | 문서 | 용도 |
 | --- | --- |
 | `observability/README.md` | 로컬 observability stack 실행 방법 |
-| `infra-eks/README.md` | EKS 인프라 구성 진입점 |
+| `docs/README.md` | EKS 인프라 구성 진입점 |
+| `docs/dev/README.md` | Dev 환경 배포 가이드 |
+| `docs/dev/security-overview.md` | Dev 환경 전체 보안 구현 현황 |
+| `docs/dev/security-hardening.md` | 보안 수정 이력 |
 
 ## Local Observability
 

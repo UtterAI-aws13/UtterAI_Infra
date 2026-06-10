@@ -25,6 +25,16 @@ variable "backup_retention" {
   default = 1
 }
 
+variable "skip_final_snapshot" {
+  type    = bool
+  default = true
+}
+
+variable "deletion_protection" {
+  type    = bool
+  default = false
+}
+
 variable "vpc_id" {
   type = string
 }

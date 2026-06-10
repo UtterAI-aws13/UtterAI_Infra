@@ -132,19 +132,19 @@ resource "aws_security_group" "node" {
   }
 
   ingress {
-    description = "Control plane to node"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    description     = "Control plane to node"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    security_groups = [aws_eks_cluster.this.vpc_config[0].cluster_security_group_id]
   }
 
   ingress {
-    description = "Control plane to node kubelet"
-    from_port   = 10250
-    to_port     = 10250
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    description     = "Control plane to node kubelet"
+    from_port       = 10250
+    to_port         = 10250
+    protocol        = "tcp"
+    security_groups = [aws_eks_cluster.this.vpc_config[0].cluster_security_group_id]
   }
 
   egress {

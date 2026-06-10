@@ -4,3 +4,13 @@ metadata:
   name: utterai-backend
 spec:
   replicas: 2
+  template:
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: backend
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
