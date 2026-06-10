@@ -84,7 +84,7 @@ SQS 파이프라인:
 | `k8s/ingress/` | `api-ingress.yaml` | ALB internet-facing, HTTPS 리다이렉트 |
 | `k8s/workloads/` | `*-deployment.yaml` | API, AI API, CPU Worker, LLM GPU Worker, ML GPU Worker, Batch Worker |
 | `k8s/workloads/` | `hpa-*.yaml` | 각 워크로드 HPA |
-| `k8s/apps/backend/` | `base/` + `overlays/dev/` | Kustomize 구조 (별도 배포) |
+| `k8s-demo/apps/backend/` | `base/` + `overlays/dev/` | Kustomize 구조 (별도 배포) |
 
 ---
 
@@ -473,7 +473,7 @@ aws route53 change-resource-record-sets \
 
 ```bash
 # dev overlay 적용
-kubectl apply -k k8s/apps/backend/overlays/dev
+kubectl apply -k k8s-demo/apps/backend/overlays/dev
 ```
 
 ---

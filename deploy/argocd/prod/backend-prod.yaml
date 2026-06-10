@@ -12,7 +12,7 @@ spec:
   source:
     repoURL: https://github.com/UtterAI-aws13/UtterAI_Infra
     targetRevision: main
-    path: k8s/apps/backend/overlays/prod
+    path: k8s-demo/apps/backend/overlays/prod
   destination:
     server: https://kubernetes.default.svc
     namespace: utterai-prod-api
