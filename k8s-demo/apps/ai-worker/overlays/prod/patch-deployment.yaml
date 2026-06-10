@@ -18,10 +18,3 @@ metadata:
   name: utterai-ai-ml-gpu-worker
 spec:
   replicas: 1
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: utterai-ai-llm-gpu-worker
-spec:
-  replicas: 1
