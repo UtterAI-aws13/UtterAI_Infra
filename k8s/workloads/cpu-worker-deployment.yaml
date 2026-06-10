@@ -29,6 +29,14 @@ spec:
           image: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-cpu:${AI_CPU_TAG}
           command: ["python", "-m", "app.workers.cpu_worker"]
           env:
+            # HuggingFace Hub 인증 토큰 — ExternalSecret(cpu-worker-secret)에서 주입
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cpu-worker-secret
+                  key: HF_TOKEN
+            - name: HF_HOME
+              value: "/tmp/huggingface"
             - name: AWS_REGION
               value: "ap-northeast-2"
             - name: APP_ENV
