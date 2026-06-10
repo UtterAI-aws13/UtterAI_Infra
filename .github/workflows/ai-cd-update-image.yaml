@@ -64,11 +64,11 @@ jobs:
 
           if [ "$TARGET_ENV" = "dev" ]; then
             TARGET_BRANCH="dev"
-            OVERLAY_PATH="k8s/apps/ai-worker/overlays/dev"
+            OVERLAY_PATH="k8s-demo/apps/ai-worker/overlays/dev"
             EXPECTED_TAG_PREFIX="dev-"
           elif [ "$TARGET_ENV" = "prod" ]; then
             TARGET_BRANCH="main"
-            OVERLAY_PATH="k8s/apps/ai-worker/overlays/prod"
+            OVERLAY_PATH="k8s-demo/apps/ai-worker/overlays/prod"
             EXPECTED_TAG_PREFIX="prod-"
           else
             echo "target_env는 dev 또는 prod만 허용합니다."
@@ -190,7 +190,7 @@ jobs:
           fi
 
           git checkout -b "$UPDATE_BRANCH"
-          git add k8s/apps/ai-worker/overlays
+          git add k8s-demo/apps/ai-worker/overlays
           git commit -m "ci(ai): update $TARGET_ENV image tag to $IMAGE_TAG"
           git push origin "$UPDATE_BRANCH"
 
