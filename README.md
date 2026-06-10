@@ -53,8 +53,7 @@ docker compose up -d
 
 | 브랜치 | 용도 |
 |--------|------|
-| `main` | 프로덕션 기준 브랜치. ArgoCD가 트래킹하여 자동 sync. |
-| `dev` | 기본 개발 브랜치. PR 시 GitHub Actions가 terraform plan / lint 자동 실행. |
+| `main` | Infra repo의 단일 기준 브랜치. Argo CD가 dev/prod Kustomize overlay를 path 기준으로 트래킹. |
 | `feature/*` | 새 인프라 리소스 추가 |
 | `fix/*` | 버그 수정 |
 | `docs/*` | 문서 작업 |

@@ -77,7 +77,7 @@ jobs:
           BUILD_GPU="$INPUT_BUILD_GPU"
 
           if [ "$TARGET_ENV" = "dev" ]; then
-            TARGET_BRANCH="dev"
+            TARGET_BRANCH="main"
             OVERLAY_PATH="k8s-demo/apps/ai-worker/overlays/dev"
             EXPECTED_TAG_PREFIX="dev-"
           elif [ "$TARGET_ENV" = "prod" ]; then
