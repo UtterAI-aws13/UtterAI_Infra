@@ -214,8 +214,23 @@ resource "aws_iam_role_policy" "ai_cpu" {
       },
       {
         Effect   = "Allow"
+        Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility", "sqs:GetQueueAttributes"]
+        Resource = [var.report_analysis_queue_arn]
+      },
+      {
+        Effect   = "Allow"
         Action   = ["s3:GetObject", "s3:PutObject"]
         Resource = ["${var.raw_audio_bucket_arn}/*"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = ["${var.reports_bucket_arn}/*"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
+        Resource = ["arn:aws:bedrock:${var.aws_region}::foundation-model/*"]
       },
     ]
   })
@@ -263,58 +278,6 @@ resource "aws_iam_role_policy" "ai_ml_gpu" {
         Effect   = "Allow"
         Action   = ["s3:GetObject", "s3:PutObject"]
         Resource = ["${var.raw_audio_bucket_arn}/*"]
-      },
-    ]
-  })
-}
-
-# ── AI LLM GPU Worker IRSA ────────────────────────────────────────────────────
-
-resource "aws_iam_role" "ai_llm_gpu" {
-  name = "${local.prefix}-ai-llm-gpu-irsa-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Federated = var.oidc_provider_arn }
-      Action    = "sts:AssumeRoleWithWebIdentity"
-      Condition = {
-        StringEquals = {
-          "${local.oidc_aud}" = "sts.amazonaws.com"
-          "${local.oidc_sub}" = "system:serviceaccount:utterai-ai-gpu:utterai-llm-gpu-worker-sa"
-        }
-      }
-    }]
-  })
-}
-
-resource "aws_iam_role_policy" "ai_llm_gpu" {
-  name = "${local.prefix}-ai-llm-gpu-policy"
-  role = aws_iam_role.ai_llm_gpu.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility", "sqs:GetQueueAttributes"]
-        Resource = [var.report_analysis_queue_arn]
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["s3:GetObject"]
-        Resource = ["${var.raw_audio_bucket_arn}/*"]
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["s3:PutObject"]
-        Resource = ["${var.reports_bucket_arn}/*"]
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = ["arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:${local.prefix}/*"]
       },
     ]
   })
