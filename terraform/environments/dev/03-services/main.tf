@@ -33,7 +33,7 @@ module "rds" {
   cluster_security_group_id = data.terraform_remote_state.eks.outputs.cluster_security_group_id
 
   skip_final_snapshot = true
-  deletion_protection  = false
+  deletion_protection = false
 }
 
 # ── Redis ─────────────────────────────────────────────────────────────────────
