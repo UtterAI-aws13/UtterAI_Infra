@@ -55,8 +55,8 @@ roleRef:
   name: utterai-cpu-worker-role
   apiGroup: rbac.authorization.k8s.io
 ---
-# GPU 워커 공용 Role — ML/LLM 두 워커가 utterai-ai-gpu 네임스페이스를 공유하므로
-# Role 하나에 RoleBinding 두 개로 각 ServiceAccount를 연결한다.
+# ML GPU 워커 Role — utterai-ai-gpu 네임스페이스에서 ConfigMap 조회 권한 부여.
+# LLM 추론은 Bedrock으로 전환해 llm-gpu-worker는 제거됐다.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -75,20 +75,6 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: utterai-ml-gpu-worker-sa
-    namespace: utterai-ai-gpu
-roleRef:
-  kind: Role
-  name: utterai-gpu-worker-role
-  apiGroup: rbac.authorization.k8s.io
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: utterai-llm-gpu-worker-rolebinding
-  namespace: utterai-ai-gpu
-subjects:
-  - kind: ServiceAccount
-    name: utterai-llm-gpu-worker-sa
     namespace: utterai-ai-gpu
 roleRef:
   kind: Role

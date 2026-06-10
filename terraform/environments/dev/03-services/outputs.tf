@@ -96,10 +96,6 @@ output "ai_ml_gpu_worker_role_arn" {
   value = module.irsa.ai_ml_gpu_role_arn
 }
 
-output "ai_llm_gpu_worker_role_arn" {
-  value = module.irsa.ai_llm_gpu_role_arn
-}
-
 output "batch_worker_role_arn" {
   value = module.irsa.batch_role_arn
 }

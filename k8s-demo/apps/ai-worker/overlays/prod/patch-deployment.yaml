@@ -38,30 +38,3 @@ metadata:
   name: utterai-ai-ml-gpu-worker
 spec:
   replicas: 1
-  template:
-    spec:
-      securityContext:
-        runAsNonRoot: true
-      containers:
-        - name: ml-gpu-worker
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: utterai-ai-llm-gpu-worker
-spec:
-  replicas: 1
-  template:
-    spec:
-      securityContext:
-        runAsNonRoot: true
-      containers:
-        - name: llm-gpu-worker
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]

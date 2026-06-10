@@ -1,7 +1,8 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# AI API와 CPU/GPU worker 배포에 필요한 최소 Kubernetes 리소스입니다.
+# AI API와 CPU Worker, ML GPU Worker 배포에 필요한 최소 Kubernetes 리소스입니다.
+# LLM 추론은 AWS Bedrock을 사용하므로 llm-gpu-worker는 제거됐습니다.
 # 실제 dev/prod 환경값과 ECR image tag는 overlays에서 분리해 관리합니다.
 resources:
   - serviceaccount.yaml
@@ -10,4 +11,3 @@ resources:
   - ai-api-service.yaml
   - cpu-worker-deployment.yaml
   - ml-gpu-worker-deployment.yaml
-  - llm-gpu-worker-deployment.yaml

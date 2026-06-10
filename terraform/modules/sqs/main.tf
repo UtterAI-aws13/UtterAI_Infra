@@ -60,7 +60,7 @@ resource "aws_sqs_queue" "gpu_inference" {
   }
 }
 
-# ── Report Analysis Queue (llm-gpu-worker) ────────────────────────────────────
+# ── Report Analysis Queue (ml-gpu-worker produce → cpu-worker consume → Bedrock) ──
 
 resource "aws_sqs_queue" "report_analysis_dlq" {
   name                      = "${local.prefix}-report-analysis-dlq"
