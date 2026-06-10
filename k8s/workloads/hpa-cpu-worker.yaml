@@ -1,0 +1,29 @@
+# HPA — CPU 음성 전처리 워커 자동 스케일링
+#
+# 음성 업로드가 몰릴 때 워커를 최대 2개까지 확장.
+# worker 노드풀 용량 제한으로 maxReplicas를 보수적으로 설정.
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: utterai-cpu-worker-hpa
+  namespace: utterai-ai-cpu
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: utterai-cpu-worker
+  minReplicas: 1
+  maxReplicas: 2
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300

@@ -1,0 +1,51 @@
+# UtterAI 서비스 네임스페이스 정의
+# 워크로드 유형별로 네임스페이스를 분리해 RBAC 범위와 리소스 쿼터를 독립적으로 관리한다.
+#
+# utterai-api          : 외부 트래픽을 받는 메인 백엔드 REST API (ALB → 이 네임스페이스)
+# utterai-ai-api       : 클러스터 내부 전용 AI 처리 API (백엔드 → 내부 호출)
+# utterai-ai-cpu       : CPU 기반 음성 전처리 워커 (SQS audio-preprocess-queue 소비)
+# utterai-ai-gpu       : GPU 기반 ML/LLM 추론 워커 (SQS gpu-inference / report-analysis 소비)
+# utterai-batch        : RAG 문서 ingest 등 비동기 배치 워커 (SQS rag-ingest-queue 소비)
+# utterai-observability: OpenTelemetry Collector 등 모니터링 스택
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: utterai-api
+  labels:
+    app.kubernetes.io/part-of: utterai
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: utterai-ai-cpu
+  labels:
+    app.kubernetes.io/part-of: utterai
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: utterai-ai-gpu
+  labels:
+    app.kubernetes.io/part-of: utterai
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: utterai-batch
+  labels:
+    app.kubernetes.io/part-of: utterai
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: utterai-ai-api
+  labels:
+    app.kubernetes.io/part-of: utterai
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: utterai-observability
+  labels:
+    app.kubernetes.io/part-of: utterai
