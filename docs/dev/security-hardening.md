@@ -102,7 +102,7 @@ spec:
               drop: ["ALL"]                   # Linux capability 전체 제거
 ```
 
-적용 대상 workload: `backend`, `ai-api`, `cpu-worker`, `ml-gpu-worker`, `llm-gpu-worker`
+적용 대상 workload: `backend`, `ai-api`, `cpu-worker`, `ml-gpu-worker`
 
 ---
 
