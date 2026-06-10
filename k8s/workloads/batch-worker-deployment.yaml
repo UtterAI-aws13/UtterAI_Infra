@@ -1,0 +1,96 @@
+# Batch Worker Deployment — RAG 문서 ingest 파이프라인
+#
+# SQS rag-ingest-queue에서 메시지를 소비해 S3 문서를 벡터 DB에 적재하는 배치 워커.
+# CPU 작업 위주이므로 utterai-ai-cpu 이미지를 사용한다.
+# workload=worker 노드풀에 배치되며 taint/toleration은 별도 설정 없음(worker 노드는 taint 없음).
+#
+# DB 접속 정보는 ExternalSecret(ai-worker-secret)에서 주입 — ConfigMap에 평문으로 넣지 않는다.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: utterai-batch-worker
+  namespace: utterai-batch
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: utterai-batch-worker
+  template:
+    metadata:
+      labels:
+        app: utterai-batch-worker
+    spec:
+      serviceAccountName: utterai-batch-worker-sa
+      nodeSelector:
+        workload: worker
+      # SQS 메시지 처리 중 강제 종료를 막기 위해 60초 유예 설정
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: worker
+          image: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-cpu:${AI_CPU_TAG}
+          command: ["python", "-m", "app.workers.rag_ingest_worker"]
+          env:
+            - name: AWS_REGION
+              value: "ap-northeast-2"
+            - name: APP_ENV
+              value: "dev"
+            - name: SQS_RAG_INGEST_QUEUE_URL
+              value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-rag-ingest-queue"
+            - name: S3_BUCKET_RAG
+              value: "utterai-dev-documents"
+            # DB 접속 정보 — ExternalSecret이 Secrets Manager에서 동기화한 Secret에서 참조
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: ai-worker-secret
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ai-worker-secret
+                  key: DB_PASSWORD
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: ai-worker-secret
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: ai-worker-secret
+                  key: DB_PORT
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: ai-worker-secret
+                  key: DB_NAME
+            - name: LOG_LEVEL
+              value: "DEBUG"
+            - name: OTEL_SERVICE_NAME
+              value: "batch-worker"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector.utterai-observability.svc.cluster.local:4318"
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "http/protobuf"
+            - name: OTEL_METRICS_EXPORTER
+              value: "otlp"
+            - name: OTEL_TRACES_EXPORTER
+              value: "otlp"
+            - name: OTEL_LOGS_EXPORTER
+              value: "none"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "deployment.environment=dev,team=utterai"
+          resources:
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+          lifecycle:
+            # preStop: kubelet이 SIGTERM 보내기 전 5초 대기
+            # — SQS visibility timeout 내에 처리 완료 또는 메시지 반환을 보장하기 위함
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]

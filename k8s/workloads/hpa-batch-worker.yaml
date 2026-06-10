@@ -1,0 +1,30 @@
+# HPA — 배치 워커 자동 스케일링
+#
+# RAG ingest 작업량에 따라 Pod를 최대 5개까지 확장.
+# 배치 작업은 트래픽 변동이 크므로 maxReplicas를 API보다 높게 설정.
+# scaleDown stabilizationWindow 300s — 배치 작업 완료 후 급격한 축소 방지
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: utterai-batch-worker-hpa
+  namespace: utterai-batch
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: utterai-batch-worker
+  minReplicas: 1
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300

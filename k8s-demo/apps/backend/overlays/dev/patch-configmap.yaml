@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: utterai-backend-config
+data:
+  APP_ENV: "dev"
+  LOG_LEVEL: "DEBUG"
+  FRONTEND_ORIGIN: "https://dev.utterai.com"
+  CORS_ALLOW_ORIGINS: "https://dev.utterai.com"
+  # TODO: 실제 endpoint 값은 Terraform output 또는 External Secrets 연동 후 확정합니다.
+  DB_HOST: "TODO_AURORA_WRITER_ENDPOINT"
+  REDIS_HOST: "TODO_REDIS_ENDPOINT"
+  S3_RAW_AUDIO_BUCKET: "utterai-dev-raw-audio"
+  S3_PROCESSED_AUDIO_BUCKET: "utterai-dev-processed-audio"
+  S3_DOCUMENT_BUCKET: "utterai-dev-documents"
+  S3_REPORT_BUCKET: "utterai-dev-reports"
+  S3_ARTIFACT_BUCKET: "utterai-dev-artifacts"
+  SQS_ANALYSIS_QUEUE_URL: "TODO_DEV_ANALYSIS_QUEUE_URL"
+  SQS_ANALYSIS_DLQ_URL: "TODO_DEV_ANALYSIS_DLQ_URL"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.utterai-observability.svc.cluster.local:4317"
+  CLOUDWATCH_LOG_GROUP: "/aws/eks/utterai-dev/backend"

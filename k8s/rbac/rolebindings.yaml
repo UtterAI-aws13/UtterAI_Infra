@@ -1,0 +1,107 @@
+# RBAC Role/RoleBinding — 최소 권한 원칙 적용
+#
+# 각 워크로드는 자신의 네임스페이스 안에서 ConfigMap/Secret 조회 권한만 갖는다.
+# AWS 리소스 접근은 ServiceAccount의 IRSA가 담당하므로 여기서는 k8s 내부 권한만 제어한다.
+# API는 Secret(DB 비밀번호, JWT 키)도 읽어야 하므로 secrets 리소스를 추가로 허용한다.
+
+---
+# 메인 백엔드 API — ConfigMap(앱 설정) + Secret(DB 비밀번호, JWT 키) 조회 필요
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: utterai-api-role
+  namespace: utterai-api
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: utterai-api-rolebinding
+  namespace: utterai-api
+subjects:
+  - kind: ServiceAccount
+    name: utterai-api-sa
+    namespace: utterai-api
+roleRef:
+  kind: Role
+  name: utterai-api-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# CPU 워커 — ConfigMap(SQS URL, S3 버킷명) 조회만 필요. Secret 불필요
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: utterai-cpu-worker-role
+  namespace: utterai-ai-cpu
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: utterai-cpu-worker-rolebinding
+  namespace: utterai-ai-cpu
+subjects:
+  - kind: ServiceAccount
+    name: utterai-cpu-worker-sa
+    namespace: utterai-ai-cpu
+roleRef:
+  kind: Role
+  name: utterai-cpu-worker-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# ML GPU 워커 Role — utterai-ai-gpu 네임스페이스에서 ConfigMap 조회 권한 부여.
+# LLM 추론은 Bedrock으로 전환해 llm-gpu-worker는 제거됐다.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: utterai-gpu-worker-role
+  namespace: utterai-ai-gpu
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: utterai-ml-gpu-worker-rolebinding
+  namespace: utterai-ai-gpu
+subjects:
+  - kind: ServiceAccount
+    name: utterai-ml-gpu-worker-sa
+    namespace: utterai-ai-gpu
+roleRef:
+  kind: Role
+  name: utterai-gpu-worker-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# 배치 워커 — ConfigMap(SQS URL, S3 버킷명) 조회만 필요
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: utterai-batch-worker-role
+  namespace: utterai-batch
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: utterai-batch-worker-rolebinding
+  namespace: utterai-batch
+subjects:
+  - kind: ServiceAccount
+    name: utterai-batch-worker-sa
+    namespace: utterai-batch
+roleRef:
+  kind: Role
+  name: utterai-batch-worker-role
+  apiGroup: rbac.authorization.k8s.io

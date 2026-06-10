@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: utterai-ai-worker-config
+data:
+  APP_ENV: "dev"
+  LOG_LEVEL: "DEBUG"
+  AWS_REGION: "ap-northeast-2"
+  BEDROCK_REGION: "ap-northeast-2"
+  S3_BUCKET_AUDIO: "utterai-dev-raw-audio"
+  S3_BUCKET_REPORT: "utterai-dev-reports"
+  S3_BUCKET_RAG: "utterai-dev-documents"
+  # TODO: 실제 SQS URL은 Terraform output과 큐 이름 확정 후 갱신합니다.
+  SQS_AUDIO_PREPROCESS_QUEUE_URL: "TODO_DEV_AUDIO_PREPROCESS_QUEUE_URL"
+  SQS_GPU_INFERENCE_QUEUE_URL: "TODO_DEV_GPU_INFERENCE_QUEUE_URL"
+  SQS_REPORT_ANALYSIS_QUEUE_URL: "TODO_DEV_REPORT_ANALYSIS_QUEUE_URL"
+  SQS_RAG_INGEST_QUEUE_URL: "TODO_DEV_RAG_INGEST_QUEUE_URL"
+  OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=dev,team=utterai,service=ai-worker"

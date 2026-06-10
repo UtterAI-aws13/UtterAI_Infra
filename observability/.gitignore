@@ -1,0 +1,20 @@
+# Local-only files
+.env
+*.env
+!env/*.env.example
+
+# Runtime output
+*.log
+logs/
+tmp/
+data/
+
+# Language/tooling caches
+node_modules/
+.venv/
+__pycache__/
+.pytest_cache/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

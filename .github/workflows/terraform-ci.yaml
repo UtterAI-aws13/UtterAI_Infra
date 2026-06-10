@@ -65,10 +65,9 @@ jobs:
             exit 0
           fi
 
-          while IFS= read -r dir; do
-            echo "Terraform init: $dir"
-            terraform -chdir="$dir" init -backend=false
+            while IFS= read -r dir; do
+              echo "Terraform init: $dir"
+              terraform -chdir="$dir" init -backend=false
+              terraform -chdir="$dir" validate
+            done <<< "$TERRAFORM_DIRS"
 
-            echo "Terraform validate: $dir"
-            terraform -chdir="$dir" validate
-          done <<< "$TERRAFORM_DIRS"
