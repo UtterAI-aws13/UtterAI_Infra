@@ -55,6 +55,15 @@ jobs:
           ECR_REGISTRY="${INPUT_ECR_REGISTRY:-$DEFAULT_ECR_REGISTRY}"
           ECR_REPOSITORY="${INPUT_ECR_REPOSITORY:-$DEFAULT_ECR_REPOSITORY}"
 
+          sanitize_single_line() {
+            printf '%s' "$1" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+          }
+
+          TARGET_ENV="$(sanitize_single_line "$TARGET_ENV")"
+          IMAGE_TAG="$(sanitize_single_line "$IMAGE_TAG")"
+          ECR_REGISTRY="$(sanitize_single_line "$ECR_REGISTRY")"
+          ECR_REPOSITORY="$(sanitize_single_line "$ECR_REPOSITORY")"
+
           if [ "$TARGET_ENV" = "dev" ]; then
             TARGET_BRANCH="main"
             OVERLAY_PATH="k8s-demo/apps/backend/overlays/dev"
