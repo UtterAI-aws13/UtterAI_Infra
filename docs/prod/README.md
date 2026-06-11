@@ -378,7 +378,7 @@ IAM Role: utterai-prod-backend-api-role
 - s3:ListBucket (특정 prefix 한정)
 - sqs:SendMessage
 - secretsmanager:GetSecretValue
-- kms:Decrypt (prod KMS key 한정)
+- kms:Decrypt (prod-aurora-kms-key 한정)
 - cloudwatch:PutMetricData
 ```
 
@@ -464,7 +464,7 @@ Connection이 80%를 넘으면 RDS Proxy 도입 검토
 | TLS | 활성화 |
 | AUTH Token | 활성화 (Secrets Manager 관리) |
 | 자동 백업 | 활성화 (1일 보존) |
-| 암호화 | KMS (prod-redis-kms-key) |
+| 암호화 | AWS Managed Key (`aws/elasticache`) |
 
 ### 6.2 접속 정보
 
@@ -493,7 +493,7 @@ Port: 6379
 ```text
 - 퍼블릭 액세스 차단: 전체 활성화
 - 버전 관리: 활성화 (raw-audio, reports)
-- 서버 사이드 암호화: KMS (prod-s3-kms-key)
+- 서버 사이드 암호화: AWS Managed Key (aws/s3)
 - 액세스 로깅: 활성화
 - 객체 수명 주기:
     raw-audio: 90일 후 Glacier로 이동, 1년 후 삭제
@@ -536,7 +536,7 @@ utterai-prod-analysis-queue:
 - 메시지 보존 기간: 4일
 - 가시성 타임아웃: 300초 (AI 분석 예상 최대 시간)
 - 최대 메시지 크기: 256KB
-- 암호화: KMS (prod-sqs-kms-key)
+- 암호화: AWS Managed Key (`aws/sqs`)
 - DLQ: utterai-prod-analysis-dlq (maxReceiveCount: 3)
 
 utterai-prod-analysis-dlq:
@@ -583,7 +583,7 @@ utterai-prod-analysis-dlq:
 | `utterai-prod/redis-auth-token` | Redis AUTH 토큰 | 수동 관리 |
 | `utterai-prod/internal-service-token` | 백엔드-AI 서버 내부 인증 토큰 | 수동 관리 |
 
-> 모든 Prod Secret은 KMS (prod-secrets-kms-key) 로 암호화
+> 모든 Prod Secret은 AWS Managed Key (`aws/secretsmanager`) 로 암호화
 
 ### 10.2 EKS에서 주입 방식
 
@@ -616,22 +616,26 @@ spec:
 
 ## 11. KMS 구성
 
-Prod에서는 서비스별로 별도 KMS Key를 사용한다.
+Aurora만 CMK(Customer Managed Key)를 사용하고, 나머지 서비스는 AWS Managed Key를 사용한다.
 
-| KMS Key Alias | 암호화 대상 |
-|---|---|
-| `prod-aurora-kms-key` | Aurora PostgreSQL |
-| `prod-redis-kms-key` | ElastiCache Redis |
-| `prod-s3-kms-key` | S3 버킷 (raw-audio, reports, artifacts) |
-| `prod-sqs-kms-key` | SQS 큐 |
-| `prod-secrets-kms-key` | Secrets Manager |
-| `prod-logs-kms-key` | CloudWatch Logs |
+Aurora에 CMK가 필요한 이유: Cross-account Aurora Global Database(Seoul → Tokyo DR) 구성 시 AWS Managed Key(`aws/rds`)는 계정 간 공유가 불가능하다. CMK는 키 정책에 Tokyo 계정을 허용하여 Secondary 클러스터가 데이터를 복호화할 수 있게 한다.
+
+| KMS Key | 종류 | 암호화 대상 |
+|---|---|---|
+| `prod-aurora-kms-key` | **CMK** (Customer Managed Key) | Aurora PostgreSQL — Cross-account DR 필요 |
+| `aws/elasticache` | AWS Managed Key | ElastiCache Redis |
+| `aws/s3` | AWS Managed Key | S3 버킷 |
+| `aws/sqs` | AWS Managed Key | SQS 큐 |
+| `aws/secretsmanager` | AWS Managed Key | Secrets Manager |
+| `aws/logs` | AWS Managed Key | CloudWatch Logs |
 
 ```text
-KMS Key 정책 원칙:
-- 백엔드 IAM Role은 필요한 Key에 대해서만 kms:Decrypt 허용
-- KMS Key 관리(생성/삭제/교체)는 별도 관리자 Role만 허용
+CMK(prod-aurora-kms-key) 키 정책 원칙:
+- 백엔드 IAM Role: kms:Decrypt, kms:GenerateDataKey 허용
+- KMS Key 관리(생성/삭제/교체): 별도 관리자 Role만 허용
+- Tokyo DR 계정: kms:Decrypt 허용 (Aurora Global DB Secondary용)
 - CloudTrail로 모든 KMS 사용 이력 기록
+- 삭제 전 대기 기간: 30일 (실수로 인한 데이터 손실 방지)
 ```
 
 ---
@@ -642,10 +646,10 @@ KMS Key 정책 원칙:
 
 | 로그 그룹 | 보존 기간 | 암호화 |
 |---|---|---|
-| `/aws/eks/utterai-prod/backend` | 30일 | KMS |
-| `/aws/eks/utterai-prod/ai-service` | 30일 | KMS |
-| `/aws/rds/cluster/utterai-prod-aurora` | 30일 | KMS |
-| `/aws/elasticache/utterai-prod-redis` | 14일 | KMS |
+| `/aws/eks/utterai-prod/backend` | 30일 | AWS Managed Key (`aws/logs`) |
+| `/aws/eks/utterai-prod/ai-service` | 30일 | AWS Managed Key (`aws/logs`) |
+| `/aws/rds/cluster/utterai-prod-aurora` | 30일 | AWS Managed Key (`aws/logs`) |
+| `/aws/elasticache/utterai-prod-redis` | 14일 | AWS Managed Key (`aws/logs`) |
 
 ### 12.2 알람 전체 목록
 
