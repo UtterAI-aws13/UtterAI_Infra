@@ -55,8 +55,17 @@ jobs:
           ECR_REGISTRY="${INPUT_ECR_REGISTRY:-$DEFAULT_ECR_REGISTRY}"
           ECR_REPOSITORY="${INPUT_ECR_REPOSITORY:-$DEFAULT_ECR_REPOSITORY}"
 
+          sanitize_single_line() {
+            printf '%s' "$1" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+          }
+
+          TARGET_ENV="$(sanitize_single_line "$TARGET_ENV")"
+          IMAGE_TAG="$(sanitize_single_line "$IMAGE_TAG")"
+          ECR_REGISTRY="$(sanitize_single_line "$ECR_REGISTRY")"
+          ECR_REPOSITORY="$(sanitize_single_line "$ECR_REPOSITORY")"
+
           if [ "$TARGET_ENV" = "dev" ]; then
-            TARGET_BRANCH="dev"
+            TARGET_BRANCH="main"
             OVERLAY_PATH="k8s-demo/apps/backend/overlays/dev"
             EXPECTED_TAG_PREFIX="dev-"
           elif [ "$TARGET_ENV" = "prod" ]; then
@@ -178,5 +187,5 @@ jobs:
 
           이 PR은 보호 브랜치에 직접 push하지 않고 GitOps image tag 변경을 리뷰 가능한 PR로 남기기 위해 생성되었습니다."
         
-        # TODO: 인프라 Repo에 Github App 을 통해 브랜치 예외규정설정 -> Dev 브랜치에 한해 자동으로 이미지 태그 변경이 반영될 수 있도록 함.
+        # TODO: 인프라 Repo에 GitHub App을 도입하면 main 보호 브랜치 정책을 유지하면서 자동 PR/merge 범위를 세밀하게 조정할 수 있습니다.
         

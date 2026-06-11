@@ -56,10 +56,10 @@ spec:
             - name: APP_ENV
               value: "dev"
             # 소비 큐: CPU 워커가 전처리 완료 후 enqueue
-            - name: SQS_ML_GPU_QUEUE_URL
+            - name: SQS_GPU_INFERENCE_QUEUE_URL
               value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-gpu-inference-queue"
             # 생산 큐: ML 추론 완료 후 CPU 워커(Bedrock 호출)로 전달
-            - name: SQS_LLM_QUEUE_URL
+            - name: SQS_REPORT_ANALYSIS_QUEUE_URL
               value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-report-analysis-queue"
             - name: S3_BUCKET_AUDIO
               value: "utterai-dev-raw-audio"
