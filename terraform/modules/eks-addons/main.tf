@@ -43,6 +43,78 @@ resource "helm_release" "aws_load_balancer_controller" {
   }
 }
 
+# ── EKS Observability ────────────────────────────────────────────────────────
+
+resource "helm_release" "kube_prometheus_stack" {
+  name             = "kube-prometheus-stack"
+  repository       = "https://prometheus-community.github.io/helm-charts"
+  chart            = "kube-prometheus-stack"
+  version          = "66.2.1"
+  namespace        = "monitoring"
+  create_namespace = true
+  cleanup_on_fail  = true
+  wait             = true
+  wait_for_jobs    = true
+
+  values = [
+    yamlencode({
+      fullnameOverride = "utterai-monitoring"
+
+      prometheus = {
+        prometheusSpec = {
+          retention      = "7d"
+          scrapeInterval = "60s"
+
+          serviceMonitorSelectorNilUsesHelmValues = false
+          podMonitorSelectorNilUsesHelmValues     = false
+          ruleSelectorNilUsesHelmValues           = false
+          serviceMonitorNamespaceSelector         = {}
+          podMonitorNamespaceSelector             = {}
+          ruleNamespaceSelector                   = {}
+
+          resources = {
+            requests = {
+              cpu    = "100m"
+              memory = "512Mi"
+            }
+            limits = {
+              cpu    = "500m"
+              memory = "1Gi"
+            }
+          }
+        }
+      }
+
+      grafana = {
+        enabled = true
+        service = {
+          type = "ClusterIP"
+        }
+        defaultDashboardsTimezone = "Asia/Seoul"
+      }
+
+      kubeStateMetrics = {
+        enabled = true
+      }
+
+      "prometheus-node-exporter" = {
+        enabled = true
+      }
+
+      kubelet = {
+        enabled = true
+        serviceMonitor = {
+          cAdvisor = true
+        }
+      }
+
+      alertmanager = {
+        enabled = false
+      }
+    })
+  ]
+}
+
 # ── Cluster Autoscaler ────────────────────────────────────────────────────────
 
 resource "helm_release" "cluster_autoscaler" {
@@ -53,7 +125,10 @@ resource "helm_release" "cluster_autoscaler" {
   namespace       = "kube-system"
   cleanup_on_fail = true
 
-  depends_on = [helm_release.aws_load_balancer_controller]
+  depends_on = [
+    helm_release.aws_load_balancer_controller,
+    helm_release.kube_prometheus_stack,
+  ]
 
   set {
     name  = "autoDiscovery.clusterName"
@@ -93,6 +168,16 @@ resource "helm_release" "cluster_autoscaler" {
   set {
     name  = "resources.requests.memory"
     value = "256Mi"
+  }
+
+  set {
+    name  = "serviceMonitor.enabled"
+    value = "true"
+  }
+
+  set {
+    name  = "serviceMonitor.interval"
+    value = "60s"
   }
 
   set {
