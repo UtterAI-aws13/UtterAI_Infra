@@ -142,3 +142,21 @@ spec:
     - name: prom-exporter
       port: 8889
       targetPort: prom-exporter
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: otel-collector
+  namespace: utterai-observability
+  labels:
+    app: otel-collector
+    app.kubernetes.io/name: otel-collector
+    app.kubernetes.io/part-of: utterai
+spec:
+  selector:
+    matchLabels:
+      app: otel-collector
+  endpoints:
+    - port: prom-exporter
+      path: /metrics
+      interval: 60s

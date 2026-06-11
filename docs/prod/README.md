@@ -875,7 +875,17 @@ CMK(prod-aurora-kms-key) 키 정책 원칙:
 
 ---
 
-## 12. CloudWatch / 모니터링 구성
+## 12. CloudWatch / Prometheus / 모니터링 구성
+
+Prod 모니터링은 CloudWatch와 Prometheus의 역할을 분리한다.
+
+| 수집 대상 | 저장 위치 | 시각화 |
+|---|---|---|
+| AWS 관리 지표(ALB, Aurora, Redis, SQS, CloudFront) | CloudWatch Metrics | CloudWatch Dashboard, Grafana CloudWatch datasource |
+| Kubernetes 지표(Node, Pod, kube-state-metrics, cAdvisor) | Prometheus TSDB | Grafana Prometheus datasource |
+| 애플리케이션 OTLP metrics | OpenTelemetry Collector → Prometheus scrape | Grafana Prometheus datasource |
+| 애플리케이션 trace | OpenTelemetry Collector → Tempo | Grafana Tempo datasource |
+| 애플리케이션 로그 | CloudWatch Logs | CloudWatch Logs Insights, Grafana CloudWatch datasource |
 
 ### 12.1 로그 그룹
 
@@ -917,20 +927,49 @@ CloudWatch 대시보드 `utterai-prod-overview`:
 ### 12.4 OpenTelemetry / Grafana
 
 ```text
-OTel Collector: EKS 내 DaemonSet
-Backend: Grafana Tempo (Shared Tooling Account)
+Collector: OpenTelemetry Collector (EKS 내 Deployment, utterai-observability namespace)
+Backend: Grafana Tempo (Shared Tooling Account에 위치)
 Sampling: 운영 중 10%, 에러 100%
+```
+
+### 12.5 Prometheus
+
+Prod 클러스터에는 `kube-prometheus-stack`을 배포한다. Prometheus는 Kubernetes 기본 지표와 OpenTelemetry Collector의 Prometheus exporter endpoint를 scrape한다.
+
+```text
+Namespace: monitoring
+Retention: 운영 정책에 맞춰 별도 지정
+Scrape 대상:
+  - kube-state-metrics
+  - prometheus-node-exporter
+  - kubelet / cAdvisor
+  - ServiceMonitor: otel-collector.utterai-observability
+```
+
+애플리케이션 Pod는 OTLP HTTP로 Collector에 metrics를 전송하고, Collector는 `prom-exporter` service port(`8889`)에서 Prometheus scrape endpoint를 노출한다. `ServiceMonitor`는 `k8s/observability/otel-collector.yaml`에 함께 정의한다.
+
+### 12.6 Grafana
 
 Grafana 데이터 소스:
   - CloudWatch (메트릭 / 로그)
-  - OpenTelemetry (Trace)
+  - Prometheus (Kubernetes / 애플리케이션 metrics)
+  - Tempo (OpenTelemetry trace)
   - Aurora Performance Insights (DB 쿼리 분석)
 
 주요 대시보드:
   - utterai-prod-overview (서비스 전체 현황)
   - utterai-prod-ai-pipeline (AI 파이프라인 처리량 및 큐 깊이)
   - utterai-prod-db (Aurora / Redis 상세)
+  - UtterAI CA vs Karpenter (node autoscaling 전환 검증)
 ```
+
+`UtterAI CA vs Karpenter` dashboard는 `k8s/observability/grafana-dashboard-ca-karpenter.yaml`에 정의한다. Dev에서는 CA baseline을 먼저 수집하고, Karpenter 설치 후 같은 dashboard에서 `karpenter_*` 지표와 비교한다.
+
+### 12.7 Alerting
+
+Prod 알림의 1차 기준은 CloudWatch Alarm이다. AWS 관리 지표와 서비스 SLO 알림은 CloudWatch Alarm에서 Discord/온콜 채널로 전송한다.
+
+Prometheus Alertmanager는 on-call routing과 중복 알림 정책이 확정된 뒤 활성화한다. 그 전까지 Prometheus는 Kubernetes/App metrics 저장 및 Grafana 시각화 경로로 사용한다.
 
 ---
 
@@ -1128,7 +1167,7 @@ AI_SERVICE_BASE_URL=http://ai-service.utterai-ai-api.svc.cluster.local:8000
 INTERNAL_CALLBACK_TOKEN=${from_secrets_manager}
 
 # 관측
-OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.utterai-observability.svc.cluster.local:4317
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.utterai-observability.svc.cluster.local:4318
 CLOUDWATCH_LOG_GROUP=/aws/eks/utterai-prod/backend
 ```
 
