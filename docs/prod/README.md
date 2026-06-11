@@ -1,5 +1,34 @@
 # UtterAI Prod 환경 인프라 가이드
 
+> AWS ap-northeast-2 (Primary) + ap-northeast-1 (DR) | EKS 1.31 | Terraform + Kubernetes
+
+---
+
+## 목차
+
+1. [환경 개요](#1-환경-개요)
+2. [도메인 구성](#2-도메인-구성)
+3. [네트워크 구성](#3-네트워크-구성)
+4. [EKS 클러스터 구성](#4-eks-클러스터-구성)
+5. [Aurora PostgreSQL 구성](#5-aurora-postgresql-구성)
+6. [ElastiCache Redis 구성](#6-elasticache-redis-구성)
+7. [S3 버킷 구성](#7-s3-버킷-구성)
+8. [SQS 구성](#8-sqs-구성)
+9. [Cognito 구성](#9-cognito-구성)
+10. [Secrets Manager 구성](#10-secrets-manager-구성)
+11. [KMS 구성](#11-kms-구성)
+12. [CloudWatch / 모니터링 구성](#12-cloudwatch--모니터링-구성)
+13. [CloudFront 구성](#13-cloudfront-구성)
+14. [Shared Tooling Account](#14-shared-tooling-account)
+15. [CI/CD 파이프라인](#15-cicd-파이프라인)
+16. [Terraform 구조](#16-terraform-구조)
+17. [환경변수 전체 목록](#17-환경변수-전체-목록)
+18. [DR (재해 복구) 구성](#18-dr-재해-복구-구성--tokyo-warm-standby)
+19. [장애 대응 체계](#19-장애-대응-체계)
+20. [운영 주의사항](#20-prod-환경-운영-주의사항)
+21. [Pod 보안 정책 (PSS + Kyverno)](#21-pod-보안-정책-pod-security-standards--kyverno)
+22. [Cilium (CNI + 네트워크 보안)](#22-cilium-cni--네트워크-보안)
+
 ---
 
 ## 1. 환경 개요
@@ -22,7 +51,7 @@ Prod 환경은 실제 사용자에게 서비스를 제공하는 운영 환경이
 - 보안 최우선: 최소 권한, 암호화, 접근 로깅 전면 적용
 - 성능 보장: 충분한 인스턴스 크기, HPA로 자동 확장
 - 변경 통제: main 브랜치 머지 + 승인 후 배포
-- Prod와 Dev는 AWS 계정 수준에서 분리 권장
+- Prod와 Dev는 AWS 계정 수준에서 분리
 ```
 
 ### 1.3 환경 식별
@@ -32,8 +61,26 @@ Prod 환경은 실제 사용자에게 서비스를 제공하는 운영 환경이
 | 환경 이름 | `prod` |
 | AWS Region | `ap-northeast-2` |
 | AWS Account | Dev와 분리된 별도 계정 |
-| EKS Namespace | `utterai-prod` |
+| EKS 클러스터 이름 | `utterai-prod-eks` |
 | 리소스 Prefix | `utterai-prod-` |
+| Terraform State S3 버킷 | `utterai-prod-terraform-state` |
+
+### 1.4 아키텍처 요약
+
+```
+User → Route 53 → CloudFront → ALB Ingress → EKS
+                                               ├── API Pod          (api NodePool, MNG + HPA)
+                                               ├── AI API Pod       (ai-api NodePool, 내부 전용)
+                                               ├── CPU AI Worker    (ai-cpu NodePool, KEDA)
+                                               ├── GPU AI Worker    (ai-gpu NodePool, KEDA)
+                                               └── Batch Worker     (batch NodePool, KEDA)
+
+SQS 파이프라인:
+  audio-preprocess-queue → gpu-inference-queue → report-analysis-queue
+  rag-ingest-queue (RAG 문서 ingest 전용)
+```
+
+> Dev vs Prod 환경 상세 비교: [`docs/README.md`](../README.md)
 
 ---
 
@@ -94,8 +141,6 @@ Prod 환경은 실제 사용자에게 서비스를 제공하는 운영 환경이
 
 ### 3.4 WAF 구성
 
-Prod ALB 앞에 WAF를 배치한다.
-
 ```text
 AWS WAF Rules:
 - AWS Managed Rules Common (OWASP Top 10 기본 차단)
@@ -128,35 +173,45 @@ AWS WAF Rules:
 | 클러스터 이름 | `utterai-prod-eks` |
 | Kubernetes 버전 | `1.31` |
 | Control Plane Endpoint | Private only (Public 접근 차단) |
-| 배포 Namespace | `utterai-prod` |
 
-> Prod에서는 Control Plane Public Endpoint를 차단하고 kubectl 접근은 VPN 또는 Bastion 경유
+> Prod에서는 Control Plane Public Endpoint를 차단하고 kubectl 접근은 VPN 또는 Systems Manager 경유
 
-### 4.2 NodeGroup 구성
+### 4.2 Namespace 구성
 
-다이어그램 기준 4개의 NodeGroup으로 역할을 분리하되, 안정적인 워크로드(System, API)는 EKS Managed NodeGroup으로, 동적 워크로드(CPU/GPU Worker)는 Karpenter NodePool로 관리하는 **하이브리드 구조**를 사용한다.
+Dev와 동일한 Namespace 구조를 사용한다. 환경 분리는 Namespace가 아닌 AWS 계정 수준에서 이루어진다.
+
+| Namespace | 용도 |
+|---|---|
+| `utterai-api` | 외부 트래픽을 받는 백엔드 REST API |
+| `utterai-ai-api` | 클러스터 내부 전용 AI 처리 API |
+| `utterai-ai-cpu` | CPU 기반 음성 전처리 워커 |
+| `utterai-ai-gpu` | GPU 기반 ML/LLM 추론 워커 |
+| `utterai-batch` | RAG 문서 ingest 배치 워커 |
+| `utterai-observability` | OpenTelemetry Collector 등 모니터링 스택 |
+
+### 4.3 NodeGroup 구성
+
+안정적인 워크로드(System, API)는 EKS Managed NodeGroup으로, 동적 워크로드(CPU/GPU Worker)는 Karpenter NodePool로 관리하는 **하이브리드 구조**를 사용한다.
 
 | NodeGroup | 관리 방식 | 인스턴스 타입 | 노드 수 | 용도 |
 |---|---|---|---:|---|
-| `prod-system-nodegroup` | EKS Managed NodeGroup | `t3.large` | 2 ~ 3 | Kubernetes 시스템 컴포넌트 (CoreDNS, ALB Controller, Karpenter 등) |
+| `prod-system-nodegroup` | EKS Managed NodeGroup | `t3.large` | 2 ~ 3 | CoreDNS, ALB Controller, Karpenter |
 | `prod-api-nodegroup` | EKS Managed NodeGroup + HPA | `t3.xlarge` | 2 ~ 5 | 백엔드 API Pod |
-| `cpu-worker-nodepool` | **Karpenter NodePool** + KEDA | `c5.2xlarge`, `c5.4xlarge` 자동 선택 | 0 ~ 4 | AI CPU 처리 (ASR, 전처리) |
-| `gpu-worker-nodepool` | **Karpenter NodePool** + KEDA | `g4dn.xlarge`, `g4dn.2xlarge` 자동 선택 | 0 ~ 3 | AI GPU 처리 (Diarization, 추론) |
+| `cpu-worker-nodepool` | Karpenter NodePool + KEDA | `c5.2xlarge`, `c5.4xlarge` | 0 ~ 4 | AI CPU 처리 |
+| `gpu-worker-nodepool` | Karpenter NodePool + KEDA | `g4dn.xlarge`, `g4dn.2xlarge` | 0 ~ 3 | AI GPU 처리 |
 
 > System / API NodeGroup: On-Demand, 항상 실행
 >
-> CPU / GPU Worker: Karpenter가 Pod Pending 감지 시 EC2 자동 기동, 작업 완료 후 자동 종료
->
-> 스케일링 역할 분리: KEDA(Pod 수) + Karpenter(노드 수) → 섹션 4.4, 4.5 참고
+> CPU / GPU Worker: KEDA가 Pod 수 조정 → Karpenter가 노드 프로비저닝 (섹션 4.5, 4.6 참고)
 
-### 4.3 HPA (Horizontal Pod Autoscaler)
+### 4.4 HPA (Horizontal Pod Autoscaler)
 
 ```yaml
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: backend-api-hpa
-  namespace: utterai-prod
+  namespace: utterai-api
 spec:
   minReplicas: 3
   maxReplicas: 10
@@ -175,50 +230,68 @@ spec:
           averageUtilization: 70
 ```
 
-### 4.4 KEDA (Queue-based Autoscaler)
+### 4.5 KEDA (Queue-based Autoscaler)
 
-KEDA는 SQS Analysis Queue의 메시지 수를 기반으로 CPU/GPU Worker Pod를 자동 스케일링한다.
+KEDA는 SQS 큐 메시지 수를 기반으로 Worker Pod를 자동 스케일링한다.
 
 ```text
-HPA와의 차이:
-- HPA: CPU/Memory 사용률 기반 스케일링 (백엔드 API에 적용)
-- KEDA: SQS 큐 메시지 수 기반 스케일링 (Worker NodeGroup에 적용)
-
 동작 방식:
-1. 분석 요청이 SQS에 쌓임
-2. KEDA가 큐 메시지 수를 감지
-3. CPU Worker Pod 수를 자동으로 증가
-4. CPU Worker가 GPU Worker에 작업 분배
-5. 큐가 비워지면 Pod 수 자동 감소
+1. 분석 요청이 audio-preprocess-queue에 쌓임
+2. KEDA가 큐 메시지 수를 감지 → CPU Worker Pod 수 증가
+3. CPU Worker가 전처리 후 gpu-inference-queue로 전달
+4. KEDA가 gpu-inference-queue 감지 → GPU Worker Pod 수 증가
+5. 큐가 비워지면 Pod 수 자동 감소 → Karpenter가 노드 종료
 ```
+
+**CPU Worker ScaledObject**
 
 ```yaml
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
   name: cpu-worker-scaledobject
-  namespace: utterai-prod
+  namespace: utterai-ai-cpu
 spec:
   scaleTargetRef:
-    name: cpu-worker
+    name: utterai-cpu-worker
   minReplicaCount: 1
   maxReplicaCount: 4
   triggers:
     - type: aws-sqs-queue
       metadata:
-        queueURL: https://sqs.ap-northeast-2.amazonaws.com/{ACCOUNT_ID}/utterai-prod-analysis-queue
+        queueURL: https://sqs.ap-northeast-2.amazonaws.com/{ACCOUNT_ID}/utterai-prod-audio-preprocess-queue
         queueLength: "5"
         awsRegion: ap-northeast-2
         identityOwner: operator
 ```
 
-> `queueLength: "5"` → 큐 메시지 5개당 Pod 1개 기준으로 스케일링
->
-> KEDA가 Pod를 늘리면 → 노드가 부족 → Karpenter가 EC2를 프로비저닝 (섹션 4.5 참고)
+**GPU Worker ScaledObject**
 
-### 4.5 Karpenter (Node Provisioner)
+```yaml
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: gpu-worker-scaledobject
+  namespace: utterai-ai-gpu
+spec:
+  scaleTargetRef:
+    name: utterai-ml-gpu-worker
+  minReplicaCount: 0
+  maxReplicaCount: 3
+  triggers:
+    - type: aws-sqs-queue
+      metadata:
+        queueURL: https://sqs.ap-northeast-2.amazonaws.com/{ACCOUNT_ID}/utterai-prod-gpu-inference-queue
+        queueLength: "1"
+        awsRegion: ap-northeast-2
+        identityOwner: operator
+```
 
-Karpenter는 KEDA가 생성한 `Pending` 상태의 Worker Pod를 감지하고, Pod의 리소스 요청에 맞는 EC2 인스턴스를 자동으로 기동한다.
+> `queueLength` 값은 큐 메시지 1개당 Pod 1개를 의미. GPU 워커는 1개 작업에 메모리 점유가 크므로 1로 설정
+
+### 4.6 Karpenter (Node Provisioner)
+
+Karpenter는 KEDA가 생성한 `Pending` Pod를 감지해 EC2를 자동 프로비저닝한다.
 
 ```text
 KEDA + Karpenter 전체 흐름:
@@ -235,7 +308,46 @@ KEDA + Karpenter 전체 흐름:
   → Karpenter: 30초 후 EC2 종료 → 과금 중단
 ```
 
-**Karpenter NodePool (GPU Worker)**
+**CPU Worker NodePool**
+
+```yaml
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: cpu-worker-nodepool
+spec:
+  template:
+    metadata:
+      labels:
+        role: cpu-worker
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: cpu-worker-class
+      requirements:
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values: ["c5.2xlarge", "c5.4xlarge"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"]
+        - key: topology.kubernetes.io/zone
+          operator: In
+          values: ["ap-northeast-2a", "ap-northeast-2b", "ap-northeast-2c"]
+      taints:
+        - key: dedicated
+          value: ai-cpu
+          effect: NoSchedule
+  limits:
+    cpu: 64
+    memory: 256Gi
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 30s
+```
+
+**GPU Worker NodePool**
 
 ```yaml
 apiVersion: karpenter.sh/v1
@@ -262,6 +374,10 @@ spec:
         - key: topology.kubernetes.io/zone
           operator: In
           values: ["ap-northeast-2a", "ap-northeast-2b", "ap-northeast-2c"]
+      taints:
+        - key: dedicated
+          value: ai-gpu
+          effect: NoSchedule
   limits:
     cpu: 64
     memory: 256Gi
@@ -270,30 +386,9 @@ spec:
     consolidateAfter: 30s
 ```
 
-**EC2NodeClass (GPU Worker)**
+> Karpenter 자체는 `prod-system-nodegroup`에 배포. Karpenter가 죽으면 Worker 노드 프로비저닝이 불가능하므로 System NodeGroup의 가용성이 전제되어야 한다
 
-```yaml
-apiVersion: karpenter.k8s.aws/v1
-kind: EC2NodeClass
-metadata:
-  name: gpu-worker-class
-spec:
-  amiFamily: AL2
-  role: karpenter-node-role
-  subnetSelectorTerms:
-    - tags:
-        karpenter.sh/discovery: utterai-prod-eks
-  securityGroupSelectorTerms:
-    - tags:
-        karpenter.sh/discovery: utterai-prod-eks
-  tags:
-    Name: karpenter-gpu-worker
-    Environment: prod
-```
-
-> Karpenter 자체는 `prod-system-nodegroup`에 배포한다. Karpenter가 죽으면 Worker 노드 프로비저닝이 불가능하므로 System NodeGroup의 가용성이 전제되어야 한다
-
-### 4.6 PodDisruptionBudget
+### 4.7 PodDisruptionBudget
 
 롤링 배포 중 서비스 중단을 방지한다.
 
@@ -302,7 +397,7 @@ apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: backend-api-pdb
-  namespace: utterai-prod
+  namespace: utterai-api
 spec:
   minAvailable: 2
   selector:
@@ -310,14 +405,14 @@ spec:
       app: backend-api
 ```
 
-### 4.7 백엔드 Deployment
+### 4.8 백엔드 Deployment
 
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend-api
-  namespace: utterai-prod
+  namespace: utterai-api
 spec:
   replicas: 3
   strategy:
@@ -325,9 +420,6 @@ spec:
     rollingUpdate:
       maxSurge: 1
       maxUnavailable: 0
-  selector:
-    matchLabels:
-      app: backend-api
   template:
     spec:
       serviceAccountName: backend-api-sa
@@ -368,28 +460,39 @@ spec:
 
 > `podAntiAffinity`로 Pod를 서로 다른 노드에 분산 배치
 
-### 4.8 IRSA 구성
+### 4.9 IRSA 구성
 
-```text
-IAM Role: utterai-prod-backend-api-role
+IRSA는 총 **8개** 역할로 구성된다. 플랫폼 컴포넌트용 3개와 애플리케이션 워크로드용 5개로 나뉜다.
 
-허용 권한 (prod 버킷/큐/시크릿 한정):
-- s3:GetObject, PutObject, HeadObject, DeleteObject
-- s3:ListBucket (특정 prefix 한정)
-- sqs:SendMessage
-- secretsmanager:GetSecretValue
-- kms:Decrypt (prod-aurora-kms-key 한정)
-- cloudwatch:PutMetricData
-```
+**플랫폼 컴포넌트 (3개)**
+
+| IAM Role | Namespace / SA | 허용 권한 |
+|---|---|---|
+| `utterai-prod-lbc-irsa-role` | `ingress-system/aws-load-balancer-controller` | ALB/NLB 관리 전체 (LBC 공식 정책) |
+| `utterai-prod-cluster-autoscaler-role` | `kube-system/cluster-autoscaler` | AutoScaling Group DescribeSet, SetDesiredCapacity 등 |
+| `utterai-prod-eso-irsa-role` | `external-secrets/external-secrets` | `secretsmanager:GetSecretValue`, `DescribeSecret` (`utterai-prod/*`) |
+
+> ESO Role이 핵심. 모든 ExternalSecret은 ESO IRSA를 통해 Secrets Manager에 접근하므로 개별 Pod Role에는 Secrets Manager 권한이 없어도 된다.
+
+**애플리케이션 워크로드 (5개)**
+
+| IAM Role | Namespace / SA | 허용 권한 요약 |
+|---|---|---|
+| `utterai-prod-api-irsa-role` | `utterai-api/utterai-api-sa` | S3(raw-audio, reports) GetObject/PutObject, SQS(audio-preprocess) SendMessage, CloudWatch PutMetricData |
+| `utterai-prod-ai-api-irsa-role` | `utterai-ai-api/utterai-ai-api-sa` | SQS(audio-preprocess) SendMessage, GetQueueAttributes |
+| `utterai-prod-ai-cpu-irsa-role` | `utterai-ai-cpu/utterai-cpu-worker-sa` | SQS(audio-preprocess) Receive/Delete, SQS(gpu-inference) Send, SQS(report-analysis) Receive/Delete, S3(raw-audio) GetObject/PutObject, S3(reports) PutObject, Bedrock InvokeModel |
+| `utterai-prod-ai-ml-gpu-irsa-role` | `utterai-ai-gpu/utterai-ml-gpu-worker-sa` | SQS(gpu-inference) Receive/Delete, SQS(report-analysis) Send, S3(raw-audio) GetObject/PutObject |
+| `utterai-prod-batch-irsa-role` | `utterai-batch/utterai-batch-worker-sa` | SQS(rag-ingest) Receive/Delete, S3(reports) PutObject, Secrets Manager GetSecretValue (db-password) |
 
 ```yaml
+# 예시: 백엔드 API ServiceAccount
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: backend-api-sa
-  namespace: utterai-prod
+  name: utterai-api-sa
+  namespace: utterai-api
   annotations:
-    eks.amazonaws.com/role-arn: arn:aws:iam::{ACCOUNT_ID}:role/utterai-prod-backend-api-role
+    eks.amazonaws.com/role-arn: arn:aws:iam::{ACCOUNT_ID}:role/utterai-prod-api-irsa-role
 ```
 
 ---
@@ -404,10 +507,10 @@ metadata:
 | 엔진 | Aurora PostgreSQL 16 |
 | Writer 인스턴스 타입 | `db.r6g.large` |
 | Reader 인스턴스 타입 | `db.r6g.large` |
-| 인스턴스 수 | Writer 1 + Reader 1 (필요 시 Reader 추가) |
+| 인스턴스 수 | Writer 1 + Reader 1 |
 | 배포 | Multi-AZ |
 | 백업 보존 기간 | 7일 |
-| 자동 마이너 버전 업그레이드 | 비활성화 (수동 제어) |
+| 자동 마이너 버전 업그레이드 | 비활성화 |
 | 암호화 | KMS (prod-aurora-kms-key) |
 | Performance Insights | 활성화 |
 | Enhanced Monitoring | 활성화 (60초 간격) |
@@ -425,13 +528,11 @@ Password: Secrets Manager에서 관리
 
 ### 5.3 Connection 관리
 
-Prod에서는 Pod 수가 늘어날 때 DB Connection 과부하를 방지한다.
-
 ```text
 SQLAlchemy Pool 설정:
 - DB_POOL_SIZE=10
 - DB_MAX_OVERFLOW=20
-- 최대 Connection = Pod 수 × (POOL_SIZE + MAX_OVERFLOW)
+- 최대 Connection = Pod 수 × 30
 - Pod 10개일 경우 최대 300 Connection
 
 Aurora max_connections = db.r6g.large 기준 약 1500
@@ -451,8 +552,6 @@ Connection이 80%를 넘으면 RDS Proxy 도입 검토
 
 ## 6. ElastiCache Redis 구성
 
-### 6.1 기본 설정
-
 | 항목 | 값 |
 |---|---|
 | 클러스터 식별자 | `utterai-prod-redis` |
@@ -465,8 +564,6 @@ Connection이 80%를 넘으면 RDS Proxy 도입 검토
 | AUTH Token | 활성화 (Secrets Manager 관리) |
 | 자동 백업 | 활성화 (1일 보존) |
 | 암호화 | AWS Managed Key (`aws/elasticache`) |
-
-### 6.2 접속 정보
 
 ```text
 Primary Endpoint: utterai-prod-redis.xxxxxx.cache.amazonaws.com
@@ -524,24 +621,44 @@ Port: 6379
 
 ### 8.1 큐 목록
 
-| 큐 이름 | 타입 | 용도 |
+Dev와 동일한 4단계 파이프라인 구조를 사용한다.
+
+| 큐 이름 | 용도 | 소비자 |
 |---|---|---|
-| `utterai-prod-analysis-queue` | Standard | 분석 요청 메시지 |
-| `utterai-prod-analysis-dlq` | Standard | 실패한 분석 요청 보관 |
+| `utterai-prod-audio-preprocess-queue` | 음성 전처리 요청 | CPU Worker |
+| `utterai-prod-gpu-inference-queue` | GPU 추론 요청 (화자분리 + ASR) | GPU Worker |
+| `utterai-prod-report-analysis-queue` | Bedrock 리포트 생성 요청 | CPU Worker (Bedrock) |
+| `utterai-prod-rag-ingest-queue` | RAG 문서 ingest | Batch Worker |
+| `utterai-prod-audio-preprocess-dlq` | 전처리 실패 메시지 보관 | — |
+| `utterai-prod-gpu-inference-dlq` | GPU 추론 실패 메시지 보관 | — |
+| `utterai-prod-report-analysis-dlq` | 리포트 생성 실패 메시지 보관 | — |
+| `utterai-prod-rag-ingest-dlq` | RAG ingest 실패 메시지 보관 | — |
 
 ### 8.2 큐 설정
 
 ```text
-utterai-prod-analysis-queue:
+utterai-prod-audio-preprocess-queue:
 - 메시지 보존 기간: 4일
 - 가시성 타임아웃: 300초 (AI 분석 예상 최대 시간)
 - 최대 메시지 크기: 256KB
 - 암호화: AWS Managed Key (`aws/sqs`)
-- DLQ: utterai-prod-analysis-dlq (maxReceiveCount: 3)
+- DLQ: utterai-prod-audio-preprocess-dlq (maxReceiveCount: 3)
 
-utterai-prod-analysis-dlq:
+utterai-prod-gpu-inference-queue:
+- 가시성 타임아웃: 600초 (GPU 추론 소요 시간 반영)
+- DLQ: utterai-prod-gpu-inference-dlq (maxReceiveCount: 2)
+
+utterai-prod-report-analysis-queue:
+- 가시성 타임아웃: 300초
+- DLQ: utterai-prod-report-analysis-dlq (maxReceiveCount: 3)
+
+utterai-prod-rag-ingest-queue:
+- 가시성 타임아웃: 300초
+- DLQ: utterai-prod-rag-ingest-dlq (maxReceiveCount: 3)
+
+모든 DLQ:
 - 메시지 보존 기간: 14일
-- DLQ 메시지 발생 시 즉시 알람 발생
+- DLQ 메시지 발생 시 즉시 CloudWatch 알람 발생
 ```
 
 ---
@@ -553,13 +670,11 @@ utterai-prod-analysis-dlq:
 | 항목 | 값 |
 |---|---|
 | User Pool 이름 | `utterai-prod-user-pool` |
-| Region | `ap-northeast-2` |
 | 로그인 방식 | 이메일 |
 | MFA | 선택적 (TOTP 지원) |
 | 비밀번호 정책 | 최소 12자, 대소문자/숫자/특수문자 포함 |
 | 이메일 인증 | 필수 |
 | 고급 보안 | 활성화 (이상 로그인 감지) |
-| 사용자 계정 복구 | 이메일 기반 |
 
 ### 9.2 App Client
 
@@ -575,41 +690,160 @@ utterai-prod-analysis-dlq:
 
 ## 10. Secrets Manager 구성
 
-### 10.1 Secret 목록
+### 10.1 시크릿 주입 전체 흐름
 
-| Secret 이름 | 저장 내용 | 교체 주기 |
+```
+[AWS Secrets Manager]
+  │  KMS(prod-secrets-kms-key)로 저장값 암호화
+  │
+  ▼
+[External Secrets Operator (ESO)]
+  │  IRSA(eso-irsa-role)로 GetSecretValue 호출
+  │  refreshInterval: 1h — 로테이션 자동 반영
+  ▼
+[ClusterSecretStore: aws-secrets-manager]
+  │  클러스터 전체에서 공유되는 Secrets Manager 연결점
+  │
+  ▼
+[ExternalSecret (네임스페이스별)]
+  │  Secrets Manager 키 → K8s Secret 키 매핑
+  ▼
+[K8s Secret]
+  │  Pod의 env.valueFrom.secretKeyRef 로 주입
+  ▼
+[Pod 환경변수]
+```
+
+> Pod 자체의 IRSA Role에는 Secrets Manager 권한이 없다.
+> ESO가 대신 읽고 K8s Secret으로 동기화하므로 역할 권한이 분리된다.
+
+### 10.2 Secret 목록
+
+| Secret 이름 | 저장 키 | 교체 주기 |
 |---|---|---|
-| `utterai-prod/db-password` | Aurora 비밀번호 | 90일 자동 교체 |
-| `utterai-prod/redis-auth-token` | Redis AUTH 토큰 | 수동 관리 |
-| `utterai-prod/internal-service-token` | 백엔드-AI 서버 내부 인증 토큰 | 수동 관리 |
+| `utterai-prod/backend-api-secret` | `DB_PASSWORD`, `JWT_SECRET_KEY`, `INTERNAL_CALLBACK_TOKEN`, `INTERNAL_CALLBACK_HMAC_SECRET`, `REDIS_AUTH_TOKEN` | DB_PASSWORD 90일 자동 교체, 나머지 수동 |
+| `utterai-prod/ai-worker-secret` | `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, `DB_NAME` (AI Worker → BE DB 직접 접근용) | 수동 관리 |
+| `utterai-prod/gpu-worker-secret` | `HF_TOKEN` (HuggingFace Access Token) | 수동 관리 |
 
 > 모든 Prod Secret은 AWS Managed Key (`aws/secretsmanager`) 로 암호화
 
-### 10.2 EKS에서 주입 방식
+### 10.3 ClusterSecretStore
+
+```yaml
+apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: aws-secrets-manager
+spec:
+  provider:
+    aws:
+      service: SecretsManager
+      region: ap-northeast-2
+      # auth는 ESO Pod의 IRSA(eso-irsa-role)를 자동 사용
+```
+
+### 10.4 ExternalSecret 목록
+
+**backend-api-secret** (`utterai-api` 네임스페이스)
 
 ```yaml
 apiVersion: external-secrets.io/v1beta1
 kind: ExternalSecret
 metadata:
-  name: backend-api-secret
-  namespace: utterai-prod
+  name: backend-api-external-secret
+  namespace: utterai-api
 spec:
   refreshInterval: 1h
   secretStoreRef:
-    name: aws-secrets-store
+    name: aws-secrets-manager
     kind: ClusterSecretStore
   target:
     name: backend-api-secret
+    creationPolicy: Owner
   data:
     - secretKey: DB_PASSWORD
       remoteRef:
-        key: utterai-prod/db-password
-    - secretKey: INTERNAL_SERVICE_TOKEN
+        key: utterai-prod/backend-api-secret
+        property: DB_PASSWORD
+    - secretKey: JWT_SECRET_KEY
       remoteRef:
-        key: utterai-prod/internal-service-token
+        key: utterai-prod/backend-api-secret
+        property: JWT_SECRET_KEY
+    - secretKey: INTERNAL_CALLBACK_TOKEN
+      remoteRef:
+        key: utterai-prod/backend-api-secret
+        property: INTERNAL_CALLBACK_TOKEN
+    - secretKey: INTERNAL_CALLBACK_HMAC_SECRET
+      remoteRef:
+        key: utterai-prod/backend-api-secret
+        property: INTERNAL_CALLBACK_HMAC_SECRET
     - secretKey: REDIS_AUTH_TOKEN
       remoteRef:
-        key: utterai-prod/redis-auth-token
+        key: utterai-prod/backend-api-secret
+        property: REDIS_AUTH_TOKEN
+```
+
+**ai-worker-secret** (`utterai-ai-gpu` + `utterai-batch` 두 네임스페이스에 동일하게 동기화)
+
+```yaml
+# utterai-ai-gpu 네임스페이스와 utterai-batch 네임스페이스 각각에 배포
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: ai-worker-external-secret
+  namespace: utterai-ai-gpu   # utterai-batch 네임스페이스에도 동일 적용
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secrets-manager
+    kind: ClusterSecretStore
+  target:
+    name: ai-worker-secret
+    creationPolicy: Owner
+  data:
+    - secretKey: DB_USER
+      remoteRef:
+        key: utterai-prod/ai-worker-secret
+        property: DB_USER
+    - secretKey: DB_PASSWORD
+      remoteRef:
+        key: utterai-prod/ai-worker-secret
+        property: DB_PASSWORD
+    - secretKey: DB_HOST
+      remoteRef:
+        key: utterai-prod/ai-worker-secret
+        property: DB_HOST
+    - secretKey: DB_PORT
+      remoteRef:
+        key: utterai-prod/ai-worker-secret
+        property: DB_PORT
+    - secretKey: DB_NAME
+      remoteRef:
+        key: utterai-prod/ai-worker-secret
+        property: DB_NAME
+```
+
+**gpu-worker-secret** (`utterai-ai-gpu` 네임스페이스)
+
+```yaml
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: gpu-worker-external-secret
+  namespace: utterai-ai-gpu
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secrets-manager
+    kind: ClusterSecretStore
+  target:
+    name: gpu-worker-secret
+    creationPolicy: Owner
+  data:
+    - secretKey: HF_TOKEN
+      remoteRef:
+        key: utterai-prod/gpu-worker-secret
+        property: HF_TOKEN
 ```
 
 ---
@@ -662,53 +896,44 @@ CMK(prod-aurora-kms-key) 키 정책 원칙:
 | `prod-aurora-replica-lag` | Replica Lag > 5초 | Discord + 온콜 |
 | `prod-redis-cpu` | CPU > 70% (5분) | Discord |
 | `prod-redis-memory` | 메모리 > 80% (5분) | Discord |
-| `prod-sqs-dlq-count` | DLQ 메시지 수 > 0 | Discord + 온콜 |
+| `prod-sqs-dlq-count` | DLQ 메시지 수 > 0 (4개 DLQ 각각) | Discord + 온콜 |
 | `prod-sqs-queue-depth` | 큐 메시지 수 > 500 (5분) | Discord |
 | `prod-ai-callback-failure` | AI Callback 실패 수 > 5 (5분) | Discord |
 
 ### 12.3 대시보드
 
-CloudWatch 대시보드 `utterai-prod-overview`에 아래 항목을 포함한다.
+CloudWatch 대시보드 `utterai-prod-overview`:
 
 ```text
 - 백엔드 API Request Count / Error Rate / p95 Latency
 - Aurora CPU / 연결 수 / Replica Lag
 - Redis CPU / Memory / Hit Rate
-- SQS 큐 깊이 / DLQ 수
+- SQS 큐 깊이 / DLQ 수 (4개 큐 각각)
 - AI Callback 성공/실패 수
 - EKS Node CPU / Memory
 ```
 
-### 12.4 OpenTelemetry Trace
+### 12.4 OpenTelemetry / Grafana
 
 ```text
-Collector: OpenTelemetry Collector (EKS 내 DaemonSet)
-Backend: Grafana Tempo (Shared Tooling Account에 위치)
+OTel Collector: EKS 내 DaemonSet
+Backend: Grafana Tempo (Shared Tooling Account)
 Sampling: 운영 중 10%, 에러 100%
-```
 
-### 12.5 Grafana
-
-Grafana는 Shared Tooling Account에 배포되어 Prod / Dev 두 환경의 메트릭을 통합 시각화한다.
-
-```text
-위치: Shared Tooling Account
-데이터 소스:
+Grafana 데이터 소스:
   - CloudWatch (메트릭 / 로그)
   - OpenTelemetry (Trace)
   - Aurora Performance Insights (DB 쿼리 분석)
 
 주요 대시보드:
   - utterai-prod-overview (서비스 전체 현황)
-  - utterai-prod-ai-pipeline (AI 분석 파이프라인 처리량)
+  - utterai-prod-ai-pipeline (AI 파이프라인 처리량 및 큐 깊이)
   - utterai-prod-db (Aurora / Redis 상세)
 ```
 
 ---
 
 ## 13. CloudFront 구성
-
-### 13.1 프론트엔드 배포
 
 ```text
 Origin: S3 utterai-prod-frontend (OAC 사용, 직접 접근 차단)
@@ -718,29 +943,13 @@ HTTPS: ACM 인증서 (us-east-1 발급 필수)
 캐시 정책: 정적 파일 1년 캐시, HTML은 캐시 없음
 ```
 
-### 13.2 백엔드 API 라우팅 (옵션)
-
-CloudFront에서 경로 기반 라우팅을 사용할 경우:
-
-```text
-utterai.com/api/* → ALB (백엔드)
-utterai.com/*    → S3 (프론트엔드)
-```
-
-경로 분리가 복잡할 경우 `api.utterai.com`을 ALB에 직접 연결하는 방식이 더 단순하다.
+백엔드 API 라우팅은 `api.utterai.com`을 ALB에 직접 연결하는 방식을 사용한다.
 
 ---
 
 ## 14. Shared Tooling Account
 
 GitHub, ECR, Argo CD, Terraform, CloudWatch, Grafana는 Prod Account와 분리된 **별도 AWS 계정(Shared Tooling Account)**에서 관리한다.
-
-```text
-이유:
-- CI/CD 도구가 침해되더라도 Prod 데이터에 직접 접근 불가
-- 여러 환경(Dev / Prod)이 하나의 Tooling 계정을 공유하여 운영 효율화
-- IAM 권한 경계를 Account 수준에서 분리
-```
 
 | 리소스 | 설명 |
 |---|---|
@@ -752,9 +961,7 @@ GitHub, ECR, Argo CD, Terraform, CloudWatch, Grafana는 Prod Account와 분리�
 | CloudWatch | 메트릭 및 로그 수집 (Cross-Account) |
 | Grafana | 통합 모니터링 대시보드 |
 
-### Cross-Account 접근
-
-Argo CD가 Prod Account EKS에 배포하려면 Cross-Account IAM Role이 필요하다.
+**Cross-Account 접근**
 
 ```text
 Tooling Account → Prod Account EKS 접근:
@@ -770,23 +977,20 @@ Tooling Account → Prod Account EKS 접근:
 
 ```text
 main 브랜치 PR 머지 (필수 리뷰 1명 이상)
-    |
-    v
+    │
+    ▼
 GitHub Actions (prod-deploy.yaml) — Shared Tooling Account
-    |
-    |-- 단위 테스트
-    |-- 통합 테스트
-    |-- Docker Build
-    |-- ECR Push (utterai-prod-backend:{git_sha})  ← Seoul ECR
-    |-- ECR Cross-Region Copy                       ← Tokyo ECR (DR용)
-    |-- 이미지 취약점 스캔 (ECR Scanning)
-    |-- Kubernetes Manifest 이미지 태그 업데이트
-    v
+    ├── 단위 테스트 / 통합 테스트
+    ├── Docker Build
+    ├── ECR Push (utterai-prod-backend:{git_sha})  ← Seoul ECR
+    ├── ECR Cross-Region Copy                       ← Tokyo ECR (DR용)
+    ├── 이미지 취약점 스캔 (ECR Scanning)
+    └── Kubernetes Manifest 이미지 태그 업데이트
+    ▼
 Argo CD (prod 클러스터 감시) — Shared Tooling Account
-    |
-    |-- Sync 전 Diff 검토 (수동 Sync 권장)
-    v
-EKS utterai-prod Namespace 배포 (Rolling Update)  ← Prod Account
+    └── Sync 전 Diff 검토 (수동 Sync)
+    ▼
+EKS Rolling Update  ← Prod Account
 ```
 
 ### 15.2 Argo CD 배포 정책
@@ -805,16 +1009,7 @@ utterai-prod-backend:{git_sha_short}  (배포 버전)
 utterai-prod-backend:stable           (운영 중 버전)
 ```
 
-### 15.4 GitHub Actions 환경변수 (Repository Secrets)
-
-```text
-PROD_AWS_ACCESS_KEY_ID
-PROD_AWS_SECRET_ACCESS_KEY
-PROD_ECR_URI
-PROD_EKS_CLUSTER_NAME
-```
-
-### 15.5 브랜치 보호 규칙 (main)
+### 15.4 브랜치 보호 규칙 (main)
 
 ```text
 - PR 리뷰 최소 1명 승인 필수
@@ -827,59 +1022,51 @@ PROD_EKS_CLUSTER_NAME
 
 ## 16. Terraform 구조
 
-Prod 인프라는 `terraform/environments/prod/` 디렉터리에서 관리한다.
+Prod 인프라는 Dev와 동일하게 4개 레이어로 분리 관리한다.
 
 ```text
 terraform/
-├── modules/
+├── modules/              ← Dev와 공용 모듈
 │   ├── vpc/
 │   ├── eks/
-│   ├── aurora/
+│   ├── eks-addons/
+│   ├── irsa/
+│   ├── rds/
 │   ├── redis/
 │   ├── s3/
 │   ├── sqs/
-│   ├── cognito/
-│   ├── kms/
+│   ├── secrets/
+│   ├── cloudfront/
 │   ├── waf/
-│   └── iam/
+│   └── ecr/
 └── environments/
     └── prod/
-        ├── main.tf
-        ├── variables.tf
-        ├── outputs.tf
-        └── terraform.tfvars
+        ├── 01-network/   ← VPC, 서브넷 (State: prod/network)
+        ├── 02-eks/       ← EKS 클러스터, NodeGroup (State: prod/platform)
+        ├── 03-services/  ← RDS, Redis, S3, SQS, IRSA, ECR (State: prod/services)
+        └── 04-addons/    ← Helm 애드온, WAF, CloudFront (State: prod/addons)
 ```
 
 ### 16.1 Terraform 상태 관리
 
 ```text
 Backend: S3 (utterai-prod-terraform-state)
-Lock: DynamoDB (utterai-prod-terraform-lock)
+Lock: S3 네이티브 락 (use_lockfile = true)
 암호화: KMS
 ```
 
-### 16.2 Terraform 적용 정책
+### 16.2 레이어 간 의존 관계
 
 ```text
-- terraform plan 결과를 PR에 포함 (Atlantis 또는 GitHub Actions)
-- terraform apply는 리뷰 승인 후 실행
-- Prod 리소스 삭제는 수동으로만 허용 (lifecycle.prevent_destroy 설정)
+01-network ──→ 02-eks ──→ 03-services ──→ 04-addons
 ```
 
-### 16.3 주요 Terraform Output
+### 16.3 Terraform 적용 정책
 
-```hcl
-output "aurora_writer_endpoint" {}
-output "aurora_reader_endpoint" {}
-output "redis_endpoint" {}
-output "raw_audio_bucket_name" {}
-output "report_bucket_name" {}
-output "analysis_queue_url" {}
-output "backend_api_role_arn" {}
-output "cognito_user_pool_id" {}
-output "cognito_client_id" {}
-output "alb_dns_name" {}
-output "cloudfront_distribution_id" {}
+```text
+- terraform plan 결과를 PR에 포함 (GitHub Actions)
+- terraform apply는 리뷰 승인 후 실행
+- Prod 리소스 삭제는 수동으로만 허용 (lifecycle.prevent_destroy 설정)
 ```
 
 ---
@@ -896,7 +1083,6 @@ API_BASE_PATH=/api/v1
 LOG_LEVEL=INFO
 
 # CORS
-FRONTEND_ORIGIN=https://utterai.com
 CORS_ALLOW_ORIGINS=https://utterai.com,https://www.utterai.com
 
 # Cognito
@@ -931,15 +1117,17 @@ S3_PRESIGNED_UPLOAD_EXPIRES_SECONDS=900
 S3_PRESIGNED_DOWNLOAD_EXPIRES_SECONDS=300
 
 # SQS
-SQS_ANALYSIS_QUEUE_URL=https://sqs.ap-northeast-2.amazonaws.com/{ACCOUNT_ID}/utterai-prod-analysis-queue
-SQS_ANALYSIS_DLQ_URL=https://sqs.ap-northeast-2.amazonaws.com/{ACCOUNT_ID}/utterai-prod-analysis-dlq
+SQS_AUDIO_PREPROCESS_QUEUE_URL=https://sqs.ap-northeast-2.amazonaws.com/{ACCOUNT_ID}/utterai-prod-audio-preprocess-queue
+SQS_GPU_INFERENCE_QUEUE_URL=https://sqs.ap-northeast-2.amazonaws.com/{ACCOUNT_ID}/utterai-prod-gpu-inference-queue
+SQS_REPORT_ANALYSIS_QUEUE_URL=https://sqs.ap-northeast-2.amazonaws.com/{ACCOUNT_ID}/utterai-prod-report-analysis-queue
+SQS_RAG_INGEST_QUEUE_URL=https://sqs.ap-northeast-2.amazonaws.com/{ACCOUNT_ID}/utterai-prod-rag-ingest-queue
 
-# AI Service
-AI_SERVICE_BASE_URL=http://ai-service.utterai-prod.svc.cluster.local:8000
-INTERNAL_SERVICE_TOKEN=${from_secrets_manager}
+# AI Service (클러스터 내부 통신)
+AI_SERVICE_BASE_URL=http://ai-service.utterai-ai-api.svc.cluster.local:8000
+INTERNAL_CALLBACK_TOKEN=${from_secrets_manager}
 
 # 관측
-OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.observability.svc.cluster.local:4317
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.utterai-observability.svc.cluster.local:4317
 CLOUDWATCH_LOG_GROUP=/aws/eks/utterai-prod/backend
 ```
 
@@ -947,9 +1135,7 @@ CLOUDWATCH_LOG_GROUP=/aws/eks/utterai-prod/backend
 
 ## 18. DR (재해 복구) 구성 — Tokyo Warm Standby
 
-다이어그램 기준 Tokyo(ap-northeast-1) Region에 Warm Standby DR을 구성한다.
-
-### 18.1 DR 구성 개요
+### 18.1 DR 목표
 
 ```text
 DR 유형: Warm Standby (평소에 최소 규모로 운영, 장애 시 빠르게 확장)
@@ -964,10 +1150,10 @@ RPO 목표: 1분 이내 (Aurora Global DB 복제 지연 기준)
 | ALB | `utterai-prod-alb` | `utterai-dr-alb` | Route 53 Failover |
 | EKS | `utterai-prod-eks` | `utterai-dr-eks` (최소 노드 Standby) | 수동 또는 자동 스케일 업 |
 | Aurora | Writer + Reader | Aurora Global DB Secondary | Global DB Promote |
-| S3 | Seoul 버킷 | S3 CRR (Cross-Region Replication) 자동 복제 | 버킷 포인터 전환 |
-| ECR | `utterai-prod-ecr` (Seoul) | `utterai-prod-ecr` (Tokyo Copy) | 이미지 자동 복제 |
+| S3 | Seoul 버킷 | S3 CRR 자동 복제 | 버킷 포인터 전환 |
+| ECR | Seoul ECR | Tokyo ECR 자동 복사 | 이미지 자동 복제 |
 
-### 18.3 Route 53 Failover 설정
+### 18.3 Route 53 Failover
 
 ```text
 Primary Record: api.utterai.com → Seoul ALB (Health Check 연결)
@@ -995,24 +1181,15 @@ Secondary Cluster: utterai-dr-aurora (ap-northeast-1)
 ### 18.5 S3 Cross-Region Replication
 
 ```text
-복제 대상 버킷:
+복제 대상:
   utterai-prod-raw-audio    → utterai-dr-raw-audio (ap-northeast-1)
   utterai-prod-reports      → utterai-dr-reports (ap-northeast-1)
   utterai-prod-artifacts    → utterai-dr-artifacts (ap-northeast-1)
 
-복제 설정:
-  - 복제 규칙: 전체 객체 / 신규 객체부터 적용
+설정:
+  - 복제 규칙: 신규 객체부터 적용
   - 암호화: KMS (DR 계정 KMS Key)
   - 삭제 마커 복제: 비활성화
-```
-
-### 18.6 ECR Cross-Region Copy
-
-```text
-GitHub Actions CI에서 이미지 빌드 후 Seoul ECR Push 이후
-Tokyo ECR에도 동일 이미지 자동 복사
-
-utterai-prod-backend:{git_sha} → ap-northeast-1 ECR 동일 태그 복사
 ```
 
 ---
@@ -1563,3 +1740,12 @@ kubectl exec -n kube-system <cilium-pod> -- \
 # 트래픽 드롭 확인
 hubble observe --verdict DROPPED --follow
 ```
+
+---
+
+## 참고
+
+- EKS 아키텍처 상세 설계: [`docs/eks-architecture-flow.md`](../eks-architecture-flow.md)
+- Dev vs Prod 환경 비교: [`docs/README.md`](../README.md)
+- Dev 환경 구현 가이드: [`docs/dev/README.md`](../dev/README.md)
+- 브랜치/커밋 규칙: [`CONTRIBUTING.md`](../../CONTRIBUTING.md)
