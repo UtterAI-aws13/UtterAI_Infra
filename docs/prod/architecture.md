@@ -26,23 +26,29 @@
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         INTERNET                                        │
-└───────────────────────────────┬─────────────────────────────────────────┘
-                                │
-                         ┌──────▼──────┐
-                         │  Route 53   │  utterai.com / api.utterai.com
-                         └──────┬──────┘
-                                │
-               ┌────────────────▼────────────────┐
-               │         CloudFront              │  utterai.com → S3
-               │   + WAF (OWASP / Rate-Limit)    │  api.utterai.com → ALB
-               └────────┬───────────┬────────────┘
-                        │           │
-               ┌────────▼───┐  ┌────▼────────────────────────────────────┐
-               │  S3 Static │  │         ALB Ingress                     │
-               │  Frontend  │  │  (AWS Load Balancer Controller)         │
-               └────────────┘  └────────────────┬────────────────────────┘
-                                                 │
-┌────────────────────────────────────────────────▼────────────────────────┐
+└──────────────┬──────────────────────────────┬───────────────────────────┘
+               │  utterai.com                 │  api.utterai.com
+               ▼                              ▼
+         ┌───────────┐                  ┌───────────┐
+         │  Route 53 │                  │  Route 53 │
+         │  (Alias)  │                  │  (Alias)  │
+         └─────┬─────┘                  └─────┬─────┘
+               │                              │
+               ▼                              ▼
+     ┌─────────────────┐         ┌────────────────────────┐
+     │   CloudFront    │         │  WAF WebACL (ALB 부착) │
+     │  (OAC, HTTPS)   │         │  OWASP / Rate-Limit    │
+     └────────┬────────┘         └────────────┬───────────┘
+              │                               │
+              ▼                               ▼
+   ┌──────────────────┐         ┌─────────────────────────┐
+   │  S3 Static       │         │  ALB Ingress            │
+   │  Frontend        │         │  (internet-facing)      │
+   │  (utterai-prod-  │         │  Public Subnet 3개      │
+   │   frontend)      │         └────────────┬────────────┘
+   └──────────────────┘                      │
+                                             │
+┌────────────────────────────────────────────▼────────────────────────┐
 │                    EKS Cluster (utterai-prod-eks)                       │
 │                                                                         │
 │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────────┐  │
@@ -151,12 +157,18 @@
 ```
 Internet (0.0.0.0/0 : 443)
         │
+   ┌────▼──────────────────────┐
+   │  WAF WebACL               │  ALB에 부착
+   │  - OWASP Managed Rules    │  (api.utterai.com 진입점)
+   │  - Rate-Limit: 2000/5min  │
+   └────┬──────────────────────┘
+        │
    ┌────▼────────┐
-   │  sg-prod-alb │
+   │  sg-prod-alb │  0.0.0.0/0 : 443
    └────┬────────┘
         │ :8000
    ┌────▼──────────────┐
-   │  sg-prod-backend  │  (EKS Pod)
+   │  sg-prod-backend  │  (EKS Pod, Private App Subnet)
    └────┬──────┬───────┘
         │      │
    :5432│      │:6379
@@ -172,42 +184,52 @@ Internet (0.0.0.0/0 : 443)
 
 ### 4.1 사용자 요청 흐름
 
+**프론트엔드 (utterai.com)**
 ```
-Browser
-  │
-  │  HTTPS utterai.com / api.utterai.com
-  ▼
-Route 53
-  │  A Record (Alias)
-  ▼
-CloudFront
-  │  + WAF (OWASP Top 10, Rate-Limit: 2000 req/5min/IP)
-  │
-  ├─ utterai.com/*     ──► S3 utterai-prod-frontend  (OAC, 직접접근 차단)
-  │
-  └─ api.utterai.com/* ──► ALB (HTTPS:443)
-                              │
-                              │  ALB Ingress (AWS Load Balancer Controller)
-                              │  TLS Termination, HTTP/2
-                              ▼
-                           utterai-api namespace
-                           Backend API Pods (3~10개, HPA)
-                              │
-                   ┌──────────┼────────────────┐
-                   │          │                │
-              ┌────▼───┐  ┌───▼────┐  ┌────────▼────────┐
-              │Cognito │  │Aurora  │  │Redis            │
-              │JWT 검증│  │PostgreS│  │Session/Cache    │
-              └────────┘  └───┬────┘  └─────────────────┘
-                              │
-                     ┌────────▼─────────┐
-                     │  SQS             │
-                     │  audio-preprocess│
-                     │  -queue          │
-                     └────────┬─────────┘
-                              │
-                         AI Pipeline
-                         (섹션 6 참고)
+Browser ── HTTPS utterai.com ──► Route 53 (A Alias)
+                                       │
+                                       ▼
+                               CloudFront Distribution
+                               ACM 인증서 (us-east-1)
+                               OAC (S3 직접접근 차단)
+                                       │
+                                       ▼
+                           S3 utterai-prod-frontend
+                           (정적 파일 서빙 / SPA 라우팅)
+```
+
+**백엔드 API (api.utterai.com)**
+```
+Browser ── HTTPS api.utterai.com ──► Route 53 (A Alias)
+                                            │
+                                            ▼
+                                   WAF WebACL (ALB 부착)
+                                   OWASP / Rate-Limit
+                                            │
+                                            ▼
+                                   ALB Ingress (internet-facing)
+                                   ACM 인증서 / HTTPS:443
+                                   TLS Termination
+                                            │
+                                            ▼
+                                   utterai-api namespace
+                                   Backend API Pods (3~10개, HPA)
+                                            │
+                           ┌────────────────┼──────────────────┐
+                           │                │                  │
+                      ┌────▼───┐       ┌────▼────┐  ┌─────────▼──────┐
+                      │Cognito │       │ Aurora  │  │ Redis          │
+                      │JWT 검증│       │PostgreSQL│  │ Session/Cache  │
+                      └────────┘       └────┬────┘  └────────────────┘
+                                            │
+                                   ┌────────▼──────────┐
+                                   │ SQS               │
+                                   │ audio-preprocess  │
+                                   │ -queue            │
+                                   └────────┬──────────┘
+                                            │
+                                       AI Pipeline
+                                       (섹션 6 참고)
 ```
 
 ### 4.2 음성 파일 업로드 흐름
