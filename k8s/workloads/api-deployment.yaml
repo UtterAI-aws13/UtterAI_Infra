@@ -135,28 +135,6 @@ spec:
     - port: 8080
       targetPort: 8080
 ---
-# HPA — CPU 70% 초과 시 최대 2개까지 자동 스케일아웃
-# (hpa-api.yaml의 독립 HPA와 중복이므로 둘 중 하나만 유지 필요)
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: utterai-api-hpa
-  namespace: utterai-api
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: utterai-api
-  minReplicas: 1
-  maxReplicas: 2
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 70
----
 # ConfigMap — 비민감 앱 설정
 # ${RDS_ENDPOINT}, ${REDIS_ENDPOINT}, ${AWS_ACCOUNT_ID}는 k8s-deploy.sh envsubst가 치환
 apiVersion: v1
