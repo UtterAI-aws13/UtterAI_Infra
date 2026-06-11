@@ -8,10 +8,10 @@ resources:
 images:
 - name: utterai-ai-cpu
   newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-cpu'
-  newTag: dev-63dd74c
+  newTag: dev-e24a4bd
 - name: utterai-ai-gpu
   newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-gpu'
-  newTag: dev-63dd74c
+  newTag: dev-e24a4bd
 patches:
 - path: patch-configmap.yaml
 - path: patch-serviceaccount.yaml
