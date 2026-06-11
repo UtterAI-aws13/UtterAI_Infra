@@ -1,22 +1,25 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: utterai-ai-cpu-worker
+  name: utterai-cpu-worker
+  namespace: utterai-ai-cpu
   labels:
-    app.kubernetes.io/name: utterai-ai-cpu-worker
+    app: utterai-cpu-worker
+    app.kubernetes.io/name: utterai-cpu-worker
     app.kubernetes.io/part-of: utterai
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: utterai-ai-cpu-worker
+      app: utterai-cpu-worker
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: utterai-ai-cpu-worker
+        app: utterai-cpu-worker
+        app.kubernetes.io/name: utterai-cpu-worker
         app.kubernetes.io/part-of: utterai
     spec:
-      serviceAccountName: utterai-ai-cpu-worker-sa
+      serviceAccountName: utterai-cpu-worker-sa
       nodeSelector:
         workload: worker
       terminationGracePeriodSeconds: 60
@@ -24,22 +27,27 @@ spec:
         - name: cpu-worker
           image: utterai-ai-cpu:dev-placeholder
           imagePullPolicy: IfNotPresent
-          command: ["python", "-c", "from app.workers.cpu_worker import start_worker; start_worker()"]
+          command: ["python", "-m", "app.workers.cpu_worker"]
           envFrom:
             - configMapRef:
                 name: utterai-ai-worker-config
           env:
-            - name: WORKER_TYPE
-              value: "cpu"
-            - name: MODEL_DEVICE
-              value: "cpu"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cpu-worker-secret
+                  key: HF_TOKEN
+            - name: HF_HOME
+              value: "/tmp/huggingface"
+            - name: OTEL_SERVICE_NAME
+              value: "cpu-worker"
           resources:
             requests:
-              cpu: "1"
-              memory: "2Gi"
-            limits:
               cpu: "2"
               memory: "4Gi"
+            limits:
+              cpu: "4"
+              memory: "8Gi"
           lifecycle:
             preStop:
               exec:

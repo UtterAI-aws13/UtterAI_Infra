@@ -15,7 +15,7 @@ spec:
     path: k8s-demo/apps/ai-worker/overlays/dev
   destination:
     server: https://kubernetes.default.svc
-    namespace: utterai-dev-ai-worker
+    namespace: utterai-ai-api
   syncPolicy:
     automated:
       prune: true

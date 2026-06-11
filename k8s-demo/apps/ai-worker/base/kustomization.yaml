@@ -6,8 +6,14 @@ kind: Kustomization
 # 실제 dev/prod 환경값과 ECR image tag는 overlays에서 분리해 관리합니다.
 resources:
   - serviceaccount.yaml
+  - rolebinding.yaml
   - configmap.yaml
+  - external-secrets.yaml
   - ai-api-deployment.yaml
   - ai-api-service.yaml
   - cpu-worker-deployment.yaml
   - ml-gpu-worker-deployment.yaml
+  - batch-worker-deployment.yaml
+  - hpa-cpu-worker.yaml
+  - hpa-ml-gpu-worker.yaml
+  - hpa-batch-worker.yaml

@@ -15,7 +15,7 @@ spec:
     path: k8s-demo/apps/backend/overlays/dev
   destination:
     server: https://kubernetes.default.svc
-    namespace: utterai-dev-api
+    namespace: utterai-api
   syncPolicy:
     automated:
       prune: true
