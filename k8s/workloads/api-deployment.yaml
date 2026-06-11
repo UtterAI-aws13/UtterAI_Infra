@@ -92,6 +92,11 @@ spec:
                 secretKeyRef:
                   name: backend-api-secret
                   key: INTERNAL_CALLBACK_HMAC_SECRET
+            - name: REDIS_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: backend-api-secret
+                  key: REDIS_AUTH_TOKEN
           resources:
             requests:
               cpu: "250m"
