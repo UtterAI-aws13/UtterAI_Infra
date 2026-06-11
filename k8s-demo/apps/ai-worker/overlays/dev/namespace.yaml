@@ -1,7 +1,31 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: utterai-dev-ai-worker
+  name: utterai-ai-api
+  labels:
+    app.kubernetes.io/part-of: utterai
+    utterai.io/environment: dev
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: utterai-ai-cpu
+  labels:
+    app.kubernetes.io/part-of: utterai
+    utterai.io/environment: dev
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: utterai-ai-gpu
+  labels:
+    app.kubernetes.io/part-of: utterai
+    utterai.io/environment: dev
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: utterai-batch
   labels:
     app.kubernetes.io/part-of: utterai
     utterai.io/environment: dev

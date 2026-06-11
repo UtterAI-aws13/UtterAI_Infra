@@ -1,14 +1,15 @@
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: utterai-api-hpa
+  name: utterai-cpu-worker-hpa
+  namespace: utterai-ai-cpu
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: utterai-api
+    name: utterai-cpu-worker
   minReplicas: 1
-  maxReplicas: 4
+  maxReplicas: 2
   metrics:
     - type: Resource
       resource:

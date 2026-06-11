@@ -2,17 +2,20 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: utterai-ai-api
+  namespace: utterai-ai-api
   labels:
+    app: utterai-ai-api
     app.kubernetes.io/name: utterai-ai-api
     app.kubernetes.io/part-of: utterai
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: utterai-ai-api
+      app: utterai-ai-api
   template:
     metadata:
       labels:
+        app: utterai-ai-api
         app.kubernetes.io/name: utterai-ai-api
         app.kubernetes.io/part-of: utterai
     spec:
@@ -42,14 +45,14 @@ spec:
           readinessProbe:
             httpGet:
               path: /health
-              port: http
+              port: 8080
             initialDelaySeconds: 10
             periodSeconds: 10
             failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /health
-              port: http
+              port: 8080
             initialDelaySeconds: 20
             periodSeconds: 20
             failureThreshold: 3

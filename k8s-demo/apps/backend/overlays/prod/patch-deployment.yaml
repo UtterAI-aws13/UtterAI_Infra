@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: utterai-backend
+  name: utterai-api
 spec:
   replicas: 2
   template:
@@ -9,7 +9,7 @@ spec:
       securityContext:
         runAsNonRoot: true
       containers:
-        - name: backend
+        - name: api
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

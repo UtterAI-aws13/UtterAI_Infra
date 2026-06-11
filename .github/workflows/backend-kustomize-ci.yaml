@@ -36,7 +36,7 @@ jobs:
       - name: Render dev overlay
         run: |
           kubectl kustomize k8s-demo/apps/backend/overlays/dev > /tmp/backend-dev.yaml
-          grep "namespace: utterai-dev-api" /tmp/backend-dev.yaml
+          grep "namespace: utterai-api" /tmp/backend-dev.yaml
           grep "image:" /tmp/backend-dev.yaml
 
       - name: Render prod overlay
