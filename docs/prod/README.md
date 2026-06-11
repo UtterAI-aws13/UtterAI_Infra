@@ -28,6 +28,7 @@
 20. [운영 주의사항](#20-prod-환경-운영-주의사항)
 21. [Pod 보안 정책 (PSS + Kyverno)](#21-pod-보안-정책-pod-security-standards--kyverno)
 22. [Cilium (CNI + 네트워크 보안)](#22-cilium-cni--네트워크-보안)
+23. [Terraform 시크릿 관리 현황 및 고도화](#23-terraform-시크릿-관리-현황-및-고도화)
 
 ---
 
@@ -1740,6 +1741,91 @@ kubectl exec -n kube-system <cilium-pod> -- \
 # 트래픽 드롭 확인
 hubble observe --verdict DROPPED --follow
 ```
+
+---
+
+## 23. Terraform 시크릿 관리 현황 및 고도화
+
+### 23.1 현재 방식별 상태
+
+| 시크릿 | Terraform 관리 방식 | State 노출 여부 |
+|---|---|---|
+| Aurora DB 비밀번호 | `manage_master_user_password = true` (AWS 자동 관리) | 없음 (안전) |
+| Redis AUTH 토큰 | `random_password` 리소스 생성 후 Secrets Manager에 저장 | **있음 (위험)** |
+| backend-api-secret | 빈 시크릿 껍데기 생성 → 수동 CLI 주입 | 없음 |
+| ai-worker-secret | 빈 시크릿 껍데기 생성 → 수동 CLI 주입 | 없음 |
+| gpu-worker-secret | 빈 시크릿 껍데기 생성 → 수동 CLI 주입 | 없음 |
+
+**현재 위험 지점**: `terraform/modules/redis/main.tf`의 `random_password` 리소스 결과값이 S3 state 파일에 평문으로 저장된다.
+
+```hcl
+# 현재 방식 — Redis 토큰이 .tfstate에 평문 노출
+resource "random_password" "redis_auth" {
+  length  = 32
+  special = false
+}
+
+resource "aws_elasticache_replication_group" "this" {
+  auth_token = random_password.redis_auth.result  # ← state에 저장됨
+}
+```
+
+### 23.2 Mozilla SOPS
+
+SOPS(Secrets OPerationS)는 YAML/JSON/ENV 파일을 KMS/age/PGP 키로 암호화하여 Git에 커밋할 수 있게 하는 도구다.
+
+```text
+적용 패턴:
+  secrets.enc.yaml (암호화 커밋) → SOPS + KMS → 평문 값 복호화
+
+Terraform 연동:
+  data "sops_file" "secrets" { source_file = "secrets.enc.yaml" }
+  → terraform-provider-sops 사용
+```
+
+**현재 프로젝트에서의 평가**
+
+- `terraform.tfvars`에 민감 정보가 없음 (AZ, CIDR 등 비민감 설정만 포함)
+- 실제 시크릿은 이미 AWS Secrets Manager 경유 (ESO → K8s Secret 흐름 확립)
+- Git에 암호화된 시크릿을 저장할 필요가 없는 현재 구조에서 도입 실익이 낮음
+
+> SOPS는 Helm values 파일에 시크릿을 포함하거나, 팀 간 `.env` 파일을 Git으로 공유해야 하는 경우에 유효하다.
+
+### 23.3 Terraform Ephemeral Resources (고도화 권장)
+
+Terraform 1.10+에서 도입된 `ephemeral` 리소스는 plan/apply 시 값을 메모리에서만 사용하고 `.tfstate`에 저장하지 않는다.
+
+**Redis 토큰 state 노출 문제 해결 방향**
+
+```hcl
+# 고도화 방향 — Redis 토큰을 state에 저장하지 않는 방식
+# Terraform 1.10+ 필요
+
+# 1. Secrets Manager에서 외부 주입된 토큰을 ephemeral로 읽기
+ephemeral "aws_secretsmanager_secret_version" "redis_auth" {
+  secret_id = aws_secretsmanager_secret.redis_auth.id
+}
+
+# 2. ElastiCache 리소스에서 ephemeral 값 참조 (state 미기록)
+resource "aws_elasticache_replication_group" "this" {
+  auth_token = ephemeral.aws_secretsmanager_secret_version.redis_auth.secret_string
+}
+```
+
+| 항목 | 현재 방식 | Ephemeral 적용 후 |
+|---|---|---|
+| Redis 토큰 저장 위치 | S3 state 파일 (평문) | 메모리 only (state 미기록) |
+| state 파일 유출 시 | 토큰 즉시 노출 | 영향 없음 |
+| Terraform 버전 요건 | 제한 없음 | 1.10 이상 |
+
+### 23.4 고도화 우선순위
+
+| 방법 | 해결 문제 | 적용 난이도 | 권장 시점 |
+|---|---|---|---|
+| **Terraform Ephemeral** | Redis 토큰 state 노출 | Terraform 버전 업 + 리소스 타입 변경 | Terraform 1.10 업그레이드 시 즉시 |
+| **SOPS** | Git 암호화 시크릿 버전 관리 | 팀 키 배포 + provider 추가 | 현 구조에서 필요성 낮음 |
+
+> 현재 가장 실질적인 보안 개선은 Terraform 1.10으로 업그레이드 후 `modules/redis/main.tf`의 `random_password`를 ephemeral 리소스로 전환하는 것이다.
 
 ---
 
