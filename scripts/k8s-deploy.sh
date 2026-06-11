@@ -68,23 +68,26 @@ apply() {
 # 1. 네임스페이스
 kubectl apply -f k8s/namespaces/
 
-# 2. RBAC (serviceaccounts.yaml에 ${AWS_ACCOUNT_ID} 플레이스홀더가 있으므로 envsubst 필요)
+# 2. Observability (앱 OTEL_EXPORTER_OTLP_ENDPOINT가 바라보는 Collector Service)
+kubectl apply -f k8s/observability/
+
+# 3. RBAC (serviceaccounts.yaml에 ${AWS_ACCOUNT_ID} 플레이스홀더가 있으므로 envsubst 필요)
 for f in k8s/rbac/*.yaml; do
   apply "$f"
 done
 
-# 3. External Secrets
+# 4. External Secrets
 kubectl apply -f k8s/secrets/cluster-secret-store.yaml
 for f in k8s/secrets/*.yaml; do
   kubectl apply -f "$f"
 done
 
-# 4. 워크로드 (AWS_ACCOUNT_ID + 각 이미지 태그 치환)
+# 5. 워크로드 (AWS_ACCOUNT_ID + 각 이미지 태그 치환)
 for f in k8s/workloads/*.yaml; do
   apply "$f"
 done
 
-# 5. Ingress (ACM_CERTIFICATE_ARN 치환 필요)
+# 6. Ingress (ACM_CERTIFICATE_ARN 치환 필요)
 for f in k8s/ingress/*.yaml; do
   apply "$f"
 done
