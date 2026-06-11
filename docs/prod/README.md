@@ -1048,3 +1048,514 @@ utterai-prod-backend:{git_sha} → ap-northeast-1 ECR 동일 태그 복사
 6. 알람 무시 금지: Discord 알람 발생 시 즉시 원인 파악 및 조치
 7. KMS Key 삭제 금지: 암호화된 데이터 복호화 불가로 이어짐
 ```
+
+---
+
+## 21. Pod 보안 정책 (Pod Security Standards + Kyverno)
+
+Dev 환경에서는 배포 YAML을 올바르게 작성하는 관행(컨벤션)에만 의존한다. Prod에서는 잘못된 설정이 배포되는 것을 시스템이 직접 막아야 한다. 이를 위해 두 계층을 적용한다.
+
+```text
+계층 1 — Pod Security Standards (Kubernetes 네이티브)
+  Kubernetes API Server가 Namespace 레이블을 읽어 Pod 스펙을 직접 검사.
+  Kyverno 없이도 동작하며 가장 기본적인 보안 기준선 역할을 한다.
+
+계층 2 — Kyverno (정책 엔진)
+  Kubernetes Admission Webhook으로 동작. Pod 생성/수정 요청을 API Server가
+  etcd에 저장하기 직전에 Kyverno에게 전달하여 허용/거부/자동수정을 결정한다.
+  PSS보다 세밀한 규칙과 자동 수정(Mutate), 리소스 자동 생성(Generate)이 가능하다.
+```
+
+### 21.1 Pod Security Standards (PSS) 레이블
+
+Namespace에 레이블을 추가하는 것만으로 활성화된다. 별도 컴포넌트 설치가 필요 없다.
+
+```text
+enforce: 위반 Pod를 거부 (배포 자체가 실패)
+warn:    위반 시 경고 메시지 반환 (배포는 됨)
+audit:   위반 내역을 감사 로그에 기록 (배포는 됨)
+```
+
+**적용 레벨 기준**
+
+| Namespace | enforce | 이유 |
+|---|---|---|
+| `utterai-prod-api` | `restricted` | 순수 API 서버. root 불필요, 최소 권한 강제 |
+| `utterai-prod-ai-worker` | `baseline` | GPU 워크로드는 NVIDIA Device Plugin 특성상 `restricted` 적용 시 스케줄링 실패 가능. `warn=restricted`로 위반 감지는 유지 |
+
+`restricted` 레벨이 강제하는 항목:
+```text
+- runAsNonRoot: true 필수
+- allowPrivilegeEscalation: false 필수
+- capabilities.drop: ["ALL"] 필수
+- seccompProfile.type: RuntimeDefault 또는 Localhost 필수
+- hostNetwork / hostPID / hostIPC: false 필수
+```
+
+실제 Namespace YAML (`k8s-demo/apps/backend/overlays/prod/namespace.yaml`):
+```yaml
+labels:
+  pod-security.kubernetes.io/enforce: restricted
+  pod-security.kubernetes.io/warn: restricted
+  pod-security.kubernetes.io/audit: restricted
+```
+
+### 21.2 Kyverno 설치
+
+```bash
+helm repo add kyverno https://kyverno.github.io/kyverno/
+helm repo update
+
+helm install kyverno kyverno/kyverno \
+  --namespace kyverno \
+  --create-namespace \
+  --set replicaCount=3
+```
+
+> `replicaCount=3`: Kyverno가 죽으면 Admission Webhook이 응답하지 않아 Pod 배포 자체가 막힌다. Prod에서는 반드시 3개로 운영한다.
+
+### 21.3 ClusterPolicy: resource limits 필수
+
+limits 없는 Pod가 배포되면 GPU/CPU 노드가 메모리 초과로 OOM 종료될 수 있다.
+
+```yaml
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-resource-limits
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+  - name: check-container-limits
+    match:
+      any:
+      - resources:
+          kinds: [Pod]
+          namespaces:
+          - utterai-prod-api
+          - utterai-prod-ai-worker
+    validate:
+      message: "resources.limits.cpu 와 resources.limits.memory 는 필수입니다"
+      pattern:
+        spec:
+          containers:
+          - resources:
+              limits:
+                memory: "?*"
+                cpu: "?*"
+```
+
+### 21.4 ClusterPolicy: latest 태그 금지
+
+`:latest` 태그는 어떤 이미지가 실행 중인지 추적이 불가능하다. Prod 배포는 항상 git SHA 태그를 사용해야 한다.
+
+```yaml
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-latest-tag
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+  - name: check-image-tag
+    match:
+      any:
+      - resources:
+          kinds: [Pod]
+          namespaces:
+          - utterai-prod-api
+          - utterai-prod-ai-worker
+    validate:
+      message: "이미지 태그에 :latest 는 사용할 수 없습니다. git SHA 태그를 사용하세요"
+      foreach:
+      - list: "request.object.spec.containers"
+        deny:
+          conditions:
+            any:
+            - key: "{{ element.image }}"
+              operator: Equals
+              value: "*:latest"
+            - key: "{{ element.image }}"
+              operator: NotContains
+              value: ":"
+```
+
+### 21.5 ClusterPolicy: GPU 요청은 ai-worker namespace만
+
+GPU On-Demand 노드는 비용이 높다. 잘못된 namespace에서 `nvidia.com/gpu` 리소스를 요청하면 불필요한 GPU 노드가 프로비저닝된다.
+
+```yaml
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-gpu-to-ai-worker
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+  - name: check-gpu-namespace
+    match:
+      any:
+      - resources:
+          kinds: [Pod]
+    exclude:
+      any:
+      - resources:
+          namespaces:
+          - utterai-prod-ai-worker
+          - kube-system
+    validate:
+      message: "nvidia.com/gpu 리소스는 utterai-prod-ai-worker namespace에서만 요청할 수 있습니다"
+      deny:
+        conditions:
+          any:
+          - key: "{{ request.object.spec.containers[].resources.limits.\"nvidia.com/gpu\" | length(@) }}"
+            operator: GreaterThan
+            value: "0"
+```
+
+### 21.6 ClusterPolicy: NetworkPolicy 자동 생성
+
+Namespace 생성 시 기본 차단 NetworkPolicy를 자동으로 함께 생성한다. 이후 필요한 통신만 명시적으로 허용하는 화이트리스트 방식으로 운영한다.
+
+```yaml
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: generate-default-networkpolicy
+spec:
+  rules:
+  - name: default-deny
+    match:
+      any:
+      - resources:
+          kinds: [Namespace]
+          selector:
+            matchLabels:
+              utterai.io/environment: prod
+    generate:
+      apiVersion: networking.k8s.io/v1
+      kind: NetworkPolicy
+      name: default-deny-all
+      namespace: "{{ request.object.metadata.name }}"
+      synchronize: true
+      data:
+        spec:
+          podSelector: {}
+          policyTypes:
+          - Ingress
+          - Egress
+```
+
+> `synchronize: true`: Namespace가 삭제 후 재생성되어도 Kyverno가 NetworkPolicy를 다시 생성한다.
+
+### 21.7 정책 상태 확인
+
+```bash
+# 모든 ClusterPolicy 상태 확인
+kubectl get clusterpolicy
+
+# 특정 Policy가 실제로 차단한 내역 확인
+kubectl get policyreport -A
+
+# 특정 Pod에 대한 정책 검사 결과
+kubectl describe policyreport -n utterai-prod-api
+```
+
+### 21.8 정책 단계적 적용 순서
+
+신규 클러스터에 바로 `Enforce` 모드로 적용하면 기존 배포가 모두 막힌다. 아래 순서로 단계적으로 적용한다.
+
+```text
+1단계 — Audit 모드로 설치
+  validationFailureAction: Audit
+  실제 배포는 막지 않고 위반 내역만 policyreport에 기록.
+  1~2일간 위반 현황을 파악한다.
+
+2단계 — 위반 수정
+  policyreport를 확인하여 위반 중인 Deployment를 수정한다.
+  (resource limits 추가, 이미지 태그 수정 등)
+
+3단계 — Enforce 모드로 전환
+  validationFailureAction: Enforce
+  이후 위반 배포는 API Server 단계에서 거부된다.
+```
+
+---
+
+## 22. Cilium (CNI + 네트워크 보안)
+
+### 22.1 선택 이유
+
+Kubernetes 기본 NetworkPolicy는 IP/포트 기반 L3/L4 제어만 가능하고, AWS VPC CNI는 NetworkPolicy를 직접 지원하지 않아 별도 플러그인이 필요하다. Cilium은 eBPF 기반으로 커널 레벨에서 동작해 사이드카 없이 아래를 모두 제공한다.
+
+```text
+- L3/L4/L7 NetworkPolicy (HTTP path, DNS 기반 제어 포함)
+- Pod 간 mTLS (Mutual Authentication)
+- Hubble — 실시간 트래픽 가시성 UI
+- sidecar 없음 → GPU Pod에 영향 없음
+- VPC CNI 대체 → 단일 CNI로 통합
+```
+
+### 22.2 EKS 설치 방식 선택
+
+Cilium은 EKS에서 두 가지 방식으로 설치할 수 있다.
+
+| 방식 | 설명 | 권장 시점 |
+|---|---|---|
+| ENI 모드 (VPC CNI 완전 교체) | Cilium이 직접 ENI를 관리. 기능 풀 사용 가능 | **Prod 첫 구성 시 (권장)** |
+| Chaining 모드 (VPC CNI 위에 추가) | VPC CNI와 공존. 덜 침습적이나 기능 제한 | 운영 중인 클러스터에 후추가 시 |
+
+> Prod 클러스터를 처음 구성하는 시점에는 ENI 모드로 시작하는 것이 가장 좋다. 운영 중인 클러스터에서 CNI를 교체하려면 노드 드레인 및 재생성이 필요해 부담이 크다.
+
+### 22.3 설치 (EKS ENI 모드)
+
+EKS 클러스터 생성 시 `vpc-cni` 애드온을 비활성화하거나, Terraform에서 `cluster_addons`에서 vpc-cni를 제외한 뒤 Cilium을 설치한다.
+
+```bash
+helm repo add cilium https://helm.cilium.io/
+helm repo update
+
+helm install cilium cilium/cilium \
+  --namespace kube-system \
+  --set eni.enabled=true \
+  --set ipam.mode=eni \
+  --set egressMasqueradeInterfaces=eth0 \
+  --set tunnel=disabled \
+  --set nodeinit.enabled=true \
+  --set hubble.relay.enabled=true \
+  --set hubble.ui.enabled=true \
+  --set kubeProxyReplacement=true \
+  --set k8sServiceHost=<EKS_API_ENDPOINT> \
+  --set k8sServicePort=443
+```
+
+> `<EKS_API_ENDPOINT>`: Terraform output `eks_cluster_endpoint` 값을 사용한다.
+
+설치 후 상태 확인:
+```bash
+cilium status --wait
+cilium connectivity test
+```
+
+### 22.4 CiliumNetworkPolicy — UtterAI 트래픽 규칙
+
+Kyverno가 Namespace 생성 시 기본 `default-deny-all` NetworkPolicy를 생성한다 (섹션 21.6). 그 위에 아래 허용 규칙을 추가해 필요한 통신만 열어준다.
+
+**utterai-prod-api: 허용 트래픽**
+
+```yaml
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: utterai-prod-api-policy
+  namespace: utterai-prod-api
+specs:
+- endpointSelector:
+    matchLabels:
+      app: utterai-api
+  ingress:
+  # ALB에서 인입되는 트래픽 허용
+  - fromEntities:
+    - world
+    toPorts:
+    - ports:
+      - port: "8080"
+        protocol: TCP
+  egress:
+  # Aurora 접근 허용
+  - toCIDRSet:
+    - cidr: 10.0.21.0/24
+    - cidr: 10.0.22.0/24
+    - cidr: 10.0.23.0/24
+    toPorts:
+    - ports:
+      - port: "5432"
+        protocol: TCP
+  # Redis 접근 허용
+  - toCIDRSet:
+    - cidr: 10.0.21.0/24
+    - cidr: 10.0.22.0/24
+    - cidr: 10.0.23.0/24
+    toPorts:
+    - ports:
+      - port: "6379"
+        protocol: TCP
+  # SQS VPC Endpoint 접근 허용
+  - toEntities:
+    - aws
+    toPorts:
+    - ports:
+      - port: "443"
+        protocol: TCP
+  # OTEL Collector 접근 허용
+  - toEndpoints:
+    - matchLabels:
+        app: otel-collector
+        io.kubernetes.pod.namespace: utterai-observability
+    toPorts:
+    - ports:
+      - port: "4318"
+        protocol: TCP
+  # DNS 허용 (모든 egress 정책 적용 시 필수)
+  - toEndpoints:
+    - matchLabels:
+        io.kubernetes.pod.namespace: kube-system
+        k8s-app: kube-dns
+    toPorts:
+    - ports:
+      - port: "53"
+        protocol: UDP
+      rules:
+        dns:
+        - matchPattern: "*"
+```
+
+**utterai-prod-ai-worker: 허용 트래픽**
+
+```yaml
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: utterai-prod-ai-worker-policy
+  namespace: utterai-prod-ai-worker
+specs:
+- endpointSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: utterai
+  egress:
+  # SQS VPC Endpoint 접근 허용 (큐 소비/생산)
+  - toEntities:
+    - aws
+    toPorts:
+    - ports:
+      - port: "443"
+        protocol: TCP
+  # S3 VPC Endpoint 접근 허용 (음성 파일 읽기/쓰기)
+  - toEntities:
+    - aws
+    toPorts:
+    - ports:
+      - port: "443"
+        protocol: TCP
+  # Bedrock 접근 허용 (CPU Worker → 리포트 생성)
+  - toFQDNs:
+    - matchPattern: "bedrock.ap-northeast-2.amazonaws.com"
+    toPorts:
+    - ports:
+      - port: "443"
+        protocol: TCP
+  # HuggingFace 모델 다운로드 허용 (초기 기동 시)
+  - toFQDNs:
+    - matchPattern: "*.huggingface.co"
+    toPorts:
+    - ports:
+      - port: "443"
+        protocol: TCP
+  # OTEL Collector 접근 허용
+  - toEndpoints:
+    - matchLabels:
+        app: otel-collector
+        io.kubernetes.pod.namespace: utterai-observability
+    toPorts:
+    - ports:
+      - port: "4318"
+        protocol: TCP
+  # DNS 허용
+  - toEndpoints:
+    - matchLabels:
+        io.kubernetes.pod.namespace: kube-system
+        k8s-app: kube-dns
+    toPorts:
+    - ports:
+      - port: "53"
+        protocol: UDP
+      rules:
+        dns:
+        - matchPattern: "*"
+```
+
+> `toFQDNs`: Cilium의 DNS 기반 egress 제어. 기본 Kubernetes NetworkPolicy에는 없는 기능으로, IP가 아닌 도메인 이름으로 외부 접근을 제어한다.
+
+### 22.5 mTLS (Mutual Authentication)
+
+Cilium 1.14 이상에서 Pod 간 mTLS를 지원한다. 인증서 관리를 Cilium이 담당하므로 Istio처럼 별도 인증서 배포 작업이 필요 없다.
+
+```bash
+# Cilium 설치 시 mTLS 활성화 옵션 추가
+helm upgrade cilium cilium/cilium \
+  --namespace kube-system \
+  --reuse-values \
+  --set authentication.mutual.spire.enabled=true \
+  --set authentication.mutual.spire.install.enabled=true
+```
+
+활성화 후 특정 namespace 간 통신에 mTLS 강제:
+
+```yaml
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: require-mtls-api-to-ai
+  namespace: utterai-prod-ai-worker
+specs:
+- endpointSelector: {}
+  ingress:
+  - fromEndpoints:
+    - matchLabels:
+        io.kubernetes.pod.namespace: utterai-prod-api
+    authentication:
+      mode: required   # mTLS 인증 없으면 차단
+```
+
+### 22.6 Hubble — 트래픽 가시성
+
+Hubble은 Cilium의 관측 도구로, 클러스터 내 모든 트래픽 흐름을 실시간으로 시각화한다.
+
+```bash
+# Hubble CLI 설치
+cilium hubble enable --ui
+
+# 포트 포워딩으로 UI 접근
+cilium hubble ui
+# → http://localhost:12000
+
+# CLI로 실시간 트래픽 확인
+hubble observe --namespace utterai-prod-api --follow
+
+# 특정 Pod 간 트래픽만 필터
+hubble observe \
+  --from-label app=utterai-api \
+  --to-label app=utterai-ai-worker \
+  --follow
+```
+
+Hubble UI에서 확인할 수 있는 항목:
+```text
+- Namespace 간 트래픽 흐름 다이어그램
+- 드롭된 패킷 및 차단 이유
+- HTTP 요청/응답 상태 코드 (L7 가시성 활성화 시)
+- DNS 쿼리 내역
+```
+
+### 22.7 상태 확인 명령어
+
+```bash
+# Cilium 전체 상태
+cilium status
+
+# 모든 노드의 Cilium Agent 상태
+kubectl get pods -n kube-system -l k8s-app=cilium
+
+# NetworkPolicy 적용 현황
+kubectl get ciliumnetworkpolicy -A
+
+# 특정 Pod에 적용된 정책 확인
+kubectl exec -n kube-system <cilium-pod> -- \
+  cilium endpoint list
+
+# 트래픽 드롭 확인
+hubble observe --verdict DROPPED --follow
+```
