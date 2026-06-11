@@ -4,8 +4,6 @@ on:
   push:
     branches:
       - main
-      - dev
-      - develop
 
   pull_request:
     types:
@@ -13,8 +11,6 @@ on:
       - reopened
     branches:
       - main
-      - dev
-      - develop
 
   workflow_run:
     workflows:

@@ -76,8 +76,20 @@ jobs:
           BUILD_CPU="$INPUT_BUILD_CPU"
           BUILD_GPU="$INPUT_BUILD_GPU"
 
+          sanitize_single_line() {
+            printf '%s' "$1" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+          }
+
+          TARGET_ENV="$(sanitize_single_line "$TARGET_ENV")"
+          IMAGE_TAG="$(sanitize_single_line "$IMAGE_TAG")"
+          ECR_REGISTRY="$(sanitize_single_line "$ECR_REGISTRY")"
+          CPU_REPOSITORY="$(sanitize_single_line "$CPU_REPOSITORY")"
+          GPU_REPOSITORY="$(sanitize_single_line "$GPU_REPOSITORY")"
+          BUILD_CPU="$(sanitize_single_line "$BUILD_CPU")"
+          BUILD_GPU="$(sanitize_single_line "$BUILD_GPU")"
+
           if [ "$TARGET_ENV" = "dev" ]; then
-            TARGET_BRANCH="dev"
+            TARGET_BRANCH="main"
             OVERLAY_PATH="k8s-demo/apps/ai-worker/overlays/dev"
             EXPECTED_TAG_PREFIX="dev-"
           elif [ "$TARGET_ENV" = "prod" ]; then
