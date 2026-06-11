@@ -5,3 +5,6 @@ metadata:
   labels:
     app.kubernetes.io/part-of: utterai
     utterai.io/environment: prod
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/audit: restricted
