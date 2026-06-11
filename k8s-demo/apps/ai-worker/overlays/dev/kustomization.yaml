@@ -1,21 +1,17 @@
+---
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-
 namespace: utterai-dev-ai-worker
-
 resources:
-  - namespace.yaml
-  - ../../base
-
-# TODO: GitHub Actions CD에서 newName/newTag를 실제 ECR image로 갱신합니다.
+- namespace.yaml
+- "../../base"
 images:
-  - name: utterai-ai-cpu
-    newName: 000000000000.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-cpu
-    newTag: dev-placeholder
-  - name: utterai-ai-gpu
-    newName: 000000000000.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-gpu
-    newTag: dev-placeholder
-
+- name: utterai-ai-cpu
+  newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-cpu'
+  newTag: dev-63dd74c
+- name: utterai-ai-gpu
+  newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-gpu'
+  newTag: dev-63dd74c
 patches:
-  - path: patch-configmap.yaml
-  - path: patch-serviceaccount.yaml
+- path: patch-configmap.yaml
+- path: patch-serviceaccount.yaml
