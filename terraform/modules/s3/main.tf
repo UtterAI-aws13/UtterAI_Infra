@@ -68,3 +68,15 @@ resource "aws_s3_bucket_cors_configuration" "raw_audio" {
     max_age_seconds = 3000
   }
 }
+
+resource "aws_s3_bucket_cors_configuration" "documents" {
+  bucket = aws_s3_bucket.buckets["documents"].id
+
+  cors_rule {
+    allowed_headers = ["*"]
+    allowed_methods = ["GET", "PUT", "POST"]
+    allowed_origins = ["https://${var.frontend_domain}"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
+}
