@@ -17,5 +17,5 @@ data:
   S3_ARTIFACT_BUCKET: "utterai-dev-artifacts"
   SQS_ANALYSIS_QUEUE_URL: "TODO_DEV_ANALYSIS_QUEUE_URL"
   SQS_ANALYSIS_DLQ_URL: "TODO_DEV_ANALYSIS_DLQ_URL"
-  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.utterai-observability.svc.cluster.local:4317"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.utterai-observability.svc.cluster.local:4318"
   CLOUDWATCH_LOG_GROUP: "/aws/eks/utterai-dev/backend"
