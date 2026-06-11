@@ -62,7 +62,7 @@ resource "helm_release" "kube_prometheus_stack" {
 
       prometheus = {
         prometheusSpec = {
-          retention    = "7d"
+          retention      = "7d"
           scrapeInterval = "60s"
 
           serviceMonitorSelectorNilUsesHelmValues = false
