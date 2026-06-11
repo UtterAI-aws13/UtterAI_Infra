@@ -52,7 +52,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "raw_audio" {
     filter {}
 
     expiration {
-      days = 30
+      days = 365
     }
   }
 }
