@@ -1,9 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: utterai-api
+  name: utterai-api-green
   labels:
     app: utterai-api
+    color: green
     app.kubernetes.io/name: utterai-api
     app.kubernetes.io/part-of: utterai
 spec:
@@ -11,10 +12,12 @@ spec:
   selector:
     matchLabels:
       app: utterai-api
+      color: green
   template:
     metadata:
       labels:
         app: utterai-api
+        color: green
         app.kubernetes.io/name: utterai-api
         app.kubernetes.io/part-of: utterai
     spec:
@@ -33,9 +36,10 @@ spec:
           labelSelector:
             matchLabels:
               app: utterai-api
+              color: green
       initContainers:
         - name: db-migrate
-          image: utterai-backend:dev-placeholder
+          image: utterai-backend-green:dev-placeholder
           command: ["alembic", "upgrade", "head"]
           envFrom:
             - configMapRef:
@@ -48,7 +52,7 @@ spec:
                   key: DB_PASSWORD
       containers:
         - name: api
-          image: utterai-backend:dev-placeholder
+          image: utterai-backend-green:dev-placeholder
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

@@ -9,10 +9,14 @@ resources:
 
 # TODO: GitHub Actions CD에서 newName/newTag를 실제 ECR image로 갱신합니다.
 images:
-  - name: utterai-backend
+  - name: utterai-backend-blue
+    newName: 032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend
+    newTag: dev-63dd74c
+  - name: utterai-backend-green
     newName: 032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend
     newTag: dev-63dd74c
 
 patches:
+  - path: patch-active-service.yaml
   - path: patch-configmap.yaml
   - path: patch-serviceaccount.yaml

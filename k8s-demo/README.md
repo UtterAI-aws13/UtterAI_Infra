@@ -74,7 +74,9 @@ k8s-demo/
 │           └── prod/
 │
 └── platform/
-    └── external-secrets/
+    ├── external-secrets/
+    │   └── base/
+    └── observability/
         └── base/
 ```
 
@@ -87,7 +89,7 @@ apps/
 
 platform/
   앱이 의존하는 클러스터 공통 리소스
-  예: External Secrets Operator가 사용하는 ClusterSecretStore
+  예: External Secrets Operator가 사용하는 ClusterSecretStore, OpenTelemetry Collector, Grafana dashboard
 ```
 
 ---
@@ -164,7 +166,7 @@ User
   -> CloudFront 또는 API 도메인
   -> ALB Ingress
   -> utterai-api-service
-  -> utterai-api Deployment
+  -> active color Deployment
 ```
 
 ### 4.1 backend/base 파일 설명
@@ -172,9 +174,11 @@ User
 ```text
 k8s-demo/apps/backend/base/
 ├── configmap.yaml
-├── deployment.yaml
+├── deployment-blue.yaml
+├── deployment-green.yaml
 ├── external-secret.yaml
-├── hpa.yaml
+├── hpa-blue.yaml
+├── hpa-green.yaml
 ├── ingress.yaml
 ├── kustomization.yaml
 ├── rolebinding.yaml
@@ -187,25 +191,29 @@ k8s-demo/apps/backend/base/
 | 파일 | 역할 |
 |---|---|
 | `kustomization.yaml` | backend base에 포함될 리소스 목록 |
-| `deployment.yaml` | `utterai-api` Pod 실행 정의 |
-| `service.yaml` | Pod 앞에 붙는 ClusterIP Service |
+| `deployment-blue.yaml` | blue 버전 `utterai-api` Pod 실행 정의 |
+| `deployment-green.yaml` | green 버전 `utterai-api` Pod 실행 정의 |
+| `service.yaml` | 현재 active color Pod 앞에 붙는 ClusterIP Service |
 | `ingress.yaml` | ALB Ingress를 통해 외부 요청을 Service로 전달 |
-| `hpa.yaml` | CPU 사용률 기준 자동 스케일링 |
+| `hpa-blue.yaml` | blue Deployment CPU 사용률 기준 자동 스케일링 |
+| `hpa-green.yaml` | green Deployment CPU 사용률 기준 자동 스케일링 |
 | `configmap.yaml` | DB host, Redis host, SQS URL 같은 비민감 설정 |
 | `serviceaccount.yaml` | Pod가 사용할 ServiceAccount와 IRSA role 연결 |
 | `rolebinding.yaml` | ConfigMap/Secret 조회 권한 |
 | `external-secret.yaml` | AWS Secrets Manager 값을 Kubernetes Secret으로 동기화 |
 
-### 4.2 backend Deployment에서 중요한 부분
+### 4.2 backend blue-green 구조
 
-backend Deployment 이름은 기존 `k8s/` 원본과 맞춰 `utterai-api`입니다.
+backend는 blue/green 배포를 위해 Deployment를 두 개로 나눕니다.
 
 ```text
 Deployment:
-  utterai-api
+  utterai-api-blue
+  utterai-api-green
 
 Service:
   utterai-api-service
+  selector.color 값으로 blue 또는 green 중 하나를 바라봄
 
 ConfigMap:
   utterai-api-config
@@ -216,6 +224,16 @@ Secret:
 ServiceAccount:
   utterai-api-sa
 ```
+
+현재 기본 active color는 `blue`입니다.
+
+```yaml
+selector:
+  app: utterai-api
+  color: blue
+```
+
+`color` 값을 `green`으로 바꾸면 Service가 green Pod로 트래픽을 보냅니다.
 
 중요한 동작:
 
@@ -254,7 +272,10 @@ dev ServiceAccount IRSA role ARN
 
 ```yaml
 images:
-  - name: utterai-backend
+  - name: utterai-backend-blue
+    newName: 032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend
+    newTag: dev-63dd74c
+  - name: utterai-backend-green
     newName: 032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend
     newTag: dev-63dd74c
 ```
@@ -412,6 +433,8 @@ DB 접속 정보는 ConfigMap이 아니라 ExternalSecret이 만든 Kubernetes S
 
 ## 6. platform Kustomize 구조
 
+### 6.1 External Secrets
+
 위치:
 
 ```text
@@ -435,6 +458,41 @@ secretStoreRef:
 ```
 
 적용 순서상 `ClusterSecretStore`는 앱의 `ExternalSecret`보다 먼저 있어야 합니다.
+
+### 6.2 Observability
+
+위치:
+
+```text
+k8s-demo/platform/observability/base
+```
+
+현재 포함된 리소스:
+
+```text
+utterai-observability Namespace
+OpenTelemetry Collector ConfigMap / Deployment / Service
+OpenTelemetry Collector ServiceMonitor
+Grafana dashboard ConfigMap
+```
+
+앱 Pod는 다음 주소로 telemetry를 전송합니다.
+
+```text
+http://otel-collector.utterai-observability.svc.cluster.local:4318
+```
+
+`ServiceMonitor`와 Grafana dashboard는 Terraform EKS addon 레이어의 `kube-prometheus-stack` 설치를 전제로 합니다.
+
+필요한 전제:
+
+```text
+monitoring namespace
+ServiceMonitor CRD
+Grafana dashboard sidecar 설정
+```
+
+현재 Terraform module의 `kube_prometheus_stack`이 `monitoring` namespace를 생성하고 Prometheus/Grafana 관련 CRD를 설치합니다.
 
 ---
 
@@ -558,6 +616,26 @@ kubectl kustomize k8s-demo/platform/external-secrets/base > /tmp/platform-extern
 kubectl apply -k k8s-demo/platform/external-secrets/base
 ```
 
+### 8.4 platform Observability 렌더링
+
+```bash
+cd UtterAI_Infra
+
+kubectl kustomize k8s-demo/platform/observability/base > /tmp/platform-observability.yaml
+```
+
+수동 적용:
+
+```bash
+kubectl apply -k k8s-demo/platform/observability/base
+```
+
+주의:
+
+```text
+kube-prometheus-stack이 먼저 설치되어 있어야 ServiceMonitor와 Grafana dashboard가 정상 동작합니다.
+```
+
 주의:
 
 ```text
@@ -574,8 +652,9 @@ ClusterSecretStore가 먼저 적용되어야 앱별 ExternalSecret이 정상 동
 
 ```text
 1. platform/external-secrets/base
-2. apps/backend/overlays/dev
-3. apps/ai-worker/overlays/dev
+2. platform/observability/base
+3. apps/backend/overlays/dev
+4. apps/ai-worker/overlays/dev
 ```
 
 명령어:
@@ -584,6 +663,7 @@ ClusterSecretStore가 먼저 적용되어야 앱별 ExternalSecret이 정상 동
 cd UtterAI_Infra
 
 kubectl apply -k k8s-demo/platform/external-secrets/base
+kubectl apply -k k8s-demo/platform/observability/base
 kubectl apply -k k8s-demo/apps/backend/overlays/dev
 kubectl apply -k k8s-demo/apps/ai-worker/overlays/dev
 ```
@@ -640,6 +720,7 @@ k8s/ 원본과 비교해서 실제 운영 의도가 보존되어야 migration이
 prod overlay는 아직 실제 prod 값이 완성된 상태가 아닙니다.
 일부 ARN, endpoint, domain 값은 TODO 또는 placeholder일 수 있습니다.
 ExternalSecret이 동작하려면 ESO와 AWS Secrets Manager 권한이 먼저 준비되어야 합니다.
+Observability 리소스가 동작하려면 kube-prometheus-stack이 먼저 설치되어 있어야 합니다.
 ALB Ingress가 동작하려면 AWS Load Balancer Controller가 설치되어 있어야 합니다.
 GPU worker가 동작하려면 GPU node와 NVIDIA device plugin이 준비되어야 합니다.
 ```
@@ -648,7 +729,9 @@ GPU worker가 동작하려면 GPU node와 NVIDIA device plugin이 준비되어�
 
 ```bash
 kubectl get crd | grep external-secrets
+kubectl get crd | grep servicemonitors
 kubectl get pods -n external-secrets
+kubectl get pods -n monitoring
 kubectl get pods -n kube-system | grep aws-load-balancer
 kubectl get nodes --show-labels | grep ai-gpu
 ```
@@ -666,4 +749,3 @@ k8s/ 원본을 읽고
   -> kubectl kustomize로 검증하고
   -> Argo CD가 Git 상태를 cluster에 반영하게 만든다.
 ```
-

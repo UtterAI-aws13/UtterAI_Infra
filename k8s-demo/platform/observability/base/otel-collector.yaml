@@ -1,3 +1,12 @@
+# OpenTelemetry Collector - in-cluster OTLP endpoint for application telemetry.
+#
+# App pods send OTLP HTTP traffic to:
+#   http://otel-collector.utterai-observability.svc.cluster.local:4318
+#
+# This minimal collector accepts traces/metrics/logs and exposes its own
+# Prometheus metrics. Trace/log export currently uses the debug exporter so the
+# application stops failing span export before a trace backend such as Tempo or
+# X-Ray is added.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -133,3 +142,21 @@ spec:
     - name: prom-exporter
       port: 8889
       targetPort: prom-exporter
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: otel-collector
+  namespace: utterai-observability
+  labels:
+    app: otel-collector
+    app.kubernetes.io/name: otel-collector
+    app.kubernetes.io/part-of: utterai
+spec:
+  selector:
+    matchLabels:
+      app: otel-collector
+  endpoints:
+    - port: prom-exporter
+      path: /metrics
+      interval: 60s

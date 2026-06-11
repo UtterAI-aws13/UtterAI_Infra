@@ -9,7 +9,10 @@ resources:
 
 # TODO: prod 배포 승인 이후 CD에서 prod-{short_sha} 또는 prod-v{semver}로 갱신합니다.
 images:
-  - name: utterai-backend
+  - name: utterai-backend-blue
+    newName: 000000000000.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend
+    newTag: prod-placeholder
+  - name: utterai-backend-green
     newName: 000000000000.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend
     newTag: prod-placeholder
 
