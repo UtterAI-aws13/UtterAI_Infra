@@ -142,6 +142,8 @@ data:
   APP_NAME: "utterai-backend"
   API_PREFIX: "/api/v1"
   LOG_LEVEL: "DEBUG"
+  FRONTEND_ORIGIN: "https://d129p1nkqgquw3.cloudfront.net"
+  CORS_ALLOW_ORIGINS: "https://d129p1nkqgquw3.cloudfront.net"
   DB_USER: "utterai_app"
   DB_HOST: "${RDS_ENDPOINT}"
   DB_PORT: "5432"

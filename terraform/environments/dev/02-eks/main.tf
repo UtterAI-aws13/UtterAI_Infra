@@ -29,6 +29,7 @@ module "eks" {
   api_node_max_size      = var.api_node_max_size
 
   worker_node_instance_type = var.worker_node_instance_type
+  worker_node_disk_size     = var.worker_node_disk_size
 
   gpu_node_desired_size = var.gpu_node_desired_size
   gpu_node_min_size     = var.gpu_node_min_size
