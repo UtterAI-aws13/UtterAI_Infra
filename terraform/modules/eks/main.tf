@@ -320,7 +320,6 @@ resource "aws_eks_node_group" "gpu" {
   instance_types = var.gpu_node_instance_types
   capacity_type  = "ON_DEMAND"
   ami_type       = "AL2023_x86_64_NVIDIA"
-  disk_size      = 100
 
   launch_template {
     id      = aws_launch_template.gpu.id
