@@ -54,6 +54,11 @@ variable "api_node_max_size" {
   type = number
 }
 
+variable "worker_node_instance_type" {
+  type    = string
+  default = "m5.large"
+}
+
 variable "gpu_node_desired_size" {
   type    = number
   default = 0
