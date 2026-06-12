@@ -114,10 +114,20 @@ jobs:
             echo "ecr_repository=$ECR_REPOSITORY"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.UTTERAI_GITOPS_APP_ID }}
+          private-key: ${{ secrets.UTTERAI_GITOPS_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Checkout GitOps repository
         uses: actions/checkout@v4
         with:
           ref: ${{ steps.meta.outputs.target_branch }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Setup kubectl
         uses: azure/setup-kubectl@v4
@@ -157,7 +167,7 @@ jobs:
           TARGET_ENV: ${{ steps.meta.outputs.target_env }}
           TARGET_BRANCH: ${{ steps.meta.outputs.target_branch }}
           IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           UPDATE_BRANCH="ci/backend-${TARGET_ENV}-${IMAGE_TAG}-${GITHUB_RUN_ID}"
 
@@ -174,7 +184,7 @@ jobs:
           git commit -m "ci(backend): update $TARGET_ENV image tag to $IMAGE_TAG"
           git push origin "$UPDATE_BRANCH"
 
-          gh pr create \
+          PR_URL="$(gh pr create \
             --base "$TARGET_BRANCH" \
             --head "$UPDATE_BRANCH" \
             --title "ci(backend): update $TARGET_ENV image tag to $IMAGE_TAG" \
@@ -185,7 +195,13 @@ jobs:
           - 기준 브랜치: \`$TARGET_BRANCH\`
           - image tag: \`$IMAGE_TAG\`
 
-          이 PR은 보호 브랜치에 직접 push하지 않고 GitOps image tag 변경을 리뷰 가능한 PR로 남기기 위해 생성되었습니다."
-        
-        # TODO: 인프라 Repo에 GitHub App을 도입하면 main 보호 브랜치 정책을 유지하면서 자동 PR/merge 범위를 세밀하게 조정할 수 있습니다.
-        
+          이 PR은 보호 브랜치에 직접 push하지 않고 GitOps image tag 변경을 리뷰 가능한 PR로 남기기 위해 생성되었습니다.")"
+
+          echo "Created PR: $PR_URL"
+
+          if [ "$TARGET_ENV" = "dev" ]; then
+            echo "dev 환경 PR은 필수 CI 통과 후 자동 merge되도록 설정합니다."
+            gh pr merge "$PR_URL" --auto --squash --delete-branch
+          else
+            echo "prod 환경 PR은 사람이 검토하고 merge해야 합니다."
+          fi
