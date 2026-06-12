@@ -174,4 +174,4 @@ data:
   OTEL_LOGS_EXPORTER: "none"
   OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=dev,team=utterai"
   CLOUDWATCH_LOG_GROUP: "/aws/eks/utterai-dev/backend"
-  CORS_ORIGINS: "https://d129p1nkqgquw3.cloudfront.net"
+  CORS_ORIGINS: "[\"https://d129p1nkqgquw3.cloudfront.net\",\"http://localhost:5173\"]"
