@@ -255,10 +255,18 @@ resource "helm_release" "nvidia_device_plugin" {
 
   values = [
     yamlencode({
-      # NFD 없이 동작하도록 기본 NFD nodeAffinity 제거, GPU 노드 레이블로 직접 타게팅
-      affinity = {}
-      nodeSelector = {
-        workload = "ai-gpu"
+      affinity = {
+        nodeAffinity = {
+          requiredDuringSchedulingIgnoredDuringExecution = {
+            nodeSelectorTerms = [{
+              matchExpressions = [{
+                key      = "workload"
+                operator = "In"
+                values   = ["ai-gpu"]
+              }]
+            }]
+          }
+        }
       }
       tolerations = [{
         key      = "dedicated"
