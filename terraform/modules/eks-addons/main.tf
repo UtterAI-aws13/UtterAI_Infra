@@ -253,25 +253,21 @@ resource "helm_release" "nvidia_device_plugin" {
 
   depends_on = [helm_release.aws_load_balancer_controller]
 
-  set {
-    name  = "tolerations[0].key"
-    value = "dedicated"
-  }
-
-  set {
-    name  = "tolerations[0].operator"
-    value = "Equal"
-  }
-
-  set {
-    name  = "tolerations[0].value"
-    value = "ai-gpu"
-  }
-
-  set {
-    name  = "tolerations[0].effect"
-    value = "NoSchedule"
-  }
+  values = [
+    yamlencode({
+      # NFD 없이 동작하도록 기본 NFD nodeAffinity 제거, GPU 노드 레이블로 직접 타게팅
+      affinity = {}
+      nodeSelector = {
+        workload = "ai-gpu"
+      }
+      tolerations = [{
+        key      = "dedicated"
+        operator = "Equal"
+        value    = "ai-gpu"
+        effect   = "NoSchedule"
+      }]
+    })
+  ]
 }
 
 # ── ArgoCD ──────────────────────────────────────────────────────
