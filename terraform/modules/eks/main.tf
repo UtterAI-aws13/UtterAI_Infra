@@ -296,7 +296,7 @@ resource "aws_eks_node_group" "gpu" {
   subnet_ids      = var.private_app_subnet_ids
 
   instance_types = var.gpu_node_instance_types
-  capacity_type  = "SPOT"
+  capacity_type  = "ON_DEMAND"
 
   scaling_config {
     desired_size = var.gpu_node_desired_size

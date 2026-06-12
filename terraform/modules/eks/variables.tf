@@ -76,7 +76,7 @@ variable "worker_node_max_size" {
 
 variable "gpu_node_instance_types" {
   type    = list(string)
-  default = ["g4dn.xlarge", "g4dn.2xlarge"]
+  default = ["g4dn.xlarge"]
 }
 
 variable "gpu_node_desired_size" {
