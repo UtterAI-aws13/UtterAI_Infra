@@ -87,11 +87,6 @@ spec:
                 secretKeyRef:
                   name: backend-api-secret
                   key: INTERNAL_CALLBACK_TOKEN
-            - name: INTERNAL_CALLBACK_HMAC_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: backend-api-secret
-                  key: INTERNAL_CALLBACK_HMAC_SECRET
             - name: REDIS_AUTH_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -145,14 +140,12 @@ metadata:
 data:
   APP_ENV: "dev"
   APP_NAME: "utterai-backend"
-  API_BASE_PATH: "/api/v1"
+  API_PREFIX: "/api/v1"
   LOG_LEVEL: "DEBUG"
-  FRONTEND_ORIGIN: "https://d4kxfdssuth29.cloudfront.net"
-  CORS_ALLOW_ORIGINS: "https://d4kxfdssuth29.cloudfront.net"
+  DB_USER: "utterai_app"
   DB_HOST: "${RDS_ENDPOINT}"
   DB_PORT: "5432"
   DB_NAME: "utterai"
-  DB_USER: "utterai_app"
   DB_POOL_SIZE: "5"
   DB_MAX_OVERFLOW: "10"
   REDIS_HOST: "${REDIS_ENDPOINT}"
@@ -160,9 +153,17 @@ data:
   REDIS_DB: "0"
   # TLS 활성화: ElastiCache는 in-transit 암호화가 기본 활성화되어 있음
   REDIS_TLS_ENABLED: "true"
+  JWT_ALGORITHM: "HS256"
+  ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+  REFRESH_TOKEN_EXPIRE_DAYS: "14"
+  AI_SERVICE_BASE_URL: "http://utterai-ai-api-service.utterai-ai-api.svc.cluster.local:8080"
+  AI_SERVICE_ANALYSIS_PATH: "/internal/ai/analysis-jobs"
+  AWS_REGION: "ap-northeast-2"
   RAW_AUDIO_BUCKET: "utterai-dev-raw-audio"
+  TEMPLATE_BUCKET: "utterai-dev-documents"
+  PRESIGNED_URL_EXPIRE_SECONDS: "900"
   SQS_AUDIO_PREPROCESS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-audio-preprocess-queue"
-  # OTEL Collector는 utterai-observability 네임스페이스에서 실행 중
+  SQS_REPORT_ANALYSIS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-report-analysis-queue"
   OTEL_SERVICE_NAME: "backend"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.utterai-observability.svc.cluster.local:4318"
   OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
@@ -171,3 +172,4 @@ data:
   OTEL_LOGS_EXPORTER: "none"
   OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=dev,team=utterai"
   CLOUDWATCH_LOG_GROUP: "/aws/eks/utterai-dev/backend"
+  CORS_ORIGINS: "https://d4kxfdssuth29.cloudfront.net"
