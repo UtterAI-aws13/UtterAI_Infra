@@ -59,6 +59,11 @@ variable "worker_node_instance_type" {
   default = "m5.xlarge"
 }
 
+variable "worker_node_disk_size" {
+  type    = number
+  default = 50
+}
+
 variable "gpu_node_desired_size" {
   type    = number
   default = 0

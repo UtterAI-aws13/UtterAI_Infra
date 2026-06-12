@@ -258,6 +258,7 @@ resource "aws_eks_node_group" "worker" {
 
   instance_types = [var.worker_node_instance_type]
   capacity_type  = "ON_DEMAND"
+  disk_size      = var.worker_node_disk_size
 
   scaling_config {
     desired_size = var.worker_node_desired_size

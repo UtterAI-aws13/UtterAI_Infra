@@ -77,9 +77,11 @@ spec:
             requests:
               cpu: "2"
               memory: "4Gi"
+              ephemeral-storage: "10Gi"
             limits:
               cpu: "4"
               memory: "8Gi"
+              ephemeral-storage: "20Gi"
           lifecycle:
             # preStop: SIGTERM 전 5초 대기 — 처리 중인 음성 파일 S3 업로드 완료 보장
             preStop:
