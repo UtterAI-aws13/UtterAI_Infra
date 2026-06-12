@@ -15,6 +15,12 @@ metadata:
   namespace: utterai-ai-gpu
 spec:
   replicas: 1
+  # GPU가 1개뿐이므로 구 파드를 먼저 종료 후 신 파드 기동 (Recreate에 가깝게 동작)
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
   selector:
     matchLabels:
       app: utterai-ml-gpu-worker
