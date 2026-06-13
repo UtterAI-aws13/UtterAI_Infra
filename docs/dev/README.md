@@ -11,6 +11,7 @@
 3. [디렉토리 구조](#3-디렉토리-구조)
 4. [State 레이어 구조](#4-state-레이어-구조)
 5. [사전 준비](#5-사전-준비)
+   - [5.6 EKS 접근 권한 및 kubeconfig 설정](#56-eks-접근-권한-및-kubeconfig-설정)
 6. [적용 순서](#6-적용-순서)
    - [기존 단일 State에서 마이그레이션하는 경우](#61-기존-단일-state에서-마이그레이션하는-경우)
    - [처음부터 새로 배포하는 경우](#62-처음부터-새로-배포하는-경우)
@@ -274,6 +275,88 @@ aws secretsmanager create-secret \
 # 확인
 aws secretsmanager list-secrets --region ap-northeast-2 \
   --query 'SecretList[?starts_with(Name, `utterai-dev`)].Name'
+```
+
+### 5.6 EKS 접근 권한 및 kubeconfig 설정
+
+> `aws configure`는 AWS CLI 자격증명만 설정한다. EKS kubectl 접근을 위해서는 **① IAM 권한 부여 → ② kubeconfig 업데이트** 두 단계가 모두 필요하다.
+
+#### ① IAM 사용자/역할에 EKS 접근 권한 부여
+
+EKS 1.29 이상은 **EKS Access Entry** 방식을 사용한다. 클러스터 생성자(또는 Admin)가 아래 명령으로 팀원의 IAM 사용자나 역할을 등록한다.
+
+```bash
+# 현재 등록된 Access Entry 확인
+aws eks list-access-entries --cluster-name utterai-dev-eks --region ap-northeast-2
+
+# IAM 사용자에게 클러스터 관리자 권한 부여
+aws eks create-access-entry \
+  --cluster-name utterai-dev-eks \
+  --principal-arn arn:aws:iam::032886669461:user/<IAM-사용자명> \
+  --region ap-northeast-2
+
+aws eks associate-access-policy \
+  --cluster-name utterai-dev-eks \
+  --principal-arn arn:aws:iam::032886669461:user/<IAM-사용자명> \
+  --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy \
+  --access-scope type=cluster \
+  --region ap-northeast-2
+```
+
+권한 수준별 정책:
+
+| 정책 ARN | 설명 |
+|---|---|
+| `AmazonEKSClusterAdminPolicy` | 클러스터 전체 관리 (cluster-admin) |
+| `AmazonEKSAdminPolicy` | 네임스페이스 포함 대부분의 관리 |
+| `AmazonEKSEditPolicy` | 워크로드 배포/수정 (읽기+쓰기) |
+| `AmazonEKSViewPolicy` | 읽기 전용 |
+
+> **팀 합류 시**: 클러스터 생성자에게 IAM 사용자 ARN을 전달하여 Access Entry 등록을 요청한다.
+
+---
+
+#### ② kubeconfig 업데이트
+
+AWS CLI 자격증명이 올바르게 설정된 후 아래 명령을 실행한다.
+
+```bash
+# 1. 현재 자격증명 확인 (이 사용자가 Access Entry에 등록되어 있어야 함)
+aws sts get-caller-identity
+
+# 2. kubeconfig 업데이트
+aws eks update-kubeconfig \
+  --name utterai-dev-eks \
+  --region ap-northeast-2
+
+# 3. context 전환 확인
+kubectl config current-context
+# 출력: arn:aws:eks:ap-northeast-2:032886669461:cluster/utterai-dev-eks
+
+# 4. 접근 확인
+kubectl get nodes
+```
+
+#### 자주 발생하는 문제
+
+| 증상 | 원인 | 해결 |
+|---|---|---|
+| `kubectl`이 docker-desktop 등 로컬 클러스터를 바라봄 | kubeconfig 업데이트 미실행 | `aws eks update-kubeconfig` 실행 |
+| `error: You must be logged in to the server (Unauthorized)` | IAM 사용자가 Access Entry에 없음 | 클러스터 관리자에게 등록 요청 |
+| `error: no such host` | 잘못된 region 또는 cluster name | `--region ap-northeast-2 --name utterai-dev-eks` 확인 |
+| `could not load credentials file` | `aws configure` 미완료 | `aws configure` 후 `aws sts get-caller-identity`로 확인 |
+
+#### 여러 context 관리 (선택)
+
+```bash
+# 등록된 context 목록
+kubectl config get-contexts
+
+# 특정 context로 전환
+kubectl config use-context arn:aws:eks:ap-northeast-2:032886669461:cluster/utterai-dev-eks
+
+# 특정 context를 명시하여 명령 실행 (전환 없이)
+kubectl get nodes --context=<context-name>
 ```
 
 ---
