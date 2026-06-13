@@ -279,6 +279,11 @@ resource "aws_iam_role_policy" "ai_ml_gpu" {
         Action   = ["s3:GetObject", "s3:PutObject"]
         Resource = ["${var.raw_audio_bucket_arn}/*"]
       },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = ["${var.reports_bucket_arn}/*"]
+      },
     ]
   })
 }
