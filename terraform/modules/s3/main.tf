@@ -2,10 +2,11 @@ locals {
   prefix = "${var.project_name}-${var.environment}"
 
   buckets = {
-    frontend  = "${local.prefix}-frontend"
-    raw_audio = "${local.prefix}-raw-audio"
-    documents = "${local.prefix}-documents"
-    reports   = "${local.prefix}-reports"
+    frontend   = "${local.prefix}-frontend"
+    raw_audio  = "${local.prefix}-raw-audio"
+    template   = "${local.prefix}-template"
+    rag_ingest = "${local.prefix}-rag-ingest"
+    reports    = "${local.prefix}-reports"
   }
 }
 

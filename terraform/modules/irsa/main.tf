@@ -318,6 +318,11 @@ resource "aws_iam_role_policy" "batch" {
       },
       {
         Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = ["${var.rag_ingest_bucket_arn}/*"]
+      },
+      {
+        Effect   = "Allow"
         Action   = ["s3:PutObject"]
         Resource = ["${var.reports_bucket_arn}/*"]
       },

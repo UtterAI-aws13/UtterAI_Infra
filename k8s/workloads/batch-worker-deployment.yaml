@@ -38,7 +38,7 @@ spec:
             - name: SQS_RAG_INGEST_QUEUE_URL
               value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-rag-ingest-queue"
             - name: S3_BUCKET_RAG
-              value: "utterai-dev-documents"
+              value: "utterai-dev-rag-ingest"
             # DB 접속 정보 — ExternalSecret이 Secrets Manager에서 동기화한 Secret에서 참조
             - name: DB_USER
               valueFrom:
