@@ -17,6 +17,7 @@ images:
     newTag: prod-placeholder
 
 patches:
+  - path: patch-active-service.yaml
   - path: patch-configmap.yaml
   - path: patch-deployment.yaml
   - path: patch-hpa.yaml

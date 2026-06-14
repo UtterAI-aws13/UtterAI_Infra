@@ -68,10 +68,12 @@ jobs:
             TARGET_BRANCH="main"
             OVERLAY_PATH="k8s-demo/apps/backend/overlays/dev"
             EXPECTED_TAG_PREFIX="dev-"
+            DEPLOY_STRATEGY="rolling"
           elif [ "$TARGET_ENV" = "prod" ]; then
             TARGET_BRANCH="main"
             OVERLAY_PATH="k8s-demo/apps/backend/overlays/prod"
             EXPECTED_TAG_PREFIX="prod-"
+            DEPLOY_STRATEGY="blue-green"
           else
             echo "target_env는 dev 또는 prod만 허용합니다."
             exit 1
@@ -112,6 +114,7 @@ jobs:
             echo "image_tag=$IMAGE_TAG"
             echo "ecr_registry=$ECR_REGISTRY"
             echo "ecr_repository=$ECR_REPOSITORY"
+            echo "deploy_strategy=$DEPLOY_STRATEGY"
           } >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub App token
@@ -133,27 +136,104 @@ jobs:
         uses: azure/setup-kubectl@v4
 
       - name: Update Kustomize image
+        id: update_image
         env:
           OVERLAY_PATH: ${{ steps.meta.outputs.overlay_path }}
           IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
           ECR_REGISTRY: ${{ steps.meta.outputs.ecr_registry }}
           ECR_REPOSITORY: ${{ steps.meta.outputs.ecr_repository }}
+          DEPLOY_STRATEGY: ${{ steps.meta.outputs.deploy_strategy }}
         run: |
           KUSTOMIZATION_FILE="$OVERLAY_PATH/kustomization.yaml"
+          ACTIVE_SERVICE_PATCH="$OVERLAY_PATH/patch-active-service.yaml"
 
           if [ ! -f "$KUSTOMIZATION_FILE" ]; then
             echo "$KUSTOMIZATION_FILE 파일을 찾을 수 없습니다."
             exit 1
           fi
 
+          if [ ! -f "$ACTIVE_SERVICE_PATCH" ]; then
+            echo "$ACTIVE_SERVICE_PATCH 파일을 찾을 수 없습니다."
+            exit 1
+          fi
+
           IMAGE_NAME="$ECR_REGISTRY/$ECR_REPOSITORY"
 
-          # TODO: image 항목이 늘어나면 yq 기반 갱신으로 바꾸는 것을 검토합니다.
-          sed -i "s#^\([[:space:]]*newName:\).*#\1 $IMAGE_NAME#" "$KUSTOMIZATION_FILE"
-          sed -i "s#^\([[:space:]]*newTag:\).*#\1 $IMAGE_TAG#" "$KUSTOMIZATION_FILE"
+          ACTIVE_COLOR="$(ruby -ryaml -e '
+            data = YAML.load_file(ARGV.fetch(0))
+            puts data.fetch("spec").fetch("selector").fetch("color")
+          ' "$ACTIVE_SERVICE_PATCH")"
+
+          if [ "$ACTIVE_COLOR" != "blue" ] && [ "$ACTIVE_COLOR" != "green" ]; then
+            echo "active color는 blue 또는 green만 허용합니다. 현재 값: $ACTIVE_COLOR"
+            exit 1
+          fi
+
+          if [ "$DEPLOY_STRATEGY" = "rolling" ]; then
+            TARGET_COLOR="blue-green"
+          elif [ "$ACTIVE_COLOR" = "blue" ]; then
+            TARGET_COLOR="green"
+          else
+            TARGET_COLOR="blue"
+          fi
+
+          export KUSTOMIZATION_FILE IMAGE_NAME IMAGE_TAG TARGET_COLOR
+          export ACTIVE_COLOR DEPLOY_STRATEGY
+
+          ruby -ryaml -e '
+            file = ENV.fetch("KUSTOMIZATION_FILE")
+            data = YAML.load_file(file)
+            images = data.fetch("images")
+            active_name = "utterai-backend-#{ENV.fetch("ACTIVE_COLOR")}"
+
+            if ENV.fetch("DEPLOY_STRATEGY") == "rolling"
+              target_names = ["utterai-backend-blue", "utterai-backend-green"]
+              bootstrap = false
+            else
+              target_names = ["utterai-backend-#{ENV.fetch("TARGET_COLOR")}"]
+              active_image = images.find { |item| item["name"] == active_name }
+              bootstrap = active_image.nil? || active_image.fetch("newTag", "").include?("placeholder")
+              target_names << active_name if bootstrap && active_image
+            end
+
+            target_images = images.select { |item| target_names.include?(item["name"]) }
+
+            if target_images.length != target_names.uniq.length
+              found_names = target_images.map { |item| item["name"] }
+              missing_names = target_names.uniq - found_names
+              warn "image 항목을 찾을 수 없습니다: #{missing_names.join(", ")}"
+              exit 1
+            end
+
+            target_images.each do |image|
+              image["newName"] = ENV.fetch("IMAGE_NAME")
+              image["newTag"] = ENV.fetch("IMAGE_TAG")
+            end
+
+            File.write(file, data.to_yaml)
+
+            File.open(ENV.fetch("GITHUB_OUTPUT"), "a") do |output|
+              output.puts "bootstrap=#{bootstrap}"
+            end
+          '
+
+          {
+            echo "active_color=$ACTIVE_COLOR"
+            echo "target_color=$TARGET_COLOR"
+          } >> "$GITHUB_OUTPUT"
 
           echo "Updated $KUSTOMIZATION_FILE"
-          grep -A3 "name: utterai-backend" "$KUSTOMIZATION_FILE"
+          echo "Deploy strategy: $DEPLOY_STRATEGY"
+          echo "Active color: $ACTIVE_COLOR"
+          echo "Deploy target color: $TARGET_COLOR"
+          BOOTSTRAP_MODE="$(grep '^bootstrap=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2)"
+          echo "Bootstrap mode: $BOOTSTRAP_MODE"
+          if [ "$DEPLOY_STRATEGY" = "rolling" ]; then
+            grep -A3 "name: utterai-backend-blue" "$KUSTOMIZATION_FILE"
+            grep -A3 "name: utterai-backend-green" "$KUSTOMIZATION_FILE"
+          else
+            grep -A3 "name: utterai-backend-$TARGET_COLOR" "$KUSTOMIZATION_FILE"
+          fi
 
       - name: Validate Kustomize render
         env:
@@ -167,9 +247,13 @@ jobs:
           TARGET_ENV: ${{ steps.meta.outputs.target_env }}
           TARGET_BRANCH: ${{ steps.meta.outputs.target_branch }}
           IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+          DEPLOY_STRATEGY: ${{ steps.meta.outputs.deploy_strategy }}
+          ACTIVE_COLOR: ${{ steps.update_image.outputs.active_color }}
+          TARGET_COLOR: ${{ steps.update_image.outputs.target_color }}
+          BOOTSTRAP: ${{ steps.update_image.outputs.bootstrap }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          UPDATE_BRANCH="ci/backend-${TARGET_ENV}-${IMAGE_TAG}-${GITHUB_RUN_ID}"
+          UPDATE_BRANCH="ci/backend-${TARGET_ENV}-${DEPLOY_STRATEGY}-${IMAGE_TAG}-${GITHUB_RUN_ID}"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -187,15 +271,20 @@ jobs:
           PR_URL="$(gh pr create \
             --base "$TARGET_BRANCH" \
             --head "$UPDATE_BRANCH" \
-            --title "ci(backend): update $TARGET_ENV image tag to $IMAGE_TAG" \
+            --title "ci(backend): deploy $IMAGE_TAG to $TARGET_ENV" \
             --body "Backend image tag를 \`$IMAGE_TAG\`로 갱신합니다.
 
           변경 대상:
           - 환경: \`$TARGET_ENV\`
           - 기준 브랜치: \`$TARGET_BRANCH\`
+          - 배포 전략: \`$DEPLOY_STRATEGY\`
+          - 현재 active color: \`$ACTIVE_COLOR\`
+          - 배포 대상 color: \`$TARGET_COLOR\`
           - image tag: \`$IMAGE_TAG\`
 
-          이 PR은 보호 브랜치에 직접 push하지 않고 GitOps image tag 변경을 리뷰 가능한 PR로 남기기 위해 생성되었습니다.")"
+          dev 환경은 blue/green 양쪽 image tag를 함께 갱신해 promote 없이 rolling update처럼 배포합니다.
+          prod 환경은 active Service를 전환하지 않고 inactive color image tag만 갱신합니다.
+          prod에서는 Argo CD sync 후 \`$TARGET_COLOR\` Pod를 검증하고, promote workflow로 Service selector를 전환해야 합니다.")"
 
           echo "Created PR: $PR_URL"
 

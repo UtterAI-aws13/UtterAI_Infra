@@ -11,6 +11,8 @@ resources:
   - deployment-blue.yaml
   - deployment-green.yaml
   - service.yaml
+  - service-blue.yaml
+  - service-green.yaml
   - hpa-blue.yaml
   - hpa-green.yaml
   - ingress.yaml

@@ -1,0 +1,202 @@
+name: Backend BlueGreen Promote
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: "트래픽 전환 대상 환경입니다. dev 또는 prod만 허용합니다."
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+      promote_color:
+        description: "active Service가 바라볼 color입니다."
+        required: true
+        type: choice
+        options:
+          - blue
+          - green
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  promote:
+    name: Promote backend color
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.target_env }}
+
+    steps:
+      - name: Prepare promote metadata
+        id: meta
+        env:
+          INPUT_TARGET_ENV: ${{ inputs.target_env }}
+          INPUT_PROMOTE_COLOR: ${{ inputs.promote_color }}
+        run: |
+          TARGET_ENV="$INPUT_TARGET_ENV"
+          PROMOTE_COLOR="$INPUT_PROMOTE_COLOR"
+          TARGET_BRANCH="main"
+
+          if [ "$TARGET_ENV" = "dev" ]; then
+            OVERLAY_PATH="k8s-demo/apps/backend/overlays/dev"
+          elif [ "$TARGET_ENV" = "prod" ]; then
+            OVERLAY_PATH="k8s-demo/apps/backend/overlays/prod"
+          else
+            echo "target_env는 dev 또는 prod만 허용합니다."
+            exit 1
+          fi
+
+          if [ "$PROMOTE_COLOR" != "blue" ] && [ "$PROMOTE_COLOR" != "green" ]; then
+            echo "promote_color는 blue 또는 green만 허용합니다."
+            exit 1
+          fi
+
+          {
+            echo "target_env=$TARGET_ENV"
+            echo "target_branch=$TARGET_BRANCH"
+            echo "overlay_path=$OVERLAY_PATH"
+            echo "promote_color=$PROMOTE_COLOR"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.UTTERAI_GITOPS_APP_CLIENT_ID }}
+          private-key: ${{ secrets.UTTERAI_GITOPS_APP_PRIVATE_KEY }}
+          owner: UtterAI-aws13
+          repositories: UtterAI_Infra
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Checkout GitOps repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.target_branch }}
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Update active Service color
+        id: update_service
+        env:
+          OVERLAY_PATH: ${{ steps.meta.outputs.overlay_path }}
+          PROMOTE_COLOR: ${{ steps.meta.outputs.promote_color }}
+        run: |
+          ACTIVE_SERVICE_PATCH="$OVERLAY_PATH/patch-active-service.yaml"
+
+          if [ ! -f "$ACTIVE_SERVICE_PATCH" ]; then
+            echo "$ACTIVE_SERVICE_PATCH 파일을 찾을 수 없습니다."
+            exit 1
+          fi
+
+          CURRENT_COLOR="$(ruby -ryaml -e '
+            data = YAML.load_file(ARGV.fetch(0))
+            puts data.fetch("spec").fetch("selector").fetch("color")
+          ' "$ACTIVE_SERVICE_PATCH")"
+
+          if [ "$CURRENT_COLOR" = "$PROMOTE_COLOR" ]; then
+            echo "이미 $PROMOTE_COLOR color가 active입니다."
+            echo "current_color=$CURRENT_COLOR" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          export ACTIVE_SERVICE_PATCH PROMOTE_COLOR
+
+          ruby -ryaml -e '
+            file = ENV.fetch("ACTIVE_SERVICE_PATCH")
+            data = YAML.load_file(file)
+            data["spec"] ||= {}
+            data["spec"]["selector"] ||= {}
+            data["spec"]["selector"]["app"] = "utterai-api"
+            data["spec"]["selector"]["color"] = ENV.fetch("PROMOTE_COLOR")
+            File.write(file, data.to_yaml)
+          '
+
+          {
+            echo "current_color=$CURRENT_COLOR"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Current active color: $CURRENT_COLOR"
+          echo "Promote color: $PROMOTE_COLOR"
+          cat "$ACTIVE_SERVICE_PATCH"
+
+      - name: Validate Kustomize render
+        env:
+          OVERLAY_PATH: ${{ steps.meta.outputs.overlay_path }}
+          PROMOTE_COLOR: ${{ steps.meta.outputs.promote_color }}
+        run: |
+          kubectl kustomize "$OVERLAY_PATH" > /tmp/backend-promote-rendered.yaml
+          ruby -ryaml -e '
+            service = YAML.load_stream(File.read("/tmp/backend-promote-rendered.yaml")).find do |doc|
+              doc.is_a?(Hash) &&
+                doc["kind"] == "Service" &&
+                doc.dig("metadata", "name") == "utterai-api-service"
+            end
+
+            unless service
+              warn "utterai-api-service 렌더링 결과를 찾을 수 없습니다."
+              exit 1
+            end
+
+            actual_color = service.dig("spec", "selector", "color")
+            expected_color = ENV.fetch("PROMOTE_COLOR")
+
+            unless actual_color == expected_color
+              warn "active Service selector color가 기대값과 다릅니다. expected=#{expected_color}, actual=#{actual_color}"
+              exit 1
+            end
+
+            puts "active Service selector color: #{actual_color}"
+          '
+
+      - name: Create promote pull request
+        env:
+          TARGET_ENV: ${{ steps.meta.outputs.target_env }}
+          TARGET_BRANCH: ${{ steps.meta.outputs.target_branch }}
+          PROMOTE_COLOR: ${{ steps.meta.outputs.promote_color }}
+          CURRENT_COLOR: ${{ steps.update_service.outputs.current_color }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          UPDATE_BRANCH="ci/backend-promote-${TARGET_ENV}-${PROMOTE_COLOR}-${GITHUB_RUN_ID}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet; then
+            echo "변경 사항이 없어 PR을 생성하지 않습니다."
+            exit 0
+          fi
+
+          git checkout -b "$UPDATE_BRANCH"
+          git add k8s-demo/apps/backend/overlays
+          git commit -m "ci(backend): promote $TARGET_ENV traffic to $PROMOTE_COLOR"
+          git push origin "$UPDATE_BRANCH"
+
+          PR_URL="$(gh pr create \
+            --base "$TARGET_BRANCH" \
+            --head "$UPDATE_BRANCH" \
+            --title "ci(backend): promote $TARGET_ENV traffic to $PROMOTE_COLOR" \
+            --body "Backend blue-green active Service를 \`$PROMOTE_COLOR\` color로 전환합니다.
+
+          변경 대상:
+          - 환경: \`$TARGET_ENV\`
+          - 기준 브랜치: \`$TARGET_BRANCH\`
+          - 이전 active color: \`$CURRENT_COLOR\`
+          - promote color: \`$PROMOTE_COLOR\`
+
+          이 PR은 image tag를 변경하지 않고 active Service selector만 변경합니다.
+          문제가 생기면 같은 workflow에서 이전 color를 선택해 rollback할 수 있습니다.")"
+
+          echo "Created PR: $PR_URL"
+
+          if [ "$TARGET_ENV" = "dev" ]; then
+            echo "dev promote PR은 필수 CI 통과 후 자동 merge되도록 설정합니다."
+            gh pr merge "$PR_URL" --auto --squash --delete-branch
+          else
+            echo "prod promote PR은 사람이 검토하고 merge해야 합니다."
+          fi
