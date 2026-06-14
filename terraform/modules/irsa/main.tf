@@ -153,6 +153,7 @@ resource "aws_iam_role_policy" "api" {
         Resource = [
           "${var.raw_audio_bucket_arn}/*",
           "${var.reports_bucket_arn}/*",
+          "${var.documents_bucket_arn}/*",
         ]
       },
       {
