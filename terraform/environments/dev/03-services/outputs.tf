@@ -24,8 +24,12 @@ output "raw_audio_bucket_arn" {
   value = module.s3.raw_audio_bucket_arn
 }
 
-output "documents_bucket_name" {
-  value = module.s3.documents_bucket_name
+output "template_bucket_name" {
+  value = module.s3.template_bucket_name
+}
+
+output "rag_ingest_bucket_name" {
+  value = module.s3.rag_ingest_bucket_name
 }
 
 output "reports_bucket_name" {
