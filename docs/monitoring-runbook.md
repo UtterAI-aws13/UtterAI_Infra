@@ -1,0 +1,305 @@
+# Monitoring Runbook
+
+> 팀원이 EKS 모니터링 화면을 로컬에서 확인할 때 쓰는 실행 가이드.  
+> 현재 명령어 예시는 dev 기준이며, prod에서도 흐름은 동일하지만 클러스터 이름, AWS 계정/profile, 저장소 정책은 환경에 맞게 바꿔야 한다.
+
+## 환경별 차이
+
+모니터링 확인 방식 자체는 dev/prod 공통이다.
+
+```text
+kubeconfig 설정
+  -> kubectl로 EKS 접근 확인
+  -> Grafana port-forward
+  -> Prometheus Metrics 확인
+  -> Loki Logs 확인
+```
+
+환경별로 달라지는 값:
+
+| 항목 | Dev 예시 | Prod 예시 |
+|---|---|---|
+| EKS Cluster | `utterai-dev-eks` | `utterai-prod-eks` |
+| AWS Account/Profile | dev 계정/profile | prod 계정/profile |
+| Region | `ap-northeast-2` | 운영 배포 Region |
+| Grafana Service | `kube-prometheus-stack-grafana` | 배포 이름에 따라 다를 수 있음 |
+| Loki 저장 방식 | 임시 저장소 가능 | S3 backend 또는 영속 저장소 권장 |
+| 접근 방식 | 로컬 `port-forward` | 운영 정책에 따라 VPN/SSO/Ingress/port-forward |
+
+## 현재 구성
+
+```text
+Kubernetes Metrics/Exporters
+  -> Prometheus
+  -> Grafana Dashboard
+
+Pod stdout/stderr logs
+  -> Promtail
+  -> Loki
+  -> Grafana Explore
+
+AWS Managed Services
+  -> CloudWatch
+```
+
+주요 네임스페이스:
+
+| Namespace | 역할 |
+|---|---|
+| `monitoring` | Grafana, Prometheus, kube-state-metrics, node-exporter, Loki, Promtail |
+| `utterai-observability` | OpenTelemetry Collector |
+| `utterai-api`, `utterai-ai-*`, `utterai-batch` | 애플리케이션 워크로드 |
+
+## 사전 조건
+
+로컬 터미널에서 아래가 가능해야 한다.
+
+```bash
+aws sts get-caller-identity
+kubectl get nodes
+kubectl get pods -n monitoring
+```
+
+`kubectl get nodes`가 안 되면 먼저 kubeconfig와 EKS access entry를 확인한다.
+
+dev 예시:
+
+```bash
+aws eks update-kubeconfig \
+  --region ap-northeast-2 \
+  --name utterai-dev-eks
+```
+
+prod 예시:
+
+```bash
+aws eks update-kubeconfig \
+  --region ap-northeast-2 \
+  --name utterai-prod-eks
+```
+
+## Grafana 접속
+
+Grafana는 외부에 직접 노출하지 않고, 로컬에서 `port-forward`로 접속한다.
+
+```bash
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80
+```
+
+브라우저에서 접속:
+
+```text
+http://localhost:3000
+```
+
+기본 계정:
+
+```text
+Username: admin
+Password: Kubernetes Secret 기준으로 확인
+```
+
+비밀번호 확인:
+
+```bash
+kubectl get secret -n monitoring kube-prometheus-stack-grafana \
+  -o jsonpath="{.data.admin-password}" | base64 -d; echo
+```
+
+접속이 끝나면 `port-forward`를 실행한 터미널에서 `Ctrl+C`로 종료한다.
+
+## Prometheus / Metrics 확인
+
+Grafana에서 대시보드를 확인한다.
+
+추천 확인 항목:
+
+| Panel | 확인 내용 |
+|---|---|
+| `Ready Nodes` | 현재 Ready 상태 노드 수 |
+| `Pending Pods` | 스케줄링 대기 중인 Pod 수 |
+| `Unschedulable Pods` | 노드 부족/taint/resource 부족 등으로 스케줄 불가 Pod |
+| `Pod Restarts 15m` | 최근 재시작 여부 |
+| `Node CPU / Memory Usage` | 노드별 사용률 |
+| `Cluster Requested Resource Ratio` | 요청 리소스 대비 allocatable 비율 |
+| `Cluster Autoscaler Activity` | CA scale-up/down 흐름 |
+
+Prometheus 쿼리 예시:
+
+```promql
+up
+kube_node_status_condition{condition="Ready",status="true"}
+kube_pod_status_phase{phase="Pending"}
+kube_pod_container_status_restarts_total
+```
+
+OpenTelemetry Collector scrape 여부:
+
+```promql
+up{job=~".*otel.*"}
+```
+
+## Loki / Logs 확인
+
+Loki와 Promtail이 적용된 상태라면 다음 리소스가 보여야 한다.
+
+```bash
+kubectl get pods -n monitoring | grep -E "loki|promtail"
+kubectl get svc -n monitoring | grep loki
+```
+
+Grafana에서 확인:
+
+1. 왼쪽 메뉴에서 `Explore` 진입
+2. datasource를 `Loki`로 선택
+3. 아래 LogQL 쿼리 실행
+
+전체 로그 라벨 확인:
+
+```logql
+{namespace=~".+"}
+```
+
+특정 네임스페이스 로그:
+
+```logql
+{namespace="utterai-api"}
+{namespace="utterai-ai-api"}
+{namespace="utterai-ai-cpu"}
+{namespace="utterai-ai-gpu"}
+{namespace="utterai-batch"}
+```
+
+특정 Pod 로그:
+
+```logql
+{pod=~"utterai-api-.*"}
+```
+
+에러성 로그 검색:
+
+```logql
+{namespace=~"utterai-.*"} |= "ERROR"
+```
+
+## 현재 Loki 저장 방식
+
+현재 dev 검증용 Loki는 임시 저장소 모드다.
+
+```text
+singleBinary.persistence.enabled = false
+```
+
+의미:
+
+| 항목 | 설명 |
+|---|---|
+| 장점 | EBS PVC를 만들지 않으므로 비용/설정 부담이 작다 |
+| 단점 | Loki Pod가 재시작되면 저장된 로그가 사라질 수 있다 |
+| 목적 | Grafana에서 로그 수집 흐름이 되는지 확인하는 dev 검증용 |
+
+prod 또는 장기 보관 단계에서는 S3 backend 또는 EBS PVC 기반 저장소로 전환한다.
+
+## 자주 보는 kubectl 명령
+
+모니터링 Pod 상태:
+
+```bash
+kubectl get pods -n monitoring
+```
+
+Grafana Service 확인:
+
+```bash
+kubectl get svc -n monitoring kube-prometheus-stack-grafana -o wide
+```
+
+Prometheus/Grafana/Loki 이벤트 확인:
+
+```bash
+kubectl get events -n monitoring --sort-by=.lastTimestamp
+```
+
+Pod 상세 확인:
+
+```bash
+kubectl describe pod -n monitoring <pod-name>
+```
+
+Pod 로그 확인:
+
+```bash
+kubectl logs -n monitoring <pod-name>
+```
+
+## 문제 해결
+
+### Grafana port-forward가 끊기는 경우
+
+먼저 Grafana Pod와 Service를 확인한다.
+
+```bash
+kubectl get pods -n monitoring | grep grafana
+kubectl get svc -n monitoring kube-prometheus-stack-grafana -o wide
+```
+
+Service port가 `80/TCP`이면 아래처럼 연결한다.
+
+```bash
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80
+```
+
+로컬 `3000` 포트가 이미 사용 중이면 다른 포트를 사용한다.
+
+```bash
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3001:80
+```
+
+접속 URL:
+
+```text
+http://localhost:3001
+```
+
+### Grafana 로그인이 안 되는 경우
+
+Secret의 admin password를 다시 확인한다.
+
+```bash
+kubectl get secret -n monitoring kube-prometheus-stack-grafana \
+  -o jsonpath="{.data.admin-password}" | base64 -d; echo
+```
+
+그래도 안 되면 Grafana DB 안에서 비밀번호가 별도로 변경됐을 수 있다. 이 경우 팀 내에서 현재 admin password를 공유받거나, 운영자 기준으로 reset 절차를 진행한다.
+
+### Loki datasource가 안 보이는 경우
+
+Terraform `04-addons`가 최신으로 적용됐는지 확인한다.
+
+```bash
+cd ~/utter-ai/UtterAI_Infra
+terraform -chdir=terraform/environments/dev/04-addons plan
+```
+
+Grafana datasource 설정은 `kube-prometheus-stack` Helm values에 들어 있다.
+
+### Loki 로그가 안 나오는 경우
+
+Promtail이 떠 있는지 먼저 본다.
+
+```bash
+kubectl get pods -n monitoring | grep promtail
+```
+
+Promtail 로그에서 Loki push 에러가 있는지 확인한다.
+
+```bash
+kubectl logs -n monitoring <promtail-pod-name> --tail=100
+```
+
+## 종료/주의사항
+
+`port-forward`는 로컬 터미널 프로세스라서 `Ctrl+C`로 끄면 된다.  
+Grafana/Prometheus/Loki 자체는 EKS 안에서 계속 실행된다.
+
+현재 Loki는 임시 저장소라 PVC/EBS 비용은 만들지 않는다. 다만 Pod 리소스는 기존 노드에서 사용한다.

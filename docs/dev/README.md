@@ -23,6 +23,12 @@
 
 ---
 
+## 관련 Runbook
+
+- [Monitoring Runbook](../monitoring-runbook.md): Grafana 접속, Prometheus/Loki 확인, port-forward, 기본 트러블슈팅
+
+---
+
 ## 1. 환경 개요
 
 | 항목 | 값 |
