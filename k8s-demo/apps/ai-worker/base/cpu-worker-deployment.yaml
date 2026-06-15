@@ -1,9 +1,4 @@
-# CPU Worker Deployment — 음성 전처리 및 Bedrock 리포트 생성 파이프라인
-#
-# 역할 1: SQS audio-preprocess-queue 소비 → 전처리 → gpu-inference-queue로 전달
-# 역할 2: SQS report-analysis-queue 소비 → AWS Bedrock InvokeModel → S3(reports) 저장
-# LLM 추론을 Bedrock으로 위임해 GPU 없이 리포트를 생성한다.
-
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -22,68 +17,67 @@ spec:
       serviceAccountName: utterai-cpu-worker-sa
       nodeSelector:
         workload: worker
-      # SQS 메시지 처리 중 강제 종료를 막기 위해 60초 유예 설정
       terminationGracePeriodSeconds: 60
       containers:
-        - name: worker
-          image: utterai-ai-cpu:dev-placeholder
-          command: ["python", "-m", "app.workers.cpu_worker"]
-          env:
-            # HuggingFace Hub 인증 토큰 — ExternalSecret(cpu-worker-secret)에서 주입
-            - name: HF_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: cpu-worker-secret
-                  key: HF_TOKEN
-            - name: HF_HOME
-              value: "/tmp/huggingface"
-            - name: AWS_REGION
-              value: "ap-northeast-2"
-            - name: APP_ENV
-              value: "dev"
-            # 소비 큐: 백엔드 API가 음성 업로드 후 enqueue
-            - name: SQS_AUDIO_PREPROCESS_QUEUE_URL
-              value: "https://sqs.ap-northeast-2.amazonaws.com/000000000000/utterai-dev-audio-preprocess-queue"
-            # 생산 큐: 전처리 완료 후 GPU 추론 워커로 전달
-            - name: SQS_GPU_INFERENCE_QUEUE_URL
-              value: "https://sqs.ap-northeast-2.amazonaws.com/000000000000/utterai-dev-gpu-inference-queue"
-            # 소비 큐: ml-gpu-worker 추론 완료 후 Bedrock 분석 단계
-            - name: SQS_REPORT_ANALYSIS_QUEUE_URL
-              value: "https://sqs.ap-northeast-2.amazonaws.com/000000000000/utterai-dev-report-analysis-queue"
-            - name: S3_BUCKET_REPORT
-              value: "utterai-dev-reports"
-            - name: BEDROCK_REGION
-              value: "ap-northeast-2"
-            - name: S3_BUCKET_AUDIO
-              value: "utterai-dev-raw-audio"
-            - name: LOG_LEVEL
-              value: "DEBUG"
-            - name: OTEL_SERVICE_NAME
-              value: "cpu-worker"
-            - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: "http://otel-collector.utterai-observability.svc.cluster.local:4318"
-            - name: OTEL_EXPORTER_OTLP_PROTOCOL
-              value: "http/protobuf"
-            - name: OTEL_METRICS_EXPORTER
-              value: "otlp"
-            - name: OTEL_TRACES_EXPORTER
-              value: "otlp"
-            - name: OTEL_LOGS_EXPORTER
-              value: "none"
-            - name: OTEL_RESOURCE_ATTRIBUTES
-              value: "deployment.environment=dev,team=utterai"
-          # 음성 파일 로딩 및 전처리에 충분한 CPU/메모리 확보
-          resources:
-            requests:
-              cpu: "2"
-              memory: "4Gi"
-              ephemeral-storage: "10Gi"
-            limits:
-              cpu: "4"
-              memory: "8Gi"
-              ephemeral-storage: "20Gi"
-          lifecycle:
-            # preStop: SIGTERM 전 5초 대기 — 처리 중인 음성 파일 S3 업로드 완료 보장
-            preStop:
-              exec:
-                command: ["/bin/sh", "-c", "sleep 5"]
+      - name: worker
+        image: utterai-ai-cpu:dev-placeholder
+        command:
+        - python
+        - "-m"
+        - app.workers.cpu_worker
+        env:
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: cpu-worker-secret
+              key: HF_TOKEN
+        - name: HF_HOME
+          value: "/tmp/huggingface"
+        - name: AWS_REGION
+          value: ap-northeast-2
+        - name: APP_ENV
+          value: dev
+        - name: SQS_AUDIO_PREPROCESS_QUEUE_URL
+          value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-audio-preprocess-queue
+        - name: SQS_GPU_INFERENCE_QUEUE_URL
+          value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-gpu-inference-queue
+        - name: SQS_REPORT_ANALYSIS_QUEUE_URL
+          value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-report-analysis-queue
+        - name: S3_BUCKET_REPORT
+          value: utterai-dev-reports
+        - name: BEDROCK_REGION
+          value: ap-northeast-2
+        - name: S3_BUCKET_AUDIO
+          value: utterai-dev-raw-audio
+        - name: LOG_LEVEL
+          value: DEBUG
+        - name: OTEL_SERVICE_NAME
+          value: cpu-worker
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://otel-collector.utterai-observability.svc.cluster.local:4318
+        - name: OTEL_EXPORTER_OTLP_PROTOCOL
+          value: http/protobuf
+        - name: OTEL_METRICS_EXPORTER
+          value: otlp
+        - name: OTEL_TRACES_EXPORTER
+          value: otlp
+        - name: OTEL_LOGS_EXPORTER
+          value: none
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: deployment.environment=dev,team=utterai
+        resources:
+          requests:
+            cpu: '2'
+            memory: 4Gi
+            ephemeral-storage: 10Gi
+          limits:
+            cpu: '4'
+            memory: 8Gi
+            ephemeral-storage: 20Gi
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - "/bin/sh"
+              - "-c"
+              - sleep 5
