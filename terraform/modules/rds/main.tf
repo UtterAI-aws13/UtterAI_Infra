@@ -44,6 +44,10 @@ resource "aws_db_instance" "this" {
   engine_version = "16.9"
   instance_class = var.instance_class
 
+  lifecycle {
+    ignore_changes = [engine_version]
+  }
+
   db_name                     = var.database_name
   username                    = var.master_username
   manage_master_user_password = true

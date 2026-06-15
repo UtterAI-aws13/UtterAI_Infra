@@ -1,12 +1,9 @@
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: utterai-batch-worker
   namespace: utterai-batch
-  labels:
-    app: utterai-batch-worker
-    app.kubernetes.io/name: utterai-batch-worker
-    app.kubernetes.io/part-of: utterai
 spec:
   replicas: 1
   selector:
@@ -16,57 +13,81 @@ spec:
     metadata:
       labels:
         app: utterai-batch-worker
-        app.kubernetes.io/name: utterai-batch-worker
-        app.kubernetes.io/part-of: utterai
     spec:
       serviceAccountName: utterai-batch-worker-sa
       nodeSelector:
         workload: worker
       terminationGracePeriodSeconds: 60
       containers:
-        - name: worker
-          image: utterai-ai-cpu:dev-placeholder
-          imagePullPolicy: IfNotPresent
-          command: ["python", "-m", "app.workers.rag_ingest_worker"]
-          envFrom:
-            - configMapRef:
-                name: utterai-ai-worker-config
-          env:
-            - name: DB_USER
-              valueFrom:
-                secretKeyRef:
-                  name: ai-worker-secret
-                  key: DB_USER
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: ai-worker-secret
-                  key: DB_PASSWORD
-            - name: DB_HOST
-              valueFrom:
-                secretKeyRef:
-                  name: ai-worker-secret
-                  key: DB_HOST
-            - name: DB_PORT
-              valueFrom:
-                secretKeyRef:
-                  name: ai-worker-secret
-                  key: DB_PORT
-            - name: DB_NAME
-              valueFrom:
-                secretKeyRef:
-                  name: ai-worker-secret
-                  key: DB_NAME
-            - name: OTEL_SERVICE_NAME
-              value: "batch-worker"
-          resources:
-            requests:
-              cpu: "1"
-              memory: "2Gi"
-            limits:
-              cpu: "2"
-              memory: "4Gi"
-          lifecycle:
-            preStop:
-              exec:
-                command: ["/bin/sh", "-c", "sleep 5"]
+      - name: worker
+        image: utterai-ai-cpu:dev-placeholder
+        command:
+        - python
+        - "-m"
+        - app.workers.rag_ingest_worker
+        env:
+        - name: AWS_REGION
+          value: ap-northeast-2
+        - name: APP_ENV
+          value: dev
+        - name: SQS_RAG_INGEST_QUEUE_URL
+          value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-rag-ingest-queue
+        - name: S3_BUCKET_RAG
+          value: utterai-dev-rag-ingest
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: ai-worker-secret
+              key: DB_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ai-worker-secret
+              key: DB_PASSWORD
+        - name: DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: ai-worker-secret
+              key: DB_HOST
+        - name: DB_PORT
+          valueFrom:
+            secretKeyRef:
+              name: ai-worker-secret
+              key: DB_PORT
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: ai-worker-secret
+              key: DB_NAME
+        - name: LOG_LEVEL
+          value: DEBUG
+        - name: OTEL_SERVICE_NAME
+          value: batch-worker
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://otel-collector.utterai-observability.svc.cluster.local:4318
+        - name: OTEL_EXPORTER_OTLP_PROTOCOL
+          value: http/protobuf
+        - name: OTEL_METRICS_EXPORTER
+          value: otlp
+        - name: OTEL_TRACES_EXPORTER
+          value: otlp
+        - name: OTEL_LOGS_EXPORTER
+          value: none
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: deployment.environment=dev,team=utterai
+        resources:
+          requests:
+            cpu: '1'
+            memory: 2Gi
+            ephemeral-storage: 5Gi
+          limits:
+            cpu: '2'
+            memory: 4Gi
+            ephemeral-storage: 10Gi
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - "/bin/sh"
+              - "-c"
+              - sleep 5

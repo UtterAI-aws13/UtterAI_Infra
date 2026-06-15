@@ -1,14 +1,16 @@
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: utterai-ml-gpu-worker
   namespace: utterai-ai-gpu
-  labels:
-    app: utterai-ml-gpu-worker
-    app.kubernetes.io/name: utterai-ml-gpu-worker
-    app.kubernetes.io/part-of: utterai
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
   selector:
     matchLabels:
       app: utterai-ml-gpu-worker
@@ -16,52 +18,101 @@ spec:
     metadata:
       labels:
         app: utterai-ml-gpu-worker
-        app.kubernetes.io/name: utterai-ml-gpu-worker
-        app.kubernetes.io/part-of: utterai
         worker-type: ml-gpu
     spec:
       serviceAccountName: utterai-ml-gpu-worker-sa
       nodeSelector:
         workload: ai-gpu
       tolerations:
-        - key: dedicated
-          operator: Equal
-          value: ai-gpu
-          effect: NoSchedule
-        - key: nvidia.com/gpu
-          operator: Exists
-          effect: NoSchedule
+      - key: dedicated
+        operator: Equal
+        value: ai-gpu
+        effect: NoSchedule
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
       terminationGracePeriodSeconds: 300
       containers:
-        - name: ml-gpu-worker
-          image: utterai-ai-gpu:dev-placeholder
-          imagePullPolicy: IfNotPresent
-          command: ["python", "-m", "app.workers.ml_gpu_worker"]
-          envFrom:
-            - configMapRef:
-                name: utterai-ai-worker-config
-          env:
-            - name: WORKER_TYPE
-              value: "ml-gpu"
-            - name: HF_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: gpu-worker-secret
-                  key: HF_TOKEN
-            - name: HF_HOME
-              value: "/tmp/huggingface"
-            - name: OTEL_SERVICE_NAME
-              value: "ml-gpu-worker"
-          resources:
-            requests:
-              cpu: "2"
-              memory: "8Gi"
-              nvidia.com/gpu: "1"
-            limits:
-              cpu: "4"
-              memory: "14Gi"
-              nvidia.com/gpu: "1"
-          lifecycle:
-            preStop:
-              exec:
-                command: ["/bin/sh", "-c", "sleep 10"]
+      - name: ml-gpu-worker
+        image: utterai-ai-gpu:dev-placeholder
+        command:
+        - python
+        - "-m"
+        - app.workers.ml_gpu_worker
+        env:
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: gpu-worker-secret
+              key: HF_TOKEN
+        - name: HF_HOME
+          value: "/tmp/huggingface"
+        - name: AWS_REGION
+          value: ap-northeast-2
+        - name: APP_ENV
+          value: dev
+        - name: SQS_GPU_INFERENCE_QUEUE_URL
+          value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-gpu-inference-queue
+        - name: SQS_REPORT_ANALYSIS_QUEUE_URL
+          value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-report-analysis-queue
+        - name: S3_BUCKET_AUDIO
+          value: utterai-dev-raw-audio
+        - name: S3_BUCKET_REPORT
+          value: utterai-dev-reports
+        - name: BE_DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: ai-worker-secret
+              key: DB_HOST
+        - name: BE_DB_PORT
+          valueFrom:
+            secretKeyRef:
+              name: ai-worker-secret
+              key: DB_PORT
+        - name: BE_DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: ai-worker-secret
+              key: DB_USER
+        - name: BE_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ai-worker-secret
+              key: DB_PASSWORD
+        - name: BE_DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: ai-worker-secret
+              key: DB_NAME
+        - name: LOG_LEVEL
+          value: DEBUG
+        - name: OTEL_SERVICE_NAME
+          value: ml-gpu-worker
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://otel-collector.utterai-observability.svc.cluster.local:4318
+        - name: OTEL_EXPORTER_OTLP_PROTOCOL
+          value: http/protobuf
+        - name: OTEL_METRICS_EXPORTER
+          value: otlp
+        - name: OTEL_TRACES_EXPORTER
+          value: otlp
+        - name: OTEL_LOGS_EXPORTER
+          value: none
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: deployment.environment=dev,team=utterai
+        resources:
+          requests:
+            cpu: '2'
+            memory: 8Gi
+            nvidia.com/gpu: '1'
+          limits:
+            cpu: '4'
+            memory: 14Gi
+            nvidia.com/gpu: '1'
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - "/bin/sh"
+              - "-c"
+              - sleep 10

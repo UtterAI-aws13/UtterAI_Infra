@@ -153,7 +153,8 @@ resource "aws_iam_role_policy" "api" {
         Resource = [
           "${var.raw_audio_bucket_arn}/*",
           "${var.reports_bucket_arn}/*",
-          "${var.documents_bucket_arn}/*",
+          "${var.template_bucket_arn}/*",
+          "${var.rag_ingest_bucket_arn}/*",
         ]
       },
       {
@@ -285,6 +286,11 @@ resource "aws_iam_role_policy" "ai_ml_gpu" {
         Action   = ["s3:PutObject"]
         Resource = ["${var.reports_bucket_arn}/*"]
       },
+      {
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = ["arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:${local.prefix}/*"]
+      },
     ]
   })
 }
@@ -321,6 +327,11 @@ resource "aws_iam_role_policy" "batch" {
         Effect   = "Allow"
         Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility", "sqs:GetQueueAttributes"]
         Resource = [var.rag_ingest_queue_arn, var.rag_ingest_dlq_arn]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = ["${var.rag_ingest_bucket_arn}/*"]
       },
       {
         Effect   = "Allow"

@@ -1,12 +1,9 @@
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: utterai-cpu-worker
   namespace: utterai-ai-cpu
-  labels:
-    app: utterai-cpu-worker
-    app.kubernetes.io/name: utterai-cpu-worker
-    app.kubernetes.io/part-of: utterai
 spec:
   replicas: 1
   selector:
@@ -16,39 +13,71 @@ spec:
     metadata:
       labels:
         app: utterai-cpu-worker
-        app.kubernetes.io/name: utterai-cpu-worker
-        app.kubernetes.io/part-of: utterai
     spec:
       serviceAccountName: utterai-cpu-worker-sa
       nodeSelector:
         workload: worker
       terminationGracePeriodSeconds: 60
       containers:
-        - name: cpu-worker
-          image: utterai-ai-cpu:dev-placeholder
-          imagePullPolicy: IfNotPresent
-          command: ["python", "-m", "app.workers.cpu_worker"]
-          envFrom:
-            - configMapRef:
-                name: utterai-ai-worker-config
-          env:
-            - name: HF_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: cpu-worker-secret
-                  key: HF_TOKEN
-            - name: HF_HOME
-              value: "/tmp/huggingface"
-            - name: OTEL_SERVICE_NAME
-              value: "cpu-worker"
-          resources:
-            requests:
-              cpu: "2"
-              memory: "4Gi"
-            limits:
-              cpu: "4"
-              memory: "8Gi"
-          lifecycle:
-            preStop:
-              exec:
-                command: ["/bin/sh", "-c", "sleep 5"]
+      - name: worker
+        image: utterai-ai-cpu:dev-placeholder
+        command:
+        - python
+        - "-m"
+        - app.workers.cpu_worker
+        env:
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: cpu-worker-secret
+              key: HF_TOKEN
+        - name: HF_HOME
+          value: "/tmp/huggingface"
+        - name: AWS_REGION
+          value: ap-northeast-2
+        - name: APP_ENV
+          value: dev
+        - name: SQS_AUDIO_PREPROCESS_QUEUE_URL
+          value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-audio-preprocess-queue
+        - name: SQS_GPU_INFERENCE_QUEUE_URL
+          value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-gpu-inference-queue
+        - name: SQS_REPORT_ANALYSIS_QUEUE_URL
+          value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-report-analysis-queue
+        - name: S3_BUCKET_REPORT
+          value: utterai-dev-reports
+        - name: BEDROCK_REGION
+          value: ap-northeast-2
+        - name: S3_BUCKET_AUDIO
+          value: utterai-dev-raw-audio
+        - name: LOG_LEVEL
+          value: DEBUG
+        - name: OTEL_SERVICE_NAME
+          value: cpu-worker
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: http://otel-collector.utterai-observability.svc.cluster.local:4318
+        - name: OTEL_EXPORTER_OTLP_PROTOCOL
+          value: http/protobuf
+        - name: OTEL_METRICS_EXPORTER
+          value: otlp
+        - name: OTEL_TRACES_EXPORTER
+          value: otlp
+        - name: OTEL_LOGS_EXPORTER
+          value: none
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: deployment.environment=dev,team=utterai
+        resources:
+          requests:
+            cpu: '2'
+            memory: 4Gi
+            ephemeral-storage: 10Gi
+          limits:
+            cpu: '4'
+            memory: 8Gi
+            ephemeral-storage: 20Gi
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - "/bin/sh"
+              - "-c"
+              - sleep 5
