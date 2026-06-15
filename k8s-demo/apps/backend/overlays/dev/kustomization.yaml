@@ -12,7 +12,7 @@ resources:
 images:
   - name: utterai-backend
     newName: 032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend
-    newTag: dev-b760792
+    newTag: dev-9be32c7
 
 patches:
   - path: patch-configmap.yaml
