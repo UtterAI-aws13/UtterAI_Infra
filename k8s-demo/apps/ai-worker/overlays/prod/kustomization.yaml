@@ -4,36 +4,16 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - ../../base
+  - keda-trigger-auth.yaml
+  - scaledobject-cpu-worker.yaml
+  - scaledobject-ml-gpu-worker.yaml
+  - scaledobject-batch-worker.yaml
 
 patches:
   - path: patch-configmap.yaml
     target:
       kind: ConfigMap
       name: utterai-ai-worker-config
-  - path: patch-scaledobject-cpu-worker.yaml
-    target:
-      group: keda.sh
-      version: v1alpha1
-      kind: ScaledObject
-      name: utterai-cpu-worker-scaledobject
-    options:
-      allowNameChange: false
-  - path: patch-scaledobject-ml-gpu-worker.yaml
-    target:
-      group: keda.sh
-      version: v1alpha1
-      kind: ScaledObject
-      name: utterai-ml-gpu-worker-scaledobject
-    options:
-      allowNameChange: false
-  - path: patch-scaledobject-batch-worker.yaml
-    target:
-      group: keda.sh
-      version: v1alpha1
-      kind: ScaledObject
-      name: utterai-batch-worker-scaledobject
-    options:
-      allowNameChange: false
 
 # TODO: prod 배포 승인 이후 CD에서 prod-{short_sha} 또는 prod-v{semver}로 갱신합니다.
 images:

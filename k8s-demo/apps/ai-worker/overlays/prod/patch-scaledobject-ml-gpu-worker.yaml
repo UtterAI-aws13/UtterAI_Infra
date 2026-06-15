@@ -1,3 +1,0 @@
-- op: replace
-  path: /spec/triggers/0/metadata/queueURL
-  value: "TODO_PROD_GPU_INFERENCE_QUEUE_URL"

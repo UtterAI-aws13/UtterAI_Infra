@@ -1,0 +1,22 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: utterai-batch-worker-scaledobject
+  namespace: utterai-batch
+spec:
+  scaleTargetRef:
+    name: utterai-batch-worker
+  minReplicaCount: 0
+  maxReplicaCount: 5
+  cooldownPeriod: 300
+  triggers:
+    - type: aws-sqs-queue
+      authenticationRef:
+        name: keda-aws-pod-identity
+        kind: ClusterTriggerAuthentication
+      metadata:
+        queueURL: "TODO_PROD_RAG_INGEST_QUEUE_URL"
+        queueLength: "3"
+        activationQueueLength: "1"
+        awsRegion: ap-northeast-2
+        identityOwner: pod
