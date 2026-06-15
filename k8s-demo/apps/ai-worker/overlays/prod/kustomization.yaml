@@ -10,8 +10,6 @@ patches:
     target:
       kind: ConfigMap
       name: utterai-ai-worker-config
-  - path: patch-deployment.yaml
-  - path: patch-serviceaccount.yaml
   - path: patch-scaledobject-cpu-worker.yaml
     target:
       group: keda.sh
