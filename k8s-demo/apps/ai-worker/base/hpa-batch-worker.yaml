@@ -1,24 +1,29 @@
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
 metadata:
-  name: utterai-batch-worker-hpa
+  name: utterai-batch-worker-scaledobject
   namespace: utterai-batch
 spec:
   scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
     name: utterai-batch-worker
-  minReplicas: 1
-  maxReplicas: 5
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 70
-  behavior:
-    scaleUp:
-      stabilizationWindowSeconds: 60
-    scaleDown:
-      stabilizationWindowSeconds: 300
+  minReplicaCount: 0
+  maxReplicaCount: 5
+  cooldownPeriod: 300
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 30
+        scaleDown:
+          stabilizationWindowSeconds: 300
+  triggers:
+    - type: aws-sqs-queue
+      authenticationRef:
+        name: keda-aws-pod-identity
+        kind: ClusterTriggerAuthentication
+      metadata:
+        queueURL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-rag-ingest-queue"
+        queueLength: "3"
+        activationQueueLength: "1"
+        awsRegion: ap-northeast-2
+        identityOwner: pod
