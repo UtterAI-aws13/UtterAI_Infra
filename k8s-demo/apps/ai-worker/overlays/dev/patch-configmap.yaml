@@ -9,7 +9,8 @@ data:
   BEDROCK_REGION: "ap-northeast-2"
   S3_BUCKET_AUDIO: "utterai-dev-raw-audio"
   S3_BUCKET_REPORT: "utterai-dev-reports"
-  S3_BUCKET_RAG: "utterai-dev-documents"
+  S3_BUCKET_RAG: "utterai-dev-rag-ingest"
+  S3_BUCKET_TEMPLATE: "utterai-dev-template"
   # TODO: 실제 SQS URL은 Terraform output과 큐 이름 확정 후 갱신합니다.
   SQS_AUDIO_PREPROCESS_QUEUE_URL: "TODO_DEV_AUDIO_PREPROCESS_QUEUE_URL"
   SQS_GPU_INFERENCE_QUEUE_URL: "TODO_DEV_GPU_INFERENCE_QUEUE_URL"

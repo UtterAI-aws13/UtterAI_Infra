@@ -102,10 +102,11 @@ module "irsa" {
   aws_account_id    = data.aws_caller_identity.current.account_id
   aws_region        = var.aws_region
 
-  raw_audio_bucket_arn = module.s3.raw_audio_bucket_arn
-  documents_bucket_arn = module.s3.documents_bucket_arn
-  reports_bucket_arn   = module.s3.reports_bucket_arn
-  frontend_bucket_arn  = module.s3.frontend_bucket_arn
+  raw_audio_bucket_arn  = module.s3.raw_audio_bucket_arn
+  template_bucket_arn   = module.s3.template_bucket_arn
+  rag_ingest_bucket_arn = module.s3.rag_ingest_bucket_arn
+  reports_bucket_arn    = module.s3.reports_bucket_arn
+  frontend_bucket_arn   = module.s3.frontend_bucket_arn
 
   audio_preprocess_queue_arn = module.sqs.audio_preprocess_queue_arn
   gpu_inference_queue_arn    = module.sqs.gpu_inference_queue_arn

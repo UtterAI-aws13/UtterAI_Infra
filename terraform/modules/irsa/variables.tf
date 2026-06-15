@@ -30,7 +30,11 @@ variable "raw_audio_bucket_arn" {
   type = string
 }
 
-variable "documents_bucket_arn" {
+variable "template_bucket_arn" {
+  type = string
+}
+
+variable "rag_ingest_bucket_arn" {
   type = string
 }
 

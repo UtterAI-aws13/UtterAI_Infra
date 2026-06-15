@@ -14,12 +14,20 @@ output "raw_audio_bucket_arn" {
   value = aws_s3_bucket.buckets["raw_audio"].arn
 }
 
-output "documents_bucket_name" {
-  value = aws_s3_bucket.buckets["documents"].id
+output "template_bucket_name" {
+  value = aws_s3_bucket.buckets["template"].id
 }
 
-output "documents_bucket_arn" {
-  value = aws_s3_bucket.buckets["documents"].arn
+output "template_bucket_arn" {
+  value = aws_s3_bucket.buckets["template"].arn
+}
+
+output "rag_ingest_bucket_name" {
+  value = aws_s3_bucket.buckets["rag_ingest"].id
+}
+
+output "rag_ingest_bucket_arn" {
+  value = aws_s3_bucket.buckets["rag_ingest"].arn
 }
 
 output "reports_bucket_name" {
