@@ -1,15 +1,17 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: utterai-api-service
+  name: utterai-api-green-service
   labels:
     app: utterai-api
     app.kubernetes.io/name: utterai-api
     app.kubernetes.io/part-of: utterai
+    color: green
 spec:
   type: ClusterIP
   selector:
     app: utterai-api
+    color: green
   ports:
     - name: http
       port: 8080

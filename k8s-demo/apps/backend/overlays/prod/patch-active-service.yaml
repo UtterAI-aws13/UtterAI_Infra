@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: utterai-api-service
+spec:
+  # blue-green 트래픽 스위치입니다.
+  # 운영에서는 promote PR 승인 후 color 값을 blue 또는 green으로 전환합니다.
+  selector:
+    app: utterai-api
+    color: blue
