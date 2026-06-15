@@ -40,14 +40,12 @@ kubectl config current-context
 kubectl get nodes
 echo ""
 
-echo "Argo CD namespace 준비:"
-kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
-echo ""
-
-echo "Argo CD 설치/업데이트:"
-kubectl apply \
-  -n argocd \
-  -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+echo "Argo CD 설치 확인:"
+if ! kubectl get namespace argocd >/dev/null 2>&1; then
+  echo "ERROR: argocd namespace가 없습니다."
+  echo "먼저 terraform/environments/dev/04-addons 를 apply해 Argo CD를 설치해야 합니다."
+  exit 1
+fi
 echo ""
 
 echo "Argo CD rollout 대기:"
