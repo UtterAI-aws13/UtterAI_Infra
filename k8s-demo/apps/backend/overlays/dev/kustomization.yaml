@@ -9,7 +9,6 @@ resources:
   - deployment.yaml
   - hpa.yaml
 
-# TODO: GitHub Actions CD에서 newName/newTag를 실제 ECR image로 갱신합니다.
 images:
   - name: utterai-backend
     newName: 032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend
