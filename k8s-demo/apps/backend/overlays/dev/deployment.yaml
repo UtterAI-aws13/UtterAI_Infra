@@ -31,7 +31,7 @@ spec:
             app: utterai-api
       initContainers:
       - name: db-migrate
-        image: "utterai-backend:${BACKEND_TAG}"
+        image: "utterai-backend:dev-placeholder"
         command:
         - alembic
         - upgrade
@@ -47,7 +47,7 @@ spec:
               key: DB_PASSWORD
       containers:
       - name: api
-        image: "utterai-backend:${BACKEND_TAG}"
+        image: "utterai-backend:dev-placeholder"
         ports:
         - containerPort: 8080
         envFrom:

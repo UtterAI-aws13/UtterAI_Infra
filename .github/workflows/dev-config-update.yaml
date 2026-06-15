@@ -1,0 +1,266 @@
+name: Dev Config Update
+
+on:
+  workflow_dispatch:
+    inputs:
+      auto_merge:
+        description: "생성된 PR을 필수 CI 통과 후 자동 merge할지 여부입니다."
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  update-dev-config:
+    name: Update dev runtime config
+    runs-on: ubuntu-latest
+    environment:
+      name: dev
+
+    env:
+      AWS_REGION: ap-northeast-2
+      TARGET_BRANCH: main
+      TERRAFORM_DIR: terraform/environments/dev/03-services
+      AUTO_MERGE: ${{ toJSON(inputs.auto_merge) }}
+      AWS_ROLE_TO_ASSUME: ${{ vars.AWS_GITOPS_CONFIG_ROLE_ARN }}
+
+    steps:
+      - name: Validate workflow variables
+        run: |
+          if [ -z "$AWS_ROLE_TO_ASSUME" ]; then
+            echo "AWS_GITOPS_CONFIG_ROLE_ARN GitHub Variable이 필요합니다."
+            echo "이 role은 dev Terraform remote state 조회와 sts:GetCallerIdentity 권한이 있어야 합니다."
+            exit 1
+          fi
+
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.UTTERAI_GITOPS_APP_CLIENT_ID }}
+          private-key: ${{ secrets.UTTERAI_GITOPS_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Checkout GitOps repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Read dev Terraform outputs
+        id: dev-config
+        run: |
+          terraform -chdir="$TERRAFORM_DIR" init -reconfigure
+
+          AWS_ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          RDS_ENDPOINT="$(terraform -chdir="$TERRAFORM_DIR" output -raw rds_endpoint)"
+          REDIS_ENDPOINT="$(terraform -chdir="$TERRAFORM_DIR" output -raw redis_endpoint)"
+          AUDIO_PREPROCESS_QUEUE_URL="$(terraform -chdir="$TERRAFORM_DIR" output -raw audio_preprocess_queue_url)"
+          GPU_INFERENCE_QUEUE_URL="$(terraform -chdir="$TERRAFORM_DIR" output -raw gpu_inference_queue_url)"
+          REPORT_ANALYSIS_QUEUE_URL="$(terraform -chdir="$TERRAFORM_DIR" output -raw report_analysis_queue_url)"
+          RAG_INGEST_QUEUE_URL="$(terraform -chdir="$TERRAFORM_DIR" output -raw rag_ingest_queue_url)"
+          BACKEND_API_ROLE_ARN="$(terraform -chdir="$TERRAFORM_DIR" output -raw backend_api_role_arn)"
+          AI_API_ROLE_ARN="$(terraform -chdir="$TERRAFORM_DIR" output -raw ai_api_role_arn)"
+          AI_CPU_WORKER_ROLE_ARN="$(terraform -chdir="$TERRAFORM_DIR" output -raw ai_cpu_worker_role_arn)"
+          AI_ML_GPU_WORKER_ROLE_ARN="$(terraform -chdir="$TERRAFORM_DIR" output -raw ai_ml_gpu_worker_role_arn)"
+          BATCH_WORKER_ROLE_ARN="$(terraform -chdir="$TERRAFORM_DIR" output -raw batch_worker_role_arn)"
+          ECR_BACKEND_URL="$(terraform -chdir="$TERRAFORM_DIR" output -json ecr_repository_urls | ruby -rjson -e 'data = JSON.parse(STDIN.read); puts data.fetch("utterai-backend")')"
+          ECR_AI_CPU_URL="$(terraform -chdir="$TERRAFORM_DIR" output -json ecr_repository_urls | ruby -rjson -e 'data = JSON.parse(STDIN.read); puts data.fetch("utterai-ai-cpu")')"
+          ECR_AI_GPU_URL="$(terraform -chdir="$TERRAFORM_DIR" output -json ecr_repository_urls | ruby -rjson -e 'data = JSON.parse(STDIN.read); puts data.fetch("utterai-ai-gpu")')"
+
+          sanitize_single_line() {
+            printf '%s' "$1" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+          }
+
+          {
+            echo "aws_account_id=$(sanitize_single_line "$AWS_ACCOUNT_ID")"
+            echo "rds_endpoint=$(sanitize_single_line "$RDS_ENDPOINT")"
+            echo "redis_endpoint=$(sanitize_single_line "$REDIS_ENDPOINT")"
+            echo "audio_preprocess_queue_url=$(sanitize_single_line "$AUDIO_PREPROCESS_QUEUE_URL")"
+            echo "gpu_inference_queue_url=$(sanitize_single_line "$GPU_INFERENCE_QUEUE_URL")"
+            echo "report_analysis_queue_url=$(sanitize_single_line "$REPORT_ANALYSIS_QUEUE_URL")"
+            echo "rag_ingest_queue_url=$(sanitize_single_line "$RAG_INGEST_QUEUE_URL")"
+            echo "backend_api_role_arn=$(sanitize_single_line "$BACKEND_API_ROLE_ARN")"
+            echo "ai_api_role_arn=$(sanitize_single_line "$AI_API_ROLE_ARN")"
+            echo "ai_cpu_worker_role_arn=$(sanitize_single_line "$AI_CPU_WORKER_ROLE_ARN")"
+            echo "ai_ml_gpu_worker_role_arn=$(sanitize_single_line "$AI_ML_GPU_WORKER_ROLE_ARN")"
+            echo "batch_worker_role_arn=$(sanitize_single_line "$BATCH_WORKER_ROLE_ARN")"
+            echo "ecr_backend_url=$(sanitize_single_line "$ECR_BACKEND_URL")"
+            echo "ecr_ai_cpu_url=$(sanitize_single_line "$ECR_AI_CPU_URL")"
+            echo "ecr_ai_gpu_url=$(sanitize_single_line "$ECR_AI_GPU_URL")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Update dev manifests
+        env:
+          RDS_ENDPOINT: ${{ steps.dev-config.outputs.rds_endpoint }}
+          REDIS_ENDPOINT: ${{ steps.dev-config.outputs.redis_endpoint }}
+          AUDIO_PREPROCESS_QUEUE_URL: ${{ steps.dev-config.outputs.audio_preprocess_queue_url }}
+          GPU_INFERENCE_QUEUE_URL: ${{ steps.dev-config.outputs.gpu_inference_queue_url }}
+          REPORT_ANALYSIS_QUEUE_URL: ${{ steps.dev-config.outputs.report_analysis_queue_url }}
+          RAG_INGEST_QUEUE_URL: ${{ steps.dev-config.outputs.rag_ingest_queue_url }}
+          BACKEND_API_ROLE_ARN: ${{ steps.dev-config.outputs.backend_api_role_arn }}
+          AI_API_ROLE_ARN: ${{ steps.dev-config.outputs.ai_api_role_arn }}
+          AI_CPU_WORKER_ROLE_ARN: ${{ steps.dev-config.outputs.ai_cpu_worker_role_arn }}
+          AI_ML_GPU_WORKER_ROLE_ARN: ${{ steps.dev-config.outputs.ai_ml_gpu_worker_role_arn }}
+          BATCH_WORKER_ROLE_ARN: ${{ steps.dev-config.outputs.batch_worker_role_arn }}
+          ECR_BACKEND_URL: ${{ steps.dev-config.outputs.ecr_backend_url }}
+          ECR_AI_CPU_URL: ${{ steps.dev-config.outputs.ecr_ai_cpu_url }}
+          ECR_AI_GPU_URL: ${{ steps.dev-config.outputs.ecr_ai_gpu_url }}
+        run: |
+          ruby -ryaml -e '
+            def write_yaml(path, docs)
+              File.write(path, docs.map(&:to_yaml).join("---\n"))
+            end
+
+            backend_config_file = "k8s-demo/apps/backend/base/configmap.yaml"
+            backend_config = YAML.load_file(backend_config_file)
+            backend_data = backend_config.fetch("data")
+            backend_data["DB_HOST"] = ENV.fetch("RDS_ENDPOINT")
+            backend_data["REDIS_HOST"] = ENV.fetch("REDIS_ENDPOINT")
+            backend_data["SQS_AUDIO_PREPROCESS_QUEUE_URL"] = ENV.fetch("AUDIO_PREPROCESS_QUEUE_URL")
+            backend_data["SQS_REPORT_ANALYSIS_QUEUE_URL"] = ENV.fetch("REPORT_ANALYSIS_QUEUE_URL")
+            File.write(backend_config_file, backend_config.to_yaml)
+
+            backend_sa_file = "k8s-demo/apps/backend/base/serviceaccount.yaml"
+            backend_sa = YAML.load_file(backend_sa_file)
+            backend_sa["metadata"]["annotations"]["eks.amazonaws.com/role-arn"] = ENV.fetch("BACKEND_API_ROLE_ARN")
+            File.write(backend_sa_file, backend_sa.to_yaml)
+
+            ai_sa_file = "k8s-demo/apps/ai-worker/base/serviceaccount.yaml"
+            ai_sas = YAML.load_stream(File.read(ai_sa_file)).compact
+            ai_role_by_name = {
+              "utterai-ai-api-sa" => ENV.fetch("AI_API_ROLE_ARN"),
+              "utterai-cpu-worker-sa" => ENV.fetch("AI_CPU_WORKER_ROLE_ARN"),
+              "utterai-ml-gpu-worker-sa" => ENV.fetch("AI_ML_GPU_WORKER_ROLE_ARN"),
+              "utterai-batch-worker-sa" => ENV.fetch("BATCH_WORKER_ROLE_ARN")
+            }
+            ai_sas.each do |doc|
+              name = doc.fetch("metadata").fetch("name")
+              doc["metadata"]["annotations"]["eks.amazonaws.com/role-arn"] = ai_role_by_name.fetch(name)
+            end
+            write_yaml(ai_sa_file, ai_sas)
+
+            queue_by_env = {
+              "SQS_AUDIO_PREPROCESS_QUEUE_URL" => ENV.fetch("AUDIO_PREPROCESS_QUEUE_URL"),
+              "SQS_GPU_INFERENCE_QUEUE_URL" => ENV.fetch("GPU_INFERENCE_QUEUE_URL"),
+              "SQS_REPORT_ANALYSIS_QUEUE_URL" => ENV.fetch("REPORT_ANALYSIS_QUEUE_URL"),
+              "SQS_RAG_INGEST_QUEUE_URL" => ENV.fetch("RAG_INGEST_QUEUE_URL")
+            }
+            %w[
+              k8s-demo/apps/ai-worker/base/ai-api-deployment.yaml
+              k8s-demo/apps/ai-worker/base/cpu-worker-deployment.yaml
+              k8s-demo/apps/ai-worker/base/ml-gpu-worker-deployment.yaml
+              k8s-demo/apps/ai-worker/base/batch-worker-deployment.yaml
+            ].each do |file|
+              docs = YAML.load_stream(File.read(file)).compact
+              docs.each do |doc|
+                containers = doc.dig("spec", "template", "spec", "containers") || []
+                containers.each do |container|
+                  Array(container["env"]).each do |env|
+                    next unless queue_by_env.key?(env["name"])
+                    env["value"] = queue_by_env.fetch(env["name"])
+                  end
+                end
+              end
+              write_yaml(file, docs)
+            end
+
+            {
+              "k8s-demo/apps/backend/overlays/dev/kustomization.yaml" => {
+                "utterai-backend" => ENV.fetch("ECR_BACKEND_URL")
+              },
+              "k8s-demo/apps/ai-worker/overlays/dev/kustomization.yaml" => {
+                "utterai-ai-cpu" => ENV.fetch("ECR_AI_CPU_URL"),
+                "utterai-ai-gpu" => ENV.fetch("ECR_AI_GPU_URL")
+              }
+            }.each do |file, image_url_by_name|
+              data = YAML.load_file(file)
+              data.fetch("images").each do |image|
+                next unless image_url_by_name.key?(image["name"])
+                image["newName"] = image_url_by_name.fetch(image["name"])
+                image["newTag"] = "dev-placeholder" if image.fetch("newTag", "").start_with?("dev-placeholder")
+              end
+              File.write(file, data.to_yaml)
+            end
+          '
+
+      - name: Validate Kustomize render
+        run: |
+          kubectl kustomize k8s-demo/platform/dev > /tmp/platform-dev.yaml
+          kubectl kustomize k8s-demo/apps/backend/overlays/dev > /tmp/backend-dev.yaml
+          kubectl kustomize k8s-demo/apps/ai-worker/overlays/dev > /tmp/ai-worker-dev.yaml
+
+          if grep -R '\${[A-Z0-9_]\+}' k8s-demo; then
+            echo "k8s-demo manifest에 envsubst placeholder가 남아 있습니다."
+            exit 1
+          fi
+
+          grep "image:" /tmp/backend-dev.yaml
+          grep "image:" /tmp/ai-worker-dev.yaml
+
+      - name: Create dev config pull request
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          RDS_ENDPOINT: ${{ steps.dev-config.outputs.rds_endpoint }}
+          REDIS_ENDPOINT: ${{ steps.dev-config.outputs.redis_endpoint }}
+        run: |
+          UPDATE_BRANCH="ci/dev-config-${GITHUB_RUN_ID}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet; then
+            echo "변경 사항이 없어 PR을 생성하지 않습니다."
+            exit 0
+          fi
+
+          git checkout -b "$UPDATE_BRANCH"
+          git add k8s-demo/apps/backend k8s-demo/apps/ai-worker
+          git commit -m "ci(dev): update k8s-demo runtime config"
+          git push origin "$UPDATE_BRANCH"
+
+          PR_URL="$(gh pr create \
+            --base "$TARGET_BRANCH" \
+            --head "$UPDATE_BRANCH" \
+            --title "ci(dev): update k8s-demo runtime config" \
+            --body "dev 환경의 k8s-demo GitOps runtime config를 갱신합니다.
+
+          변경 대상:
+          - backend ConfigMap의 RDS/Redis endpoint
+          - backend/AI worker SQS queue URL
+          - backend/AI worker ServiceAccount IRSA role ARN
+          - dev overlay ECR repository URL
+
+          참고:
+          - 민감값은 Git에 기록하지 않고 ExternalSecret/Secrets Manager 경로를 유지합니다.
+          - image tag는 기존 backend/AI image update workflow가 별도 PR로 갱신합니다.
+          - RDS endpoint: \`$RDS_ENDPOINT\`
+          - Redis endpoint: \`$REDIS_ENDPOINT\`")"
+
+          echo "Created PR: $PR_URL"
+
+          if [ "$AUTO_MERGE" = "true" ]; then
+            echo "dev config PR은 필수 CI 통과 후 자동 merge되도록 설정합니다."
+            gh pr merge "$PR_URL" --auto --squash --delete-branch
+          else
+            echo "dev config PR은 사람이 검토하고 merge해야 합니다."
+          fi

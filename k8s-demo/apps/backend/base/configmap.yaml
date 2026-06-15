@@ -11,12 +11,12 @@ data:
   FRONTEND_ORIGIN: https://d129p1nkqgquw3.cloudfront.net
   CORS_ALLOW_ORIGINS: https://d129p1nkqgquw3.cloudfront.net
   DB_USER: utterai_app
-  DB_HOST: "${RDS_ENDPOINT}"
+  DB_HOST: "TODO_DEV_RDS_ENDPOINT"
   DB_PORT: '5432'
   DB_NAME: utterai
   DB_POOL_SIZE: '5'
   DB_MAX_OVERFLOW: '10'
-  REDIS_HOST: "${REDIS_ENDPOINT}"
+  REDIS_HOST: "TODO_DEV_REDIS_ENDPOINT"
   REDIS_PORT: '6379'
   REDIS_DB: '0'
   REDIS_TLS_ENABLED: 'true'
@@ -29,8 +29,8 @@ data:
   RAW_AUDIO_BUCKET: utterai-dev-raw-audio
   TEMPLATE_BUCKET: utterai-dev-documents
   PRESIGNED_URL_EXPIRE_SECONDS: '900'
-  SQS_AUDIO_PREPROCESS_QUEUE_URL: https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-audio-preprocess-queue
-  SQS_REPORT_ANALYSIS_QUEUE_URL: https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-report-analysis-queue
+  SQS_AUDIO_PREPROCESS_QUEUE_URL: https://sqs.ap-northeast-2.amazonaws.com/000000000000/utterai-dev-audio-preprocess-queue
+  SQS_REPORT_ANALYSIS_QUEUE_URL: https://sqs.ap-northeast-2.amazonaws.com/000000000000/utterai-dev-report-analysis-queue
   OTEL_SERVICE_NAME: backend
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.utterai-observability.svc.cluster.local:4318
   OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf

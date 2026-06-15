@@ -45,7 +45,7 @@ spec:
       terminationGracePeriodSeconds: 300
       containers:
         - name: ml-gpu-worker
-          image: utterai-ai-gpu:${AI_GPU_TAG}
+          image: utterai-ai-gpu:dev-placeholder
           command: ["python", "-m", "app.workers.ml_gpu_worker"]
           env:
             # HuggingFace Hub 인증 토큰 — ExternalSecret(gpu-worker-secret)에서 주입
@@ -63,10 +63,10 @@ spec:
               value: "dev"
             # 소비 큐: CPU 워커가 전처리 완료 후 enqueue
             - name: SQS_GPU_INFERENCE_QUEUE_URL
-              value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-gpu-inference-queue"
+              value: "https://sqs.ap-northeast-2.amazonaws.com/000000000000/utterai-dev-gpu-inference-queue"
             # 생산 큐: ML 추론 완료 후 CPU 워커(Bedrock 호출)로 전달
             - name: SQS_REPORT_ANALYSIS_QUEUE_URL
-              value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-report-analysis-queue"
+              value: "https://sqs.ap-northeast-2.amazonaws.com/000000000000/utterai-dev-report-analysis-queue"
             - name: S3_BUCKET_AUDIO
               value: "utterai-dev-raw-audio"
             - name: S3_BUCKET_REPORT
