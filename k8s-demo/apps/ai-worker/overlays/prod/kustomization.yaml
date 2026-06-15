@@ -4,6 +4,16 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - ../../base
+  - keda-trigger-auth.yaml
+  - scaledobject-cpu-worker.yaml
+  - scaledobject-ml-gpu-worker.yaml
+  - scaledobject-batch-worker.yaml
+
+patches:
+  - path: patch-configmap.yaml
+    target:
+      kind: ConfigMap
+      name: utterai-ai-worker-config
 
 # TODO: prod 배포 승인 이후 CD에서 prod-{short_sha} 또는 prod-v{semver}로 갱신합니다.
 images:

@@ -1,0 +1,48 @@
+# Image Pruner DaemonSet — worker 노드 미사용 이미지 자동 정리
+#
+# 1시간마다 crictl rmi --prune 실행해 미사용 이미지를 제거한다.
+# disk-pressure로 인한 pod eviction 루프를 예방하기 위한 안전장치.
+# worker 노드(workload=worker)에만 배치한다.
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: utterai-image-pruner
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: utterai-image-pruner
+  template:
+    metadata:
+      labels:
+        app: utterai-image-pruner
+    spec:
+      nodeSelector:
+        workload: worker
+      tolerations:
+        - operator: Exists
+      hostPID: true
+      containers:
+        - name: pruner
+          image: alpine:3.19
+          command:
+            - /bin/sh
+            - -c
+            - |
+              while true; do
+                echo "[image-pruner] $(date): pruning unused images"
+                nsenter -t 1 -m -- crictl rmi --prune || true
+                echo "[image-pruner] done. sleeping 1h"
+                sleep 3600
+              done
+          securityContext:
+            privileged: true
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "32Mi"
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+      terminationGracePeriodSeconds: 10

@@ -4,5 +4,3 @@ metadata:
   name: utterai-api
   labels:
     app.kubernetes.io/part-of: utterai
-    app.kubernetes.io/component: backend
-    utterai.io/environment: dev
