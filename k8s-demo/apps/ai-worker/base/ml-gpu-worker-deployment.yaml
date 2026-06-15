@@ -1,14 +1,26 @@
+# ML GPU Worker Deployment — 음성 인식(STT) 및 화자 분리 파이프라인
+#
+# SQS gpu-inference-queue에서 메시지를 소비해 GPU 기반 ML 모델로 음성 인식/분리를 수행.
+# 결과를 SQS report-analysis-queue로 전달해 CPU 워커의 Bedrock 분석 단계로 넘긴다.
+#
+# GPU 노드 배치 조건:
+#   nodeSelector workload=ai-gpu  — GPU 전용 노드풀에만 스케줄링
+#   toleration dedicated=ai-gpu   — 해당 노드의 NoSchedule taint 허용
+#   toleration nvidia.com/gpu     — NVIDIA device plugin taint 허용
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: utterai-ml-gpu-worker
   namespace: utterai-ai-gpu
-  labels:
-    app: utterai-ml-gpu-worker
-    app.kubernetes.io/name: utterai-ml-gpu-worker
-    app.kubernetes.io/part-of: utterai
 spec:
   replicas: 1
+  # GPU가 1개뿐이므로 구 파드를 먼저 종료 후 신 파드 기동 (Recreate에 가깝게 동작)
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
   selector:
     matchLabels:
       app: utterai-ml-gpu-worker
@@ -16,8 +28,6 @@ spec:
     metadata:
       labels:
         app: utterai-ml-gpu-worker
-        app.kubernetes.io/name: utterai-ml-gpu-worker
-        app.kubernetes.io/part-of: utterai
         worker-type: ml-gpu
     spec:
       serviceAccountName: utterai-ml-gpu-worker-sa
@@ -31,27 +41,78 @@ spec:
         - key: nvidia.com/gpu
           operator: Exists
           effect: NoSchedule
+      # ML 추론은 오래 걸리므로 진행 중인 요청이 완료될 때까지 300초 유예
       terminationGracePeriodSeconds: 300
       containers:
         - name: ml-gpu-worker
-          image: utterai-ai-gpu:dev-placeholder
-          imagePullPolicy: IfNotPresent
+          image: utterai-ai-gpu:${AI_GPU_TAG}
           command: ["python", "-m", "app.workers.ml_gpu_worker"]
-          envFrom:
-            - configMapRef:
-                name: utterai-ai-worker-config
           env:
-            - name: WORKER_TYPE
-              value: "ml-gpu"
+            # HuggingFace Hub 인증 토큰 — ExternalSecret(gpu-worker-secret)에서 주입
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: gpu-worker-secret
                   key: HF_TOKEN
+            # /tmp 사용: 컨테이너 루트 파일시스템 쓰기 권한 없이도 모델 캐시 저장 가능
             - name: HF_HOME
               value: "/tmp/huggingface"
+            - name: AWS_REGION
+              value: "ap-northeast-2"
+            - name: APP_ENV
+              value: "dev"
+            # 소비 큐: CPU 워커가 전처리 완료 후 enqueue
+            - name: SQS_GPU_INFERENCE_QUEUE_URL
+              value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-gpu-inference-queue"
+            # 생산 큐: ML 추론 완료 후 CPU 워커(Bedrock 호출)로 전달
+            - name: SQS_REPORT_ANALYSIS_QUEUE_URL
+              value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-report-analysis-queue"
+            - name: S3_BUCKET_AUDIO
+              value: "utterai-dev-raw-audio"
+            - name: S3_BUCKET_REPORT
+              value: "utterai-dev-reports"
+            - name: BE_DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: ai-worker-secret
+                  key: DB_HOST
+            - name: BE_DB_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: ai-worker-secret
+                  key: DB_PORT
+            - name: BE_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: ai-worker-secret
+                  key: DB_USER
+            - name: BE_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ai-worker-secret
+                  key: DB_PASSWORD
+            - name: BE_DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: ai-worker-secret
+                  key: DB_NAME
+            - name: LOG_LEVEL
+              value: "DEBUG"
             - name: OTEL_SERVICE_NAME
               value: "ml-gpu-worker"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector.utterai-observability.svc.cluster.local:4318"
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: "http/protobuf"
+            - name: OTEL_METRICS_EXPORTER
+              value: "otlp"
+            - name: OTEL_TRACES_EXPORTER
+              value: "otlp"
+            - name: OTEL_LOGS_EXPORTER
+              value: "none"
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "deployment.environment=dev,team=utterai"
+          # nvidia.com/gpu: "1" 을 명시해야 NVIDIA device plugin이 GPU를 할당한다
           resources:
             requests:
               cpu: "2"
@@ -62,6 +123,7 @@ spec:
               memory: "14Gi"
               nvidia.com/gpu: "1"
           lifecycle:
+            # preStop: 추론 결과 SQS 전송 완료까지 10초 여유를 두고 SIGTERM 전달
             preStop:
               exec:
                 command: ["/bin/sh", "-c", "sleep 10"]

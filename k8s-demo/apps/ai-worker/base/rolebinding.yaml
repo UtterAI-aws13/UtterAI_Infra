@@ -1,12 +1,19 @@
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: utterai-cpu-worker-role
   namespace: utterai-ai-cpu
 rules:
-  - apiGroups: [""]
-    resources: ["configmaps"]
-    verbs: ["get", "list", "watch"]
+- apiGroups:
+  - ''
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+---
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -14,13 +21,14 @@ metadata:
   name: utterai-cpu-worker-rolebinding
   namespace: utterai-ai-cpu
 subjects:
-  - kind: ServiceAccount
-    name: utterai-cpu-worker-sa
-    namespace: utterai-ai-cpu
+- kind: ServiceAccount
+  name: utterai-cpu-worker-sa
+  namespace: utterai-ai-cpu
 roleRef:
   kind: Role
   name: utterai-cpu-worker-role
   apiGroup: rbac.authorization.k8s.io
+---
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -28,9 +36,15 @@ metadata:
   name: utterai-gpu-worker-role
   namespace: utterai-ai-gpu
 rules:
-  - apiGroups: [""]
-    resources: ["configmaps"]
-    verbs: ["get", "list", "watch"]
+- apiGroups:
+  - ''
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+---
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -38,13 +52,14 @@ metadata:
   name: utterai-ml-gpu-worker-rolebinding
   namespace: utterai-ai-gpu
 subjects:
-  - kind: ServiceAccount
-    name: utterai-ml-gpu-worker-sa
-    namespace: utterai-ai-gpu
+- kind: ServiceAccount
+  name: utterai-ml-gpu-worker-sa
+  namespace: utterai-ai-gpu
 roleRef:
   kind: Role
   name: utterai-gpu-worker-role
   apiGroup: rbac.authorization.k8s.io
+---
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -52,9 +67,15 @@ metadata:
   name: utterai-batch-worker-role
   namespace: utterai-batch
 rules:
-  - apiGroups: [""]
-    resources: ["configmaps"]
-    verbs: ["get", "list", "watch"]
+- apiGroups:
+  - ''
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+---
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -62,9 +83,9 @@ metadata:
   name: utterai-batch-worker-rolebinding
   namespace: utterai-batch
 subjects:
-  - kind: ServiceAccount
-    name: utterai-batch-worker-sa
-    namespace: utterai-batch
+- kind: ServiceAccount
+  name: utterai-batch-worker-sa
+  namespace: utterai-batch
 roleRef:
   kind: Role
   name: utterai-batch-worker-role
