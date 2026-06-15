@@ -1,0 +1,6 @@
+- op: replace
+  path: /spec/triggers/0/metadata/queueURL
+  value: "TODO_PROD_AUDIO_PREPROCESS_QUEUE_URL"
+- op: replace
+  path: /spec/triggers/1/metadata/queueURL
+  value: "TODO_PROD_REPORT_ANALYSIS_QUEUE_URL"
