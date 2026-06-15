@@ -91,6 +91,15 @@ resource "helm_release" "kube_prometheus_stack" {
           type = "ClusterIP"
         }
         defaultDashboardsTimezone = "Asia/Seoul"
+        additionalDataSources = [
+          {
+            name      = "Loki"
+            type      = "loki"
+            access    = "proxy"
+            url       = "http://loki-gateway.monitoring.svc.cluster.local"
+            isDefault = false
+          }
+        ]
       }
 
       kubeStateMetrics = {
@@ -111,6 +120,147 @@ resource "helm_release" "kube_prometheus_stack" {
       alertmanager = {
         enabled = false
       }
+    })
+  ]
+}
+
+# ── Grafana Loki / Promtail ──────────────────────────────────────────────────
+
+resource "helm_release" "loki" {
+  name             = "loki"
+  repository       = "https://grafana.github.io/helm-charts"
+  chart            = "loki"
+  version          = "7.0.0"
+  namespace        = "monitoring"
+  create_namespace = true
+  cleanup_on_fail  = true
+  wait             = true
+  wait_for_jobs    = true
+
+  depends_on = [helm_release.kube_prometheus_stack]
+
+  values = [
+    yamlencode({
+      deploymentMode = "SingleBinary"
+
+      loki = {
+        auth_enabled = false
+        commonConfig = {
+          path_prefix        = "/tmp/loki"
+          replication_factor = 1
+        }
+        storage = {
+          type = "filesystem"
+          filesystem = {
+            chunks_directory = "/tmp/loki/chunks"
+            rules_directory  = "/tmp/loki/rules"
+          }
+        }
+        storage_config = {
+          bloom_shipper = {
+            working_directory = "/tmp/loki/data/bloomshipper"
+          }
+        }
+        rulerConfig = {
+          wal = {
+            dir = "/tmp/loki/ruler-wal"
+          }
+        }
+        useTestSchema = true
+      }
+
+      singleBinary = {
+        replicas = 1
+        resources = {
+          requests = {
+            cpu    = "100m"
+            memory = "256Mi"
+          }
+          limits = {
+            cpu    = "500m"
+            memory = "1Gi"
+          }
+        }
+        persistence = {
+          enabled = false
+        }
+      }
+
+      read = {
+        replicas = 0
+      }
+      write = {
+        replicas = 0
+      }
+      backend = {
+        replicas = 0
+      }
+
+      chunksCache = {
+        enabled = false
+      }
+      resultsCache = {
+        enabled = false
+      }
+      lokiCanary = {
+        enabled = false
+      }
+      test = {
+        enabled = false
+      }
+    })
+  ]
+}
+
+resource "helm_release" "promtail" {
+  name             = "promtail"
+  repository       = "https://grafana.github.io/helm-charts"
+  chart            = "promtail"
+  version          = "6.17.1"
+  namespace        = "monitoring"
+  create_namespace = true
+  cleanup_on_fail  = true
+  wait             = true
+
+  depends_on = [helm_release.loki]
+
+  values = [
+    yamlencode({
+      config = {
+        clients = [
+          {
+            url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
+          }
+        ]
+      }
+      resources = {
+        requests = {
+          cpu    = "50m"
+          memory = "64Mi"
+        }
+        limits = {
+          cpu    = "200m"
+          memory = "256Mi"
+        }
+      }
+      tolerations = [
+        {
+          key      = "node-role.kubernetes.io/master"
+          operator = "Exists"
+          effect   = "NoSchedule"
+        },
+        {
+          key      = "node-role.kubernetes.io/control-plane"
+          operator = "Exists"
+          effect   = "NoSchedule"
+        },
+        {
+          key      = "dedicated"
+          operator = "Equal"
+          value    = "ai-gpu"
+          effect   = "NoSchedule"
+        }
+      ]
     })
   ]
 }

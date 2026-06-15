@@ -14,6 +14,14 @@ output "kube_prometheus_stack_release_name" {
   value = helm_release.kube_prometheus_stack.name
 }
 
+output "loki_release_name" {
+  value = helm_release.loki.name
+}
+
+output "promtail_release_name" {
+  value = helm_release.promtail.name
+}
+
 output "external_secrets_release_name" {
   value = helm_release.external_secrets.name
 }
