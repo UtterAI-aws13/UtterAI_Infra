@@ -8,9 +8,5 @@ resources:
   - rolebinding.yaml
   - configmap.yaml
   - external-secret.yaml
-  - deployment-blue.yaml
-  - deployment-green.yaml
   - service.yaml
-  - hpa-blue.yaml
-  - hpa-green.yaml
   - ingress.yaml
