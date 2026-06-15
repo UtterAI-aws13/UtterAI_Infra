@@ -396,9 +396,9 @@ spec:
 |------|-----|------|
 | `scan_on_push` | `true` | ECR push 시 CVE 자동 스캔 |
 | `encryption_type` | `KMS` | 이미지 레이어 KMS 암호화 |
-| Lifecycle: `dev-*` | 최대 30개 | 구 이미지 자동 정리 |
-| Lifecycle: `prod-*` | 최대 10개 | 구 이미지 자동 정리 |
-| Lifecycle: untagged | 7일 후 삭제 | 빌드 잔여물 정리 |
+| Lifecycle: `dev-*` | 최대 5개 | 구 이미지 자동 정리 |
+| Lifecycle: `prod-*` | 최대 5개 | 구 이미지 자동 정리 |
+| Lifecycle: untagged | 3일 후 삭제 | 빌드 잔여물 정리 |
 
 ---
 
