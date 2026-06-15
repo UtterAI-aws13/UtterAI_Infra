@@ -7,14 +7,13 @@ kind: Kustomization
 resources:
   - serviceaccount.yaml
   - rolebinding.yaml
-  - configmap.yaml
-  - external-secrets.yaml
+  - cpu-worker-external-secret.yaml
+  - gpu-worker-external-secret.yaml
+  - ai-worker-external-secret.yaml
   - ai-api-deployment.yaml
-  - ai-api-service.yaml
   - cpu-worker-deployment.yaml
   - ml-gpu-worker-deployment.yaml
   - batch-worker-deployment.yaml
-  - keda-trigger-auth.yaml
   - hpa-cpu-worker.yaml
   - hpa-ml-gpu-worker.yaml
   - hpa-batch-worker.yaml
