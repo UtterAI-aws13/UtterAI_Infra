@@ -11,5 +11,5 @@ resources:
 
 images:
   - name: utterai-backend
-    newName: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend
-    newTag: ${BACKEND_TAG}
+    newName: 000000000000.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend
+    newTag: dev-placeholder

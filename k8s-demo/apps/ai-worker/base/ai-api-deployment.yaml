@@ -24,7 +24,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: ai-api
-          image: utterai-ai-cpu:${AI_CPU_TAG}
+          image: utterai-ai-cpu:dev-placeholder
           command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
           ports:
             - containerPort: 8080
@@ -34,9 +34,9 @@ spec:
             - name: APP_ENV
               value: "dev"
             - name: SQS_AUDIO_PREPROCESS_QUEUE_URL
-              value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-audio-preprocess-queue"
+              value: "https://sqs.ap-northeast-2.amazonaws.com/000000000000/utterai-dev-audio-preprocess-queue"
             - name: SQS_RAG_INGEST_QUEUE_URL
-              value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-rag-ingest-queue"
+              value: "https://sqs.ap-northeast-2.amazonaws.com/000000000000/utterai-dev-rag-ingest-queue"
             - name: LOG_LEVEL
               value: "DEBUG"
             - name: OTEL_SERVICE_NAME

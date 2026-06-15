@@ -7,8 +7,8 @@ resources:
 
 images:
   - name: utterai-ai-cpu
-    newName: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-cpu
-    newTag: ${AI_CPU_TAG}
+    newName: 000000000000.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-cpu
+    newTag: dev-placeholder
   - name: utterai-ai-gpu
-    newName: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-gpu
-    newTag: ${AI_GPU_TAG}
+    newName: 000000000000.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-gpu
+    newTag: dev-placeholder
