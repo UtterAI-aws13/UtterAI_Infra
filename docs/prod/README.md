@@ -581,22 +581,23 @@ Port: 6379
 |---|---|---|
 | `utterai-prod-frontend` | 프론트엔드 정적 파일 | CloudFront 경유만 허용 |
 | `utterai-prod-raw-audio` | 사용자 업로드 원본 음성 | 비공개 |
-| `utterai-prod-processed-audio` | AI 처리 중간 음성 | 비공개 |
-| `utterai-prod-documents` | RAG 기준 문서 | 비공개 |
+| `utterai-prod-template` | 분석 템플릿 문서 | 비공개 |
+| `utterai-prod-rag-ingest` | RAG 문서 ingest 원본 | 비공개 |
 | `utterai-prod-reports` | 분석 결과 리포트 | 비공개 |
-| `utterai-prod-artifacts` | 분석 JSON 결과 | 비공개 |
 
 ### 7.2 버킷 공통 설정
 
 ```text
+현재 모듈(terraform/modules/s3/main.tf) 구현 상태:
 - 퍼블릭 액세스 차단: 전체 활성화
-- 버전 관리: 활성화 (raw-audio, reports)
-- 서버 사이드 암호화: AWS Managed Key (aws/s3)
+- 서버 사이드 암호화: AES256 (SSE-S3)
+- 객체 수명 주기: raw-audio 365일 후 삭제
+
+Prod 추가 예정 (modules/s3에 변수 추가 필요):
+- 서버 사이드 암호화: SSE-KMS (Prod CMK)로 교체
+- 버전 관리: raw-audio, reports에 활성화
 - 액세스 로깅: 활성화
-- 객체 수명 주기:
-    raw-audio: 90일 후 Glacier로 이동, 1년 후 삭제
-    artifacts: 1년 후 Glacier 이동
-    processed-audio: 30일 후 삭제
+- raw-audio 수명 주기: 90일 Glacier 전환, 1년 삭제로 변경
 ```
 
 ### 7.3 CORS 설정 (raw-audio 버킷)
@@ -1149,10 +1150,9 @@ REDIS_AUTH_TOKEN=${from_secrets_manager}
 
 # S3
 S3_RAW_AUDIO_BUCKET=utterai-prod-raw-audio
-S3_PROCESSED_AUDIO_BUCKET=utterai-prod-processed-audio
-S3_DOCUMENT_BUCKET=utterai-prod-documents
+S3_TEMPLATE_BUCKET=utterai-prod-template
+S3_RAG_INGEST_BUCKET=utterai-prod-rag-ingest
 S3_REPORT_BUCKET=utterai-prod-reports
-S3_ARTIFACT_BUCKET=utterai-prod-artifacts
 S3_PRESIGNED_UPLOAD_EXPIRES_SECONDS=900
 S3_PRESIGNED_DOWNLOAD_EXPIRES_SECONDS=300
 
@@ -1224,7 +1224,7 @@ Secondary Cluster: utterai-dr-aurora (ap-northeast-1)
 복제 대상:
   utterai-prod-raw-audio    → utterai-dr-raw-audio (ap-northeast-1)
   utterai-prod-reports      → utterai-dr-reports (ap-northeast-1)
-  utterai-prod-artifacts    → utterai-dr-artifacts (ap-northeast-1)
+  utterai-prod-rag-ingest   → utterai-dr-rag-ingest (ap-northeast-1)
 
 설정:
   - 복제 규칙: 신규 객체부터 적용
