@@ -6,17 +6,15 @@ namespace: utterai-api
 resources:
   - namespace.yaml
   - ../../base
+  - deployment.yaml
+  - hpa.yaml
 
 # TODO: GitHub Actions CD에서 newName/newTag를 실제 ECR image로 갱신합니다.
 images:
-  - name: utterai-backend-blue
-    newName: 032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend
-    newTag: dev-b760792
-  - name: utterai-backend-green
+  - name: utterai-backend
     newName: 032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend
     newTag: dev-b760792
 
 patches:
-  - path: patch-active-service.yaml
   - path: patch-configmap.yaml
   - path: patch-serviceaccount.yaml

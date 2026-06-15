@@ -6,6 +6,12 @@ namespace: utterai-prod-api
 resources:
   - namespace.yaml
   - ../../base
+  - deployment-blue.yaml
+  - deployment-green.yaml
+  - hpa-blue.yaml
+  - hpa-green.yaml
+  - service-blue.yaml
+  - service-green.yaml
 
 # TODO: prod 배포 승인 이후 CD에서 prod-{short_sha} 또는 prod-v{semver}로 갱신합니다.
 images:

@@ -10,7 +10,6 @@ spec:
   type: ClusterIP
   selector:
     app: utterai-api
-    color: blue
   ports:
     - name: http
       port: 8080

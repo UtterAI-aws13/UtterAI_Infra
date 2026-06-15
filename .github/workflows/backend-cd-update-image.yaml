@@ -145,36 +145,44 @@ jobs:
           DEPLOY_STRATEGY: ${{ steps.meta.outputs.deploy_strategy }}
         run: |
           KUSTOMIZATION_FILE="$OVERLAY_PATH/kustomization.yaml"
-          ACTIVE_SERVICE_PATCH="$OVERLAY_PATH/patch-active-service.yaml"
 
           if [ ! -f "$KUSTOMIZATION_FILE" ]; then
             echo "$KUSTOMIZATION_FILE 파일을 찾을 수 없습니다."
             exit 1
           fi
 
-          if [ ! -f "$ACTIVE_SERVICE_PATCH" ]; then
+          if [ "$DEPLOY_STRATEGY" = "blue-green" ]; then
+            ACTIVE_SERVICE_PATCH="$OVERLAY_PATH/patch-active-service.yaml"
+          else
+            ACTIVE_SERVICE_PATCH=""
+          fi
+
+          if [ "$DEPLOY_STRATEGY" = "blue-green" ] && [ ! -f "$ACTIVE_SERVICE_PATCH" ]; then
             echo "$ACTIVE_SERVICE_PATCH 파일을 찾을 수 없습니다."
             exit 1
           fi
 
           IMAGE_NAME="$ECR_REGISTRY/$ECR_REPOSITORY"
 
-          ACTIVE_COLOR="$(ruby -ryaml -e '
-            data = YAML.load_file(ARGV.fetch(0))
-            puts data.fetch("spec").fetch("selector").fetch("color")
-          ' "$ACTIVE_SERVICE_PATCH")"
-
-          if [ "$ACTIVE_COLOR" != "blue" ] && [ "$ACTIVE_COLOR" != "green" ]; then
-            echo "active color는 blue 또는 green만 허용합니다. 현재 값: $ACTIVE_COLOR"
-            exit 1
-          fi
-
           if [ "$DEPLOY_STRATEGY" = "rolling" ]; then
-            TARGET_COLOR="blue-green"
-          elif [ "$ACTIVE_COLOR" = "blue" ]; then
-            TARGET_COLOR="green"
+            ACTIVE_COLOR="rolling"
+            TARGET_COLOR="rolling"
           else
-            TARGET_COLOR="blue"
+            ACTIVE_COLOR="$(ruby -ryaml -e '
+              data = YAML.load_file(ARGV.fetch(0))
+              puts data.fetch("spec").fetch("selector").fetch("color")
+            ' "$ACTIVE_SERVICE_PATCH")"
+
+            if [ "$ACTIVE_COLOR" != "blue" ] && [ "$ACTIVE_COLOR" != "green" ]; then
+              echo "active color는 blue 또는 green만 허용합니다. 현재 값: $ACTIVE_COLOR"
+              exit 1
+            fi
+
+            if [ "$ACTIVE_COLOR" = "blue" ]; then
+              TARGET_COLOR="green"
+            else
+              TARGET_COLOR="blue"
+            fi
           fi
 
           export KUSTOMIZATION_FILE IMAGE_NAME IMAGE_TAG TARGET_COLOR
@@ -187,7 +195,7 @@ jobs:
             active_name = "utterai-backend-#{ENV.fetch("ACTIVE_COLOR")}"
 
             if ENV.fetch("DEPLOY_STRATEGY") == "rolling"
-              target_names = ["utterai-backend-blue", "utterai-backend-green"]
+              target_names = ["utterai-backend"]
               bootstrap = false
             else
               target_names = ["utterai-backend-#{ENV.fetch("TARGET_COLOR")}"]
@@ -229,8 +237,7 @@ jobs:
           BOOTSTRAP_MODE="$(grep '^bootstrap=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2)"
           echo "Bootstrap mode: $BOOTSTRAP_MODE"
           if [ "$DEPLOY_STRATEGY" = "rolling" ]; then
-            grep -A3 "name: utterai-backend-blue" "$KUSTOMIZATION_FILE"
-            grep -A3 "name: utterai-backend-green" "$KUSTOMIZATION_FILE"
+            grep -A3 "name: utterai-backend" "$KUSTOMIZATION_FILE"
           else
             grep -A3 "name: utterai-backend-$TARGET_COLOR" "$KUSTOMIZATION_FILE"
           fi
@@ -282,7 +289,7 @@ jobs:
           - 배포 대상 color: \`$TARGET_COLOR\`
           - image tag: \`$IMAGE_TAG\`
 
-          dev 환경은 blue/green 양쪽 image tag를 함께 갱신해 promote 없이 rolling update처럼 배포합니다.
+          dev 환경은 단일 backend Deployment image tag를 갱신해 Kubernetes RollingUpdate로 배포합니다.
           prod 환경은 active Service를 전환하지 않고 inactive color image tag만 갱신합니다.
           prod에서는 Argo CD sync 후 \`$TARGET_COLOR\` Pod를 검증하고, promote workflow로 Service selector를 전환해야 합니다.")"
 
