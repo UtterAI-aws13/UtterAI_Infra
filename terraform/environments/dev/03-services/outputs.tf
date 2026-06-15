@@ -14,6 +14,10 @@ output "redis_endpoint" {
   value = module.redis.primary_endpoint
 }
 
+output "redis_auth_token_secret_arn" {
+  value = module.redis.auth_token_secret_arn
+}
+
 # ── S3 ───────────────────────────────────────────────────────────────────────
 
 output "raw_audio_bucket_name" {

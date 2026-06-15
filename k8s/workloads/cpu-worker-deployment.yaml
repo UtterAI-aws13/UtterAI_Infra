@@ -42,10 +42,10 @@ spec:
             - name: APP_ENV
               value: "dev"
             # 소비 큐: 백엔드 API가 음성 업로드 후 enqueue
-            - name: SQS_CPU_QUEUE_URL
+            - name: SQS_AUDIO_PREPROCESS_QUEUE_URL
               value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-audio-preprocess-queue"
             # 생산 큐: 전처리 완료 후 GPU 추론 워커로 전달
-            - name: SQS_ML_GPU_QUEUE_URL
+            - name: SQS_GPU_INFERENCE_QUEUE_URL
               value: "https://sqs.ap-northeast-2.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-dev-gpu-inference-queue"
             # 소비 큐: ml-gpu-worker 추론 완료 후 Bedrock 분석 단계
             - name: SQS_REPORT_ANALYSIS_QUEUE_URL
@@ -77,9 +77,11 @@ spec:
             requests:
               cpu: "2"
               memory: "4Gi"
+              ephemeral-storage: "10Gi"
             limits:
               cpu: "4"
               memory: "8Gi"
+              ephemeral-storage: "20Gi"
           lifecycle:
             # preStop: SIGTERM 전 5초 대기 — 처리 중인 음성 파일 S3 업로드 완료 보장
             preStop:

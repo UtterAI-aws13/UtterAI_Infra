@@ -2,6 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: utterai-ai-worker-config
+  namespace: utterai-ai-api
 data:
   APP_ENV: "dev"
   LOG_LEVEL: "DEBUG"
@@ -11,13 +12,85 @@ data:
   S3_BUCKET_REPORT: "utterai-dev-reports"
   S3_BUCKET_RAG: "utterai-dev-rag-ingest"
   S3_BUCKET_TEMPLATE: "utterai-dev-template"
-  # TODO: 실제 SQS URL은 Terraform output 기준으로 dev/prod overlay에서 갱신합니다.
-  SQS_AUDIO_PREPROCESS_QUEUE_URL: "TODO_DEV_AUDIO_PREPROCESS_QUEUE_URL"
-  SQS_GPU_INFERENCE_QUEUE_URL: "TODO_DEV_GPU_INFERENCE_QUEUE_URL"
-  SQS_REPORT_ANALYSIS_QUEUE_URL: "TODO_DEV_REPORT_ANALYSIS_QUEUE_URL"
-  SQS_RAG_INGEST_QUEUE_URL: "TODO_DEV_RAG_INGEST_QUEUE_URL"
+  SQS_AUDIO_PREPROCESS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-audio-preprocess-queue"
+  SQS_GPU_INFERENCE_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-gpu-inference-queue"
+  SQS_REPORT_ANALYSIS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-report-analysis-queue"
+  SQS_RAG_INGEST_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-rag-ingest-queue"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.utterai-observability.svc.cluster.local:4318"
   OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
   OTEL_METRICS_EXPORTER: "otlp"
   OTEL_TRACES_EXPORTER: "otlp"
   OTEL_LOGS_EXPORTER: "none"
+  OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=dev,team=utterai"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: utterai-ai-worker-config
+  namespace: utterai-ai-cpu
+data:
+  APP_ENV: "dev"
+  LOG_LEVEL: "DEBUG"
+  AWS_REGION: "ap-northeast-2"
+  BEDROCK_REGION: "ap-northeast-2"
+  S3_BUCKET_AUDIO: "utterai-dev-raw-audio"
+  S3_BUCKET_REPORT: "utterai-dev-reports"
+  S3_BUCKET_RAG: "utterai-dev-documents"
+  SQS_AUDIO_PREPROCESS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-audio-preprocess-queue"
+  SQS_GPU_INFERENCE_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-gpu-inference-queue"
+  SQS_REPORT_ANALYSIS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-report-analysis-queue"
+  SQS_RAG_INGEST_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-rag-ingest-queue"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.utterai-observability.svc.cluster.local:4318"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+  OTEL_METRICS_EXPORTER: "otlp"
+  OTEL_TRACES_EXPORTER: "otlp"
+  OTEL_LOGS_EXPORTER: "none"
+  OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=dev,team=utterai"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: utterai-ai-worker-config
+  namespace: utterai-ai-gpu
+data:
+  APP_ENV: "dev"
+  LOG_LEVEL: "DEBUG"
+  AWS_REGION: "ap-northeast-2"
+  BEDROCK_REGION: "ap-northeast-2"
+  S3_BUCKET_AUDIO: "utterai-dev-raw-audio"
+  S3_BUCKET_REPORT: "utterai-dev-reports"
+  S3_BUCKET_RAG: "utterai-dev-documents"
+  SQS_AUDIO_PREPROCESS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-audio-preprocess-queue"
+  SQS_GPU_INFERENCE_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-gpu-inference-queue"
+  SQS_REPORT_ANALYSIS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-report-analysis-queue"
+  SQS_RAG_INGEST_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-rag-ingest-queue"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.utterai-observability.svc.cluster.local:4318"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+  OTEL_METRICS_EXPORTER: "otlp"
+  OTEL_TRACES_EXPORTER: "otlp"
+  OTEL_LOGS_EXPORTER: "none"
+  OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=dev,team=utterai"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: utterai-ai-worker-config
+  namespace: utterai-batch
+data:
+  APP_ENV: "dev"
+  LOG_LEVEL: "DEBUG"
+  AWS_REGION: "ap-northeast-2"
+  BEDROCK_REGION: "ap-northeast-2"
+  S3_BUCKET_AUDIO: "utterai-dev-raw-audio"
+  S3_BUCKET_REPORT: "utterai-dev-reports"
+  S3_BUCKET_RAG: "utterai-dev-documents"
+  SQS_AUDIO_PREPROCESS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-audio-preprocess-queue"
+  SQS_GPU_INFERENCE_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-gpu-inference-queue"
+  SQS_REPORT_ANALYSIS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-report-analysis-queue"
+  SQS_RAG_INGEST_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-rag-ingest-queue"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.utterai-observability.svc.cluster.local:4318"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+  OTEL_METRICS_EXPORTER: "otlp"
+  OTEL_TRACES_EXPORTER: "otlp"
+  OTEL_LOGS_EXPORTER: "none"
+  OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=dev,team=utterai"

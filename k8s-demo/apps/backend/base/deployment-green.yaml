@@ -1,0 +1,109 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: utterai-api-green
+  labels:
+    app: utterai-api
+    color: green
+    app.kubernetes.io/name: utterai-api
+    app.kubernetes.io/part-of: utterai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: utterai-api
+      color: green
+  template:
+    metadata:
+      labels:
+        app: utterai-api
+        color: green
+        app.kubernetes.io/name: utterai-api
+        app.kubernetes.io/part-of: utterai
+    spec:
+      serviceAccountName: utterai-api-sa
+      nodeSelector:
+        workload: api
+      tolerations:
+        - key: dedicated
+          operator: Equal
+          value: api
+          effect: NoSchedule
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: utterai-api
+              color: green
+      initContainers:
+        - name: db-migrate
+          image: utterai-backend-green:dev-placeholder
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef:
+                name: utterai-api-config
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: backend-api-secret
+                  key: DB_PASSWORD
+      containers:
+        - name: api
+          image: utterai-backend-green:dev-placeholder
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: utterai-api-config
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: backend-api-secret
+                  key: DB_PASSWORD
+            - name: JWT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backend-api-secret
+                  key: JWT_SECRET_KEY
+            - name: INTERNAL_CALLBACK_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: backend-api-secret
+                  key: INTERNAL_CALLBACK_TOKEN
+            - name: INTERNAL_CALLBACK_HMAC_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: backend-api-secret
+                  key: INTERNAL_CALLBACK_HMAC_SECRET
+            - name: REDIS_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: backend-api-secret
+                  key: REDIS_AUTH_TOKEN
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            failureThreshold: 3

@@ -85,9 +85,11 @@ spec:
             requests:
               cpu: "1"
               memory: "2Gi"
+              ephemeral-storage: "5Gi"
             limits:
               cpu: "2"
               memory: "4Gi"
+              ephemeral-storage: "10Gi"
           lifecycle:
             # preStop: kubelet이 SIGTERM 보내기 전 5초 대기
             # — SQS visibility timeout 내에 처리 완료 또는 메시지 반환을 보장하기 위함

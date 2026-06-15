@@ -258,6 +258,7 @@ resource "aws_eks_node_group" "worker" {
 
   instance_types = [var.worker_node_instance_type]
   capacity_type  = "ON_DEMAND"
+  disk_size      = var.worker_node_disk_size
 
   scaling_config {
     desired_size = var.worker_node_desired_size
@@ -289,14 +290,41 @@ resource "aws_eks_node_group" "worker" {
 
 # ── GPU Managed Node Group ────────────────────────────────────────────────────
 
+# disk_size 파라미터는 AL2023_x86_64_NVIDIA AMI에서 적용되지 않음 — launch template 필요
+resource "aws_launch_template" "gpu" {
+  name_prefix = "${local.prefix}-gpu-"
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+    ebs {
+      volume_size           = 100
+      volume_type           = "gp3"
+      delete_on_termination = true
+    }
+  }
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name = "${local.prefix}-gpu-node"
+    }
+  }
+}
+
 resource "aws_eks_node_group" "gpu" {
   cluster_name    = aws_eks_cluster.this.name
   node_group_name = "${local.prefix}-gpu"
   node_role_arn   = aws_iam_role.node.arn
   subnet_ids      = var.private_app_subnet_ids
 
-  instance_types = [var.gpu_node_instance_type]
+  instance_types = var.gpu_node_instance_types
   capacity_type  = "ON_DEMAND"
+  ami_type       = "AL2023_x86_64_NVIDIA"
+
+  launch_template {
+    id      = aws_launch_template.gpu.id
+    version = aws_launch_template.gpu.latest_version
+  }
 
   scaling_config {
     desired_size = var.gpu_node_desired_size

@@ -3,7 +3,6 @@ name: AI Kustomize CI
 on:
   pull_request:
     branches:
-      - dev
       - main
     paths:
       - "k8s-demo/apps/ai-worker/**"
@@ -12,7 +11,6 @@ on:
 
   push:
     branches:
-      - dev
       - main
       - "feature/**"
     paths:
@@ -38,11 +36,13 @@ jobs:
       - name: Render dev overlay
         run: |
           kubectl kustomize k8s-demo/apps/ai-worker/overlays/dev > /tmp/ai-worker-dev.yaml
-          grep "namespace: utterai-dev-ai-worker" /tmp/ai-worker-dev.yaml
+          grep "namespace: utterai-ai-api" /tmp/ai-worker-dev.yaml
+          grep "namespace: utterai-ai-cpu" /tmp/ai-worker-dev.yaml
+          grep "namespace: utterai-ai-gpu" /tmp/ai-worker-dev.yaml
+          grep "namespace: utterai-batch" /tmp/ai-worker-dev.yaml
           grep "image:" /tmp/ai-worker-dev.yaml
 
       - name: Render prod overlay
         run: |
           kubectl kustomize k8s-demo/apps/ai-worker/overlays/prod > /tmp/ai-worker-prod.yaml
-          grep "namespace: utterai-prod-ai-worker" /tmp/ai-worker-prod.yaml
           grep "image:" /tmp/ai-worker-prod.yaml

@@ -11,11 +11,11 @@ spec:
   project: default
   source:
     repoURL: https://github.com/UtterAI-aws13/UtterAI_Infra
-    targetRevision: dev
+    targetRevision: main
     path: k8s-demo/apps/backend/overlays/dev
   destination:
     server: https://kubernetes.default.svc
-    namespace: utterai-dev-api
+    namespace: utterai-api
   syncPolicy:
     automated:
       prune: true

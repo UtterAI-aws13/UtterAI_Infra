@@ -1,9 +1,8 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: utterai-backend-role
+  name: utterai-api-role
 rules:
-  # ConfigMap/Secret 조회 권한만 부여합니다. AWS 권한은 IRSA가 담당합니다.
   - apiGroups: [""]
     resources: ["configmaps", "secrets"]
     verbs: ["get", "list", "watch"]
@@ -11,11 +10,11 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: utterai-backend-rolebinding
+  name: utterai-api-rolebinding
 subjects:
   - kind: ServiceAccount
-    name: utterai-backend-sa
+    name: utterai-api-sa
 roleRef:
   kind: Role
-  name: utterai-backend-role
+  name: utterai-api-role
   apiGroup: rbac.authorization.k8s.io

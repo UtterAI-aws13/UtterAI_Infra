@@ -21,34 +21,34 @@ resource "aws_ecr_lifecycle_policy" "this" {
     rules = [
       {
         rulePriority = 1
-        description  = "dev 태그 이미지 30개 유지"
+        description  = "dev 태그 이미지 5개 유지"
         selection = {
           tagStatus     = "tagged"
           tagPrefixList = ["dev-"]
           countType     = "imageCountMoreThan"
-          countNumber   = 30
+          countNumber   = 5
         }
         action = { type = "expire" }
       },
       {
         rulePriority = 2
-        description  = "prod 태그 이미지 10개 유지"
+        description  = "prod 태그 이미지 5개 유지"
         selection = {
           tagStatus     = "tagged"
           tagPrefixList = ["prod-"]
           countType     = "imageCountMoreThan"
-          countNumber   = 10
+          countNumber   = 5
         }
         action = { type = "expire" }
       },
       {
         rulePriority = 3
-        description  = "untagged 이미지 7일 후 삭제"
+        description  = "untagged 이미지 3일 후 삭제"
         selection = {
           tagStatus   = "untagged"
           countType   = "sinceImagePushed"
           countUnit   = "days"
-          countNumber = 7
+          countNumber = 3
         }
         action = { type = "expire" }
       },

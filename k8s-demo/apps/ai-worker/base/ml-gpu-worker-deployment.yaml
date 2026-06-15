@@ -1,23 +1,26 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: utterai-ai-ml-gpu-worker
+  name: utterai-ml-gpu-worker
+  namespace: utterai-ai-gpu
   labels:
-    app.kubernetes.io/name: utterai-ai-ml-gpu-worker
+    app: utterai-ml-gpu-worker
+    app.kubernetes.io/name: utterai-ml-gpu-worker
     app.kubernetes.io/part-of: utterai
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: utterai-ai-ml-gpu-worker
+      app: utterai-ml-gpu-worker
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: utterai-ai-ml-gpu-worker
+        app: utterai-ml-gpu-worker
+        app.kubernetes.io/name: utterai-ml-gpu-worker
         app.kubernetes.io/part-of: utterai
         worker-type: ml-gpu
     spec:
-      serviceAccountName: utterai-ai-ml-gpu-worker-sa
+      serviceAccountName: utterai-ml-gpu-worker-sa
       nodeSelector:
         workload: ai-gpu
       tolerations:
@@ -33,7 +36,7 @@ spec:
         - name: ml-gpu-worker
           image: utterai-ai-gpu:dev-placeholder
           imagePullPolicy: IfNotPresent
-          command: ["python", "-c", "from app.workers.ml_gpu_worker import start_worker; start_worker()"]
+          command: ["python", "-m", "app.workers.ml_gpu_worker"]
           envFrom:
             - configMapRef:
                 name: utterai-ai-worker-config
@@ -43,12 +46,12 @@ spec:
             - name: HF_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: utterai-ai-gpu-secret
+                  name: gpu-worker-secret
                   key: HF_TOKEN
             - name: HF_HOME
               value: "/tmp/huggingface"
-            - name: CUDA_VISIBLE_DEVICES
-              value: "0"
+            - name: OTEL_SERVICE_NAME
+              value: "ml-gpu-worker"
           resources:
             requests:
               cpu: "2"

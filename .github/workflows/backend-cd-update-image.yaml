@@ -55,8 +55,17 @@ jobs:
           ECR_REGISTRY="${INPUT_ECR_REGISTRY:-$DEFAULT_ECR_REGISTRY}"
           ECR_REPOSITORY="${INPUT_ECR_REPOSITORY:-$DEFAULT_ECR_REPOSITORY}"
 
+          sanitize_single_line() {
+            printf '%s' "$1" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
+          }
+
+          TARGET_ENV="$(sanitize_single_line "$TARGET_ENV")"
+          IMAGE_TAG="$(sanitize_single_line "$IMAGE_TAG")"
+          ECR_REGISTRY="$(sanitize_single_line "$ECR_REGISTRY")"
+          ECR_REPOSITORY="$(sanitize_single_line "$ECR_REPOSITORY")"
+
           if [ "$TARGET_ENV" = "dev" ]; then
-            TARGET_BRANCH="dev"
+            TARGET_BRANCH="main"
             OVERLAY_PATH="k8s-demo/apps/backend/overlays/dev"
             EXPECTED_TAG_PREFIX="dev-"
           elif [ "$TARGET_ENV" = "prod" ]; then
@@ -105,10 +114,20 @@ jobs:
             echo "ecr_repository=$ECR_REPOSITORY"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.UTTERAI_GITOPS_APP_CLIENT_ID }}
+          private-key: ${{ secrets.UTTERAI_GITOPS_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Checkout GitOps repository
         uses: actions/checkout@v4
         with:
           ref: ${{ steps.meta.outputs.target_branch }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Setup kubectl
         uses: azure/setup-kubectl@v4
@@ -148,7 +167,7 @@ jobs:
           TARGET_ENV: ${{ steps.meta.outputs.target_env }}
           TARGET_BRANCH: ${{ steps.meta.outputs.target_branch }}
           IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           UPDATE_BRANCH="ci/backend-${TARGET_ENV}-${IMAGE_TAG}-${GITHUB_RUN_ID}"
 
@@ -165,7 +184,7 @@ jobs:
           git commit -m "ci(backend): update $TARGET_ENV image tag to $IMAGE_TAG"
           git push origin "$UPDATE_BRANCH"
 
-          gh pr create \
+          PR_URL="$(gh pr create \
             --base "$TARGET_BRANCH" \
             --head "$UPDATE_BRANCH" \
             --title "ci(backend): update $TARGET_ENV image tag to $IMAGE_TAG" \
@@ -176,7 +195,13 @@ jobs:
           - 기준 브랜치: \`$TARGET_BRANCH\`
           - image tag: \`$IMAGE_TAG\`
 
-          이 PR은 보호 브랜치에 직접 push하지 않고 GitOps image tag 변경을 리뷰 가능한 PR로 남기기 위해 생성되었습니다."
-        
-        # TODO: 인프라 Repo에 Github App 을 통해 브랜치 예외규정설정 -> Dev 브랜치에 한해 자동으로 이미지 태그 변경이 반영될 수 있도록 함.
-        
+          이 PR은 보호 브랜치에 직접 push하지 않고 GitOps image tag 변경을 리뷰 가능한 PR로 남기기 위해 생성되었습니다.")"
+
+          echo "Created PR: $PR_URL"
+
+          if [ "$TARGET_ENV" = "dev" ]; then
+            echo "dev 환경 PR은 필수 CI 통과 후 자동 merge되도록 설정합니다."
+            gh pr merge "$PR_URL" --auto --squash --delete-branch
+          else
+            echo "prod 환경 PR은 사람이 검토하고 merge해야 합니다."
+          fi

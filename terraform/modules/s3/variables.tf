@@ -9,3 +9,8 @@ variable "environment" {
 variable "frontend_domain" {
   type = string
 }
+
+variable "allowed_extra_origins" {
+  type    = list(string)
+  default = []
+}

@@ -17,7 +17,6 @@ UtterAI_Infra/
 │   ├── dev/            # Dev 환경 가이드, 보안, 부하 테스트 시나리오
 │   └── prod/           # Prod 환경 가이드
 │
-├── observability/      # 로컬 관측성 스택 (Docker Compose)
 ├── tests/              # 부하 테스트 스크립트 (CA+HPA / Karpenter+KEDA)
 ├── scripts/            # 배포 자동화 및 마이그레이션 스크립트
 └── deploy/             # 배포 관련 설정
@@ -32,29 +31,16 @@ UtterAI_Infra/
 | [`docs/dev/security-overview.md`](docs/dev/security-overview.md) | Dev 환경 전체 보안 구현 현황 |
 | [`docs/dev/security-hardening.md`](docs/dev/security-hardening.md) | 보안 수정 이력 및 잔여 항목 |
 | [`docs/dev/load-test-scenarios.md`](docs/dev/load-test-scenarios.md) | CA+HPA / Karpenter+KEDA 부하 테스트 시나리오 |
-| [`observability/README.md`](observability/README.md) | 로컬 observability 스택 실행 방법 |
 
-## Local Observability
+## Observability
 
-```bash
-cd observability
-docker compose up -d
-```
-
-| 서비스 | URL |
-|--------|-----|
-| Grafana | http://localhost:3000 (admin / admin) |
-| Prometheus | http://localhost:9090 |
-| Tempo | http://localhost:3200 |
-| OTLP gRPC | localhost:4317 |
-| OTLP HTTP | http://localhost:4318 |
+EKS 클러스터 내부 관측성은 `terraform/modules/eks-addons/`의 `kube-prometheus-stack`과 `k8s/observability/`의 OpenTelemetry Collector 매니페스트를 기준으로 관리한다.
 
 ## Branch Strategy
 
 | 브랜치 | 용도 |
 |--------|------|
-| `main` | 프로덕션 기준 브랜치. ArgoCD가 트래킹하여 자동 sync. |
-| `dev` | 기본 개발 브랜치. PR 시 GitHub Actions가 terraform plan / lint 자동 실행. |
+| `main` | Infra repo의 단일 기준 브랜치. Argo CD가 dev/prod Kustomize overlay를 path 기준으로 트래킹. |
 | `feature/*` | 새 인프라 리소스 추가 |
 | `fix/*` | 버그 수정 |
 | `docs/*` | 문서 작업 |
