@@ -70,8 +70,8 @@ resource "aws_s3_bucket_cors_configuration" "raw_audio" {
   }
 }
 
-resource "aws_s3_bucket_cors_configuration" "documents" {
-  bucket = aws_s3_bucket.buckets["documents"].id
+resource "aws_s3_bucket_cors_configuration" "template" {
+  bucket = aws_s3_bucket.buckets["template"].id
 
   cors_rule {
     allowed_headers = ["*"]
