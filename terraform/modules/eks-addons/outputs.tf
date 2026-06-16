@@ -22,6 +22,14 @@ output "promtail_release_name" {
   value = helm_release.promtail.name
 }
 
+output "alertmanager_slack_secret_manager_name" {
+  value = aws_secretsmanager_secret.alertmanager_slack_webhook.name
+}
+
+output "alertmanager_slack_secret_manager_arn" {
+  value = aws_secretsmanager_secret.alertmanager_slack_webhook.arn
+}
+
 output "external_secrets_release_name" {
   value = helm_release.external_secrets.name
 }
