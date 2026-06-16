@@ -832,5 +832,5 @@ ECR Seoul utterai-prod-backend  ──────► ECR Tokyo utterai-prod-bac
 - 운영 가이드 (설정값·명령어): [`docs/prod/README.md`](./README.md)
 - Dev vs Prod 환경 비교: [`docs/README.md`](../README.md)
 - Dev 환경 가이드: [`docs/dev/README.md`](../dev/README.md)
-- EKS 플랫폼 구현 방향: [`docs/eks-architecture-flow.md`](../eks-architecture-flow.md)
-- Prod 마이그레이션 체크리스트: [`docs/prod/prod-migration-checklist.md`](./prod-migration-checklist.md)
+- EKS 플랫폼 구현 방향: [`docs/shared/eks-architecture-flow.md`](../shared/eks-architecture-flow.md)
+- Prod 마이그레이션 체크리스트: [`docs/prod/migration-checklist.md`](./migration-checklist.md)

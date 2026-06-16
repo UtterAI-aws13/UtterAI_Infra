@@ -910,4 +910,4 @@ spec:
 
 - [Prod 환경 인프라 가이드](./README.md)
 - [Dev vs Prod 비교](../README.md)
-- [보안 미비점 분석](../dev/security-gaps.md)
+- [보안 미비점 분석](../dev/security/gaps.md)

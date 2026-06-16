@@ -371,6 +371,6 @@ Phase 2 결과 기록:
 
 ## 관련 문서
 
-- [전체 보안 현황](./security-overview.md)
+- [전체 보안 현황](./security/overview.md)
 - [Dev 환경 배포 가이드](./README.md)
 - 테스트 스크립트: `tests/load/`, `tests/observe/`
