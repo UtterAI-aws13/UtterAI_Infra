@@ -30,6 +30,14 @@ output "alertmanager_slack_secret_manager_arn" {
   value = aws_secretsmanager_secret.alertmanager_slack_webhook.arn
 }
 
+output "grafana_admin_secret_manager_name" {
+  value = aws_secretsmanager_secret.grafana_admin_credentials.name
+}
+
+output "grafana_admin_secret_manager_arn" {
+  value = aws_secretsmanager_secret.grafana_admin_credentials.arn
+}
+
 output "external_secrets_release_name" {
   value = helm_release.external_secrets.name
 }

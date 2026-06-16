@@ -2,6 +2,7 @@
 
 > 팀원이 EKS 모니터링 화면을 로컬에서 확인할 때 쓰는 실행 가이드.  
 > 현재 명령어 예시는 dev 기준이며, prod에서도 흐름은 동일하지만 클러스터 이름, AWS 계정/profile, 저장소 정책은 환경에 맞게 바꿔야 한다.
+> 장애 원인 분석과 재발 방지 기록은 [Troubleshooting](./troubleshooting.md)에 정리한다.
 
 ## 환경별 차이
 
@@ -106,11 +107,98 @@ Password: Kubernetes Secret 기준으로 확인
 비밀번호 확인:
 
 ```bash
-kubectl get secret -n monitoring kube-prometheus-stack-grafana \
+kubectl get secret -n monitoring grafana-admin-credentials \
   -o jsonpath="{.data.admin-password}" | base64 -d; echo
 ```
 
 접속이 끝나면 `port-forward`를 실행한 터미널에서 `Ctrl+C`로 종료한다.
+
+## Grafana admin credential 관리
+
+Grafana admin credential은 Git이나 Terraform 변수에 평문으로 두지 않는다. Dev 기준 운영 흐름은 Alertmanager Slack webhook과 동일하게 AWS Secrets Manager에서 시작한다.
+
+현재 흐름:
+
+```text
+AWS Secrets Manager
+  -> External Secrets Operator
+  -> Kubernetes Secret: monitoring/grafana-admin-credentials
+  -> kube-prometheus-stack Grafana admin.existingSecret
+```
+
+### Secrets Manager 값 주입
+
+먼저 Terraform이 Secrets Manager secret을 만들었는지 확인한다.
+
+```bash
+terraform -chdir=terraform/environments/dev/04-addons output \
+  grafana_admin_secret_manager_name
+```
+
+Secrets Manager에는 JSON 형태로 값을 넣는다.
+
+```bash
+aws secretsmanager put-secret-value \
+  --secret-id utterai-dev/grafana-admin-credentials \
+  --secret-string '{"admin_user":"admin","admin_password":"<GRAFANA_ADMIN_PASSWORD>"}'
+```
+
+비밀번호는 충분히 긴 랜덤 값을 사용한다. 이 값은 Git, PR, Slack 일반 채널에 기록하지 않는다.
+
+### Terraform 적용
+
+Secret 값이 주입된 뒤 Grafana가 해당 Secret을 사용하도록 `04-addons`를 적용한다.
+
+```bash
+cd ~/utter-ai/UtterAI_Infra
+terraform -chdir=terraform/environments/dev/04-addons plan \
+  -var='alertmanager_slack_enabled=true' \
+  -var='grafana_admin_credentials_enabled=true'
+terraform -chdir=terraform/environments/dev/04-addons apply \
+  -var='alertmanager_slack_enabled=true' \
+  -var='grafana_admin_credentials_enabled=true'
+```
+
+반복 적용 시 로컬 전용 `terraform.tfvars`를 둘 수 있다. 이 파일은 Git에 커밋하지 않는다.
+
+```bash
+cp terraform/environments/dev/04-addons/terraform.tfvars.example \
+  terraform/environments/dev/04-addons/terraform.tfvars
+```
+
+### 동작 확인
+
+ExternalSecret과 Kubernetes Secret 동기화를 확인한다.
+
+```bash
+kubectl get externalsecret -n monitoring grafana-admin-credentials
+kubectl get secret -n monitoring grafana-admin-credentials
+```
+
+Grafana Pod가 정상인지 확인한다.
+
+```bash
+kubectl get pods -n monitoring | grep grafana
+```
+
+Grafana admin password는 아래 Secret에서 확인한다.
+
+```bash
+kubectl get secret -n monitoring grafana-admin-credentials \
+  -o jsonpath="{.data.admin-password}" | base64 -d; echo
+```
+
+### Bootstrap 주의사항
+
+새 클러스터에서 처음 `04-addons`를 적용할 때 `monitoring` namespace가 아직 없으면 Grafana admin ExternalSecret을 먼저 만들 수 없다. 이 경우 아래 순서로 나눠서 진행한다.
+
+```text
+1. grafana_admin_credentials_enabled=false 상태로 04-addons 1차 적용
+2. Secrets Manager에 Grafana admin JSON 값 주입
+3. grafana_admin_credentials_enabled=true 상태로 04-addons 2차 적용
+```
+
+이미 dev처럼 `monitoring` namespace와 External Secrets Operator가 설치된 환경에서는 2차 적용부터 진행하면 된다.
 
 ## Prometheus / Metrics 확인
 
@@ -382,7 +470,7 @@ http://localhost:3001
 Secret의 admin password를 다시 확인한다.
 
 ```bash
-kubectl get secret -n monitoring kube-prometheus-stack-grafana \
+kubectl get secret -n monitoring grafana-admin-credentials \
   -o jsonpath="{.data.admin-password}" | base64 -d; echo
 ```
 
