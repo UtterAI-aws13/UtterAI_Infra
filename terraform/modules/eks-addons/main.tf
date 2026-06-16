@@ -11,6 +11,14 @@ locals {
       group_wait      = "30s"
       group_interval  = "5m"
       repeat_interval = "4h"
+      routes = [
+        {
+          receiver = "null"
+          matchers = [
+            "alertname = Watchdog"
+          ]
+        }
+      ]
     }
     receivers = concat(
       [

@@ -40,6 +40,10 @@ Pod stdout/stderr logs
 
 AWS Managed Services
   -> CloudWatch
+
+Prometheus Alerts
+  -> Alertmanager
+  -> Slack
 ```
 
 주요 네임스페이스:
@@ -138,6 +142,118 @@ OpenTelemetry Collector scrape 여부:
 ```promql
 up{job=~".*otel.*"}
 ```
+
+## Alertmanager / Slack 알림 확인
+
+Alertmanager는 Prometheus alert를 받아 Slack으로 전달한다. Dev 기준 Slack webhook URL은 Git에 기록하지 않고 AWS Secrets Manager에만 저장한다.
+
+현재 흐름:
+
+```text
+AWS Secrets Manager
+  -> External Secrets Operator
+  -> Kubernetes Secret: monitoring/alertmanager-slack-webhook
+  -> Alertmanager Secret mount
+  -> Slack receiver
+```
+
+### Terraform 적용
+
+Slack 알림을 켠 상태로 `04-addons`를 적용한다.
+
+```bash
+cd ~/utter-ai/UtterAI_Infra
+terraform -chdir=terraform/environments/dev/04-addons plan \
+  -var='alertmanager_slack_enabled=true'
+terraform -chdir=terraform/environments/dev/04-addons apply \
+  -var='alertmanager_slack_enabled=true'
+```
+
+반복 적용 시 `-var`를 빼먹지 않도록 로컬에 `terraform.tfvars`를 둘 수 있다. 이 파일은 Git에 커밋하지 않는다.
+
+```bash
+cp terraform/environments/dev/04-addons/terraform.tfvars.example \
+  terraform/environments/dev/04-addons/terraform.tfvars
+```
+
+### Slack webhook Secret 주입
+
+`terraform output`으로 Secrets Manager 이름을 확인한다.
+
+```bash
+terraform -chdir=terraform/environments/dev/04-addons output \
+  alertmanager_slack_secret_manager_name
+```
+
+Slack webhook URL은 Secrets Manager에만 넣는다.
+
+```bash
+aws secretsmanager put-secret-value \
+  --secret-id utterai-dev/alertmanager-slack-webhook \
+  --secret-string '<SLACK_WEBHOOK_URL>'
+```
+
+### 동작 확인
+
+ExternalSecret과 Kubernetes Secret 동기화를 확인한다.
+
+```bash
+kubectl get externalsecret -n monitoring alertmanager-slack-webhook
+kubectl get secret -n monitoring alertmanager-slack-webhook
+```
+
+Alertmanager reconciliation 상태를 확인한다.
+
+```bash
+kubectl get alertmanager -n monitoring
+```
+
+정상 기준:
+
+```text
+READY       1
+RECONCILED  True
+AVAILABLE   True
+```
+
+실제 Alertmanager 라우팅 설정을 확인한다.
+
+```bash
+kubectl get secret -n monitoring alertmanager-utterai-monitoring-alertmanager \
+  -o go-template='{{index .data "alertmanager.yaml" | base64decode}}'
+```
+
+정상 설정에는 아래 내용이 보여야 한다.
+
+```text
+receiver: slack
+receivers:
+- name: slack
+- name: "null"
+routes:
+- receiver: "null"
+  matchers:
+  - alertname = "Watchdog"
+```
+
+### EKS control plane 알림 정책
+
+EKS는 `kube-scheduler`, `kube-controller-manager`, `etcd`를 AWS managed control plane에서 운영한다. 클러스터 내부 Prometheus가 해당 컴포넌트를 직접 scrape할 수 없으므로 아래 알림은 기본값에서 제외한다.
+
+| Alert | 처리 |
+|---|---|
+| `KubeSchedulerDown` | 비활성화 |
+| `KubeControllerManagerDown` | 비활성화 |
+| etcd 관련 기본 rule | 비활성화 |
+
+대신 유지하는 알림:
+
+| 영역 | 이유 |
+|---|---|
+| kube-apiserver | EKS에서도 Prometheus target으로 확인 가능 |
+| kubelet / cAdvisor | 노드와 Pod 리소스 확인에 필요 |
+| kube-state-metrics | Kubernetes object 상태 확인에 필요 |
+| node-exporter | 노드 리소스/파일시스템 확인에 필요 |
 
 ## Loki / Logs 확인
 
@@ -295,6 +411,30 @@ Promtail 로그에서 Loki push 에러가 있는지 확인한다.
 
 ```bash
 kubectl logs -n monitoring <promtail-pod-name> --tail=100
+```
+
+### Alertmanager `RECONCILED=False`인 경우
+
+Alertmanager CR 상태 메시지를 먼저 확인한다.
+
+```bash
+kubectl get alertmanager -n monitoring utterai-monitoring-alertmanager -o yaml
+```
+
+자주 보는 원인:
+
+| 증상 | 의미 | 조치 |
+|---|---|---|
+| `notification config name "null" is not unique` | receiver 이름 중복 | Terraform Alertmanager config 확인 후 `04-addons` 재적용 |
+| `alertmanager-slack-webhook` Secret 없음 | ESO 동기화 실패 또는 Slack Secret 미주입 | ExternalSecret, Secrets Manager 값 확인 |
+| Slack 메시지가 안 옴 | receiver가 `null`이거나 webhook 값 문제 | `alertmanager_slack_enabled=true` 적용 여부와 Secret 값 확인 |
+
+확인 명령:
+
+```bash
+kubectl get externalsecret -n monitoring alertmanager-slack-webhook
+kubectl get secret -n monitoring alertmanager-slack-webhook
+kubectl get alertmanager -n monitoring
 ```
 
 ## 종료/주의사항
