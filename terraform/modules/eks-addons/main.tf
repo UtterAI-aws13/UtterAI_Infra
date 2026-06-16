@@ -1,3 +1,68 @@
+locals {
+  alertmanager_receiver_name = var.alertmanager_slack_enabled ? "slack" : "null"
+
+  alertmanager_config = {
+    global = {
+      resolve_timeout = "5m"
+    }
+    route = {
+      receiver        = local.alertmanager_receiver_name
+      group_by        = ["namespace", "alertname"]
+      group_wait      = "30s"
+      group_interval  = "5m"
+      repeat_interval = "4h"
+    }
+    receivers = [
+      merge(
+        {
+          name = local.alertmanager_receiver_name
+        },
+        var.alertmanager_slack_enabled ? {
+          slack_configs = [
+            {
+              api_url_file  = "/etc/alertmanager/secrets/${var.alertmanager_slack_webhook_secret_name}/${var.alertmanager_slack_webhook_secret_key}"
+              channel       = var.alertmanager_slack_channel
+              send_resolved = true
+              title         = "[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}"
+              text          = "{{ range .Alerts }}*Severity:* {{ .Labels.severity }}\n*Namespace:* {{ .Labels.namespace }}\n*Summary:* {{ .Annotations.summary }}\n*Description:* {{ .Annotations.description }}\n{{ end }}"
+            }
+          ]
+        } : {}
+      ),
+      {
+        name = "null"
+      }
+    ]
+  }
+
+  alertmanager_spec = merge(
+    {
+      replicas = 1
+      resources = {
+        requests = {
+          cpu    = "50m"
+          memory = "128Mi"
+        }
+        limits = {
+          cpu    = "200m"
+          memory = "256Mi"
+        }
+      }
+    },
+    var.alertmanager_slack_enabled ? {
+      secrets = [var.alertmanager_slack_webhook_secret_name]
+    } : {}
+  )
+}
+
+# ── Alertmanager Slack Secret Sync ───────────────────────────────────────────
+
+resource "aws_secretsmanager_secret" "alertmanager_slack_webhook" {
+  name                    = var.alertmanager_slack_secret_manager_name
+  description             = "Slack incoming webhook URL for Alertmanager notifications."
+  recovery_window_in_days = 0
+}
+
 # ── AWS Load Balancer Controller ──────────────────────────────────────────────
 
 resource "helm_release" "aws_load_balancer_controller" {
@@ -118,7 +183,9 @@ resource "helm_release" "kube_prometheus_stack" {
       }
 
       alertmanager = {
-        enabled = false
+        enabled          = true
+        config           = local.alertmanager_config
+        alertmanagerSpec = local.alertmanager_spec
       }
     })
   ]
@@ -390,6 +457,41 @@ resource "helm_release" "external_secrets" {
     name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
     value = var.eso_irsa_role_arn
   }
+}
+
+resource "kubernetes_manifest" "alertmanager_slack_webhook" {
+  manifest = {
+    apiVersion = "external-secrets.io/v1beta1"
+    kind       = "ExternalSecret"
+    metadata = {
+      name      = "alertmanager-slack-webhook"
+      namespace = "monitoring"
+    }
+    spec = {
+      refreshInterval = "1h"
+      secretStoreRef = {
+        name = var.external_secrets_cluster_store_name
+        kind = "ClusterSecretStore"
+      }
+      target = {
+        name           = var.alertmanager_slack_webhook_secret_name
+        creationPolicy = "Owner"
+      }
+      data = [
+        {
+          secretKey = var.alertmanager_slack_webhook_secret_key
+          remoteRef = {
+            key = aws_secretsmanager_secret.alertmanager_slack_webhook.name
+          }
+        }
+      ]
+    }
+  }
+
+  depends_on = [
+    helm_release.kube_prometheus_stack,
+    helm_release.external_secrets,
+  ]
 }
 
 # ── NVIDIA Device Plugin ──────────────────────────────────────────────────────
