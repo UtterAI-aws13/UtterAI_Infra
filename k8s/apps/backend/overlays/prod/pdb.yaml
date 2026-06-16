@@ -1,0 +1,22 @@
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: utterai-api-blue-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: utterai-api
+      color: blue
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: utterai-api-green-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: utterai-api
+      color: green
