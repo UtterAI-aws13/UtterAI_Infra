@@ -155,6 +155,6 @@ resource "aws_elasticache_replication_group" "this" {
 
 ## 관련 문서
 
-- [Dev 환경 적용 가이드](./README.md)
-- [인프라 환경 개요](../README.md)
-- EKS 아키텍처 상세: [`docs/eks-architecture-flow.md`](../eks-architecture-flow.md)
+- [Dev 환경 적용 가이드](../README.md)
+- [인프라 환경 개요](../../README.md)
+- EKS 아키텍처 상세: [`docs/shared/eks-architecture-flow.md`](../../shared/eks-architecture-flow.md)

@@ -1870,7 +1870,7 @@ resource "aws_elasticache_replication_group" "this" {
 
 ## 참고
 
-- EKS 아키텍처 상세 설계: [`docs/eks-architecture-flow.md`](../eks-architecture-flow.md)
+- EKS 아키텍처 상세 설계: [`docs/shared/eks-architecture-flow.md`](../shared/eks-architecture-flow.md)
 - Dev vs Prod 환경 비교: [`docs/README.md`](../README.md)
 - Dev 환경 구현 가이드: [`docs/dev/README.md`](../dev/README.md)
 - 브랜치/커밋 규칙: [`CONTRIBUTING.md`](../../CONTRIBUTING.md)

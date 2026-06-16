@@ -1,7 +1,7 @@
 # Terraform 레이어 의존 흐름
 
 dev 환경 4개 레이어가 서로 어떤 output을 주고받으며 리소스가 설치되는지 정리한다.  
-apply/destroy 절차는 [terraform-ops.md](./terraform-ops.md) 참고.
+apply/destroy 절차는 [ops.md](./ops.md) 참고.
 
 ---
 
