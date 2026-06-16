@@ -456,6 +456,19 @@ terraform plan
 terraform apply   # 약 10~15분
 ```
 
+Alertmanager Slack 알림을 운영할 때는 `alertmanager_slack_enabled=true`를 함께 적용한다. Slack webhook URL은 `terraform.tfvars`에 넣지 않고 Secrets Manager에만 저장한다.
+
+```bash
+terraform plan -var='alertmanager_slack_enabled=true'
+terraform apply -var='alertmanager_slack_enabled=true'
+```
+
+반복 적용 시 로컬 전용 `terraform.tfvars`를 사용할 수 있다. 이 파일은 `.gitignore` 대상이다.
+
+```bash
+cp terraform.tfvars.example terraform.tfvars
+```
+
 설치 순서 (Terraform 내부 의존 관계에 의해 자동 제어):
 
 ```

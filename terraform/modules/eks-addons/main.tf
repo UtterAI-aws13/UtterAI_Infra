@@ -11,28 +11,36 @@ locals {
       group_wait      = "30s"
       group_interval  = "5m"
       repeat_interval = "4h"
-    }
-    receivers = [
-      merge(
+      routes = [
         {
-          name = local.alertmanager_receiver_name
-        },
-        var.alertmanager_slack_enabled ? {
-          slack_configs = [
-            {
-              api_url_file  = "/etc/alertmanager/secrets/${var.alertmanager_slack_webhook_secret_name}/${var.alertmanager_slack_webhook_secret_key}"
-              channel       = var.alertmanager_slack_channel
-              send_resolved = true
-              title         = "[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}"
-              text          = "{{ range .Alerts }}*Severity:* {{ .Labels.severity }}\n*Namespace:* {{ .Labels.namespace }}\n*Summary:* {{ .Annotations.summary }}\n*Description:* {{ .Annotations.description }}\n{{ end }}"
-            }
+          receiver = "null"
+          matchers = [
+            "alertname = Watchdog"
           ]
-        } : {}
-      ),
-      {
-        name = "null"
-      }
-    ]
+        }
+      ]
+    }
+    receivers = concat(
+      [
+        merge(
+          {
+            name = local.alertmanager_receiver_name
+          },
+          var.alertmanager_slack_enabled ? {
+            slack_configs = [
+              {
+                api_url_file  = "/etc/alertmanager/secrets/${var.alertmanager_slack_webhook_secret_name}/${var.alertmanager_slack_webhook_secret_key}"
+                channel       = var.alertmanager_slack_channel
+                send_resolved = true
+                title         = "[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}"
+                text          = "{{ range .Alerts }}*Severity:* {{ .Labels.severity }}\n*Namespace:* {{ .Labels.namespace }}\n*Summary:* {{ .Annotations.summary }}\n*Description:* {{ .Annotations.description }}\n{{ end }}"
+              }
+            ]
+          } : {}
+        )
+      ],
+      var.alertmanager_slack_enabled ? [{ name = "null" }] : []
+    )
   }
 
   alertmanager_spec = merge(
@@ -125,6 +133,17 @@ resource "helm_release" "kube_prometheus_stack" {
     yamlencode({
       fullnameOverride = "utterai-monitoring"
 
+      # EKS manages these control plane components outside worker nodes, so
+      # Prometheus cannot reliably scrape their endpoints from the cluster.
+      defaultRules = {
+        rules = {
+          etcd                   = false
+          kubeControllerManager  = false
+          kubeSchedulerAlerting  = false
+          kubeSchedulerRecording = false
+        }
+      }
+
       prometheus = {
         prometheusSpec = {
           retention      = "7d"
@@ -180,6 +199,18 @@ resource "helm_release" "kube_prometheus_stack" {
         serviceMonitor = {
           cAdvisor = true
         }
+      }
+
+      kubeControllerManager = {
+        enabled = false
+      }
+
+      kubeEtcd = {
+        enabled = false
+      }
+
+      kubeScheduler = {
+        enabled = false
       }
 
       alertmanager = {
