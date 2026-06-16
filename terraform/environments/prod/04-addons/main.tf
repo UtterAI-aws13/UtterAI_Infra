@@ -44,6 +44,12 @@ module "eks_addons" {
   alertmanager_slack_webhook_secret_name = var.alertmanager_slack_webhook_secret_name
   alertmanager_slack_webhook_secret_key  = var.alertmanager_slack_webhook_secret_key
   alertmanager_slack_secret_manager_name = var.alertmanager_slack_secret_manager_name
+
+  grafana_admin_credentials_enabled    = var.grafana_admin_credentials_enabled
+  grafana_admin_secret_manager_name    = var.grafana_admin_secret_manager_name
+  grafana_admin_kubernetes_secret_name = var.grafana_admin_kubernetes_secret_name
+  grafana_admin_user_key               = var.grafana_admin_user_key
+  grafana_admin_password_key           = var.grafana_admin_password_key
 }
 
 # ── ALB DNS 자동 조회 ─────────────────────────────────────────────────────────
