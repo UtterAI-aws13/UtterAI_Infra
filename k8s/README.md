@@ -314,15 +314,18 @@ utterai-batch:
 k8s/apps/ai-worker/base/
 ├── ai-api-deployment.yaml
 ├── ai-api-service.yaml
+d├── ai-worker-external-secret.yaml
 ├── batch-worker-deployment.yaml
 ├── configmap.yaml
 ├── cpu-worker-deployment.yaml
-├── external-secrets.yaml
+├── cpu-worker-external-secret.yaml
+├── gpu-worker-external-secret.yaml
 ├── hpa-batch-worker.yaml
 ├── hpa-cpu-worker.yaml
 ├── hpa-ml-gpu-worker.yaml
 ├── kustomization.yaml
 ├── ml-gpu-worker-deployment.yaml
+├── rag-ingest-external-secret.yaml
 ├── rolebinding.yaml
 └── serviceaccount.yaml
 ```
@@ -339,7 +342,10 @@ k8s/apps/ai-worker/base/
 | `configmap.yaml` | S3, SQS, OTel 등 공통 설정 |
 | `serviceaccount.yaml` | 각 worker별 IRSA role 연결 |
 | `rolebinding.yaml` | 각 namespace 안에서 ConfigMap 조회 권한 |
-| `external-secrets.yaml` | HF token, DB 접속정보를 AWS Secrets Manager에서 동기화 |
+| `ai-worker-external-secret.yaml` | ML GPU Worker BE DB 접속정보 (utterai-ai-gpu namespace) |
+| `cpu-worker-external-secret.yaml` | CPU Worker HF_TOKEN + AI DB(rag-ingest-secret) + BE DB(ai-worker-secret) |
+| `gpu-worker-external-secret.yaml` | ML GPU Worker HF_TOKEN |
+| `rag-ingest-external-secret.yaml` | Batch Worker AI DB 접속정보 (utterai-batch namespace) |
 | `hpa-*.yaml` | worker별 HPA |
 | `kustomization.yaml` | AI base 리소스 목록 |
 
@@ -377,7 +383,9 @@ Bedrock 기반 리포트 생성
 필요한 값:
 
 ```text
-HF_TOKEN
+HF_TOKEN                          cpu-worker-secret (HF_TOKEN)
+DB_* (AI DB / pgvector)           cpu-worker-secret ← rag-ingest-secret
+BE_DB_* (BE RDS)                  cpu-worker-secret ← ai-worker-secret
 SQS_AUDIO_PREPROCESS_QUEUE_URL
 SQS_GPU_INFERENCE_QUEUE_URL
 SQS_REPORT_ANALYSIS_QUEUE_URL
@@ -427,7 +435,7 @@ S3 문서를 읽음
 DB/vector store에 적재
 ```
 
-DB 접속 정보는 ConfigMap이 아니라 ExternalSecret이 만든 Kubernetes Secret에서 가져옵니다.
+DB 접속 정보(AI DB)는 `rag-ingest-secret`에서 가져옵니다. `ai-worker-secret`(BE DB)은 사용하지 않습니다.
 
 ---
 

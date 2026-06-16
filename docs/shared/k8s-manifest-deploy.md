@@ -48,8 +48,9 @@ k8s-legacy/
 ├── secrets/
 │   ├── cluster-secret-store.yaml
 │   ├── backend-api-external-secret.yaml
-│   ├── ai-worker-external-secret.yaml
-│   ├── cpu-worker-external-secret.yaml
+│   ├── ai-worker-external-secret.yaml      # ML GPU Worker BE DB (utterai)
+│   ├── cpu-worker-external-secret.yaml     # CPU Worker HF_TOKEN + AI DB + BE DB
+│   ├── rag-ingest-external-secret.yaml     # Batch Worker AI DB (utterai_ai)
 │   └── gpu-worker-external-secret.yaml
 ├── workloads/
 │   ├── api-deployment.yaml       # ${BACKEND_TAG}, ${AWS_ACCOUNT_ID} 포함
@@ -112,9 +113,10 @@ k8s/
 │   │   │   ├── configmap.yaml                 # SQS URL 등 (dev-config-update로 갱신)
 │   │   │   ├── serviceaccount.yaml            # IRSA ARN (dev-config-update로 갱신)
 │   │   │   ├── rolebinding.yaml
-│   │   │   ├── ai-worker-external-secret.yaml # DB 자격증명 → Secrets Manager
-│   │   │   ├── cpu-worker-external-secret.yaml # HF_TOKEN → Secrets Manager
-│   │   │   ├── gpu-worker-external-secret.yaml # HF_TOKEN → Secrets Manager
+│   │   │   ├── ai-worker-external-secret.yaml # ML GPU Worker BE DB 자격증명 (utterai-ai-gpu)
+│   │   │   ├── cpu-worker-external-secret.yaml # CPU Worker: HF_TOKEN + AI DB + BE DB (utterai-ai-cpu)
+│   │   │   ├── gpu-worker-external-secret.yaml # ML GPU Worker HF_TOKEN (utterai-ai-gpu)
+│   │   │   ├── rag-ingest-external-secret.yaml # Batch Worker AI DB 자격증명 (utterai-batch)
 │   │   │   ├── ai-api-deployment.yaml
 │   │   │   ├── cpu-worker-deployment.yaml
 │   │   │   ├── ml-gpu-worker-deployment.yaml
@@ -278,15 +280,22 @@ ExternalSecret (backend-api-external-secret)
   └─ utterai-dev/backend-api-secret → K8s Secret (backend-api-secret)
        DB_PASSWORD, JWT_SECRET_KEY, INTERNAL_CALLBACK_TOKEN, REDIS_AUTH_TOKEN
 
-ExternalSecret (ai-worker-external-secret)
+ExternalSecret (ai-worker-external-secret)          [namespace: utterai-ai-gpu]
   └─ utterai-dev/ai-worker-secret → K8s Secret (ai-worker-secret)
-       DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
+       BE DB 접속 정보 (utterai DB): DB_HOST, DB_PORT, DB_NAME(utterai), DB_USER, DB_PASSWORD
 
-ExternalSecret (cpu-worker-external-secret)
-  └─ utterai-dev/cpu-worker-secret → K8s Secret (cpu-worker-secret)
+ExternalSecret (rag-ingest-external-secret)         [namespace: utterai-batch]
+  └─ utterai-dev/rag-ingest-secret → K8s Secret (rag-ingest-secret)
+       AI DB 접속 정보 (utterai_ai DB): DB_HOST, DB_PORT, DB_NAME(utterai_ai), DB_USER, DB_PASSWORD
+
+ExternalSecret (cpu-worker-external-secret)         [namespace: utterai-ai-cpu]
+  └─ utterai-dev/cpu-worker-secret + rag-ingest-secret + ai-worker-secret
+       → K8s Secret (cpu-worker-secret)
        HF_TOKEN
+       DB_* (AI DB) ← rag-ingest-secret
+       BE_DB_* (BE DB) ← ai-worker-secret
 
-ExternalSecret (gpu-worker-external-secret)
+ExternalSecret (gpu-worker-external-secret)         [namespace: utterai-ai-gpu]
   └─ utterai-dev/gpu-worker-secret → K8s Secret (gpu-worker-secret)
        HF_TOKEN
 ```
