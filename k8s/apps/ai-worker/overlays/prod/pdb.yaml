@@ -1,0 +1,13 @@
+---
+# ai-api는 replicas: 2 고정 — 유지보수 중 최소 1개 보장
+# cpu-worker, ml-gpu-worker, batch-worker는 KEDA가 0으로 스케일 가능하므로 PDB 미적용
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: utterai-ai-api-pdb
+  namespace: utterai-prod-ai-worker
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: utterai-ai-api

@@ -8,6 +8,8 @@ resources:
   - scaledobject-cpu-worker.yaml
   - scaledobject-ml-gpu-worker.yaml
   - scaledobject-batch-worker.yaml
+  - network-policy.yaml
+  - pdb.yaml
 
 patches:
   - path: patch-configmap.yaml

@@ -1,9 +1,11 @@
 # UtterAI Prod 환경 — 보안 적용 계획
 
-> 작성일: 2026-06-15
-> **이 문서는 Prod 전환 시 적용해야 할 보안 항목 계획이다. 현재 Prod는 미구성 상태.**
+> 작성일: 2026-06-15 / 최종 업데이트: 2026-06-16
+> **이 문서는 Prod 전환 시 적용해야 할 보안 항목 계획이다.**
 > Dev 보안 문서(`security-overview`, `security-gaps`, `security-hardening`)를 기반으로
 > Dev에서 허용한 것 중 Prod에서 강화해야 할 항목을 정리한다.
+>
+> **2026-06-16 적용 완료**: NetworkPolicy (AWS VPC CNI native), PodDisruptionBudget
 
 ---
 
@@ -49,11 +51,11 @@
 | **seccompProfile** | 없음 | PSS restricted 강제로 자동 요건화 |
 | **PSA 레이블** | 없음 (`k8s-legacy/namespaces/`) | `k8s` prod overlay에 적용 완료 (`utterai-prod-api`: restricted, `utterai-prod-ai-worker`: baseline) |
 | **Kyverno** | 없음 | 설치 + ClusterPolicy 4종 |
-| **NetworkPolicy** | 없음 | Cilium + 기본 deny-all |
+| **NetworkPolicy** | 없음 | ✅ AWS VPC CNI native NetworkPolicy 활성화 (`ENABLE_NETWORK_POLICY=true`) + 네임스페이스별 deny-all + 명시적 허용 정책 적용 완료 (2026-06-16) |
 | **ClusterSecretStore** | 클러스터 전체 공유 | 네임스페이스별 SecretStore 분리 |
 | **이미지 태그** | mutable tag 허용 | git SHA 고정 + Kyverno latest 차단 |
 | **ECR Immutability** | MUTABLE | IMMUTABLE |
-| **PodDisruptionBudget** | 없음 | api: min 2, ai-api: min 1 |
+| **PodDisruptionBudget** | 없음 | ✅ backend blue/green `minAvailable: 1`, ai-api `minAvailable: 1` 적용 완료 (2026-06-16) |
 | **podAntiAffinity** | 없음 | backend api 다른 노드 분산 |
 | **ArgoCD 인증** | Helm 기본 admin (초기값) | bcrypt 비밀번호 주입 또는 Cognito SSO |
 | **배포 방식** | envsubst + 수동 스크립트 | Kustomize + ArgoCD GitOps |
@@ -271,7 +273,49 @@ spec:
 
 ---
 
-### 3-D. ArgoCD Admin 자격증명
+### 3-D. NetworkPolicy — AWS VPC CNI native ✅ 적용 완료 (2026-06-16)
+
+Cilium 미사용 결정에 따라 AWS VPC CNI 내장 NetworkPolicy로 대체.
+
+**Terraform**: `terraform/modules/eks/main.tf` vpc-cni addon에 `ENABLE_NETWORK_POLICY = "true"` 추가.
+
+**k8s 정책 구조** (네임스페이스별 동일 패턴):
+
+| 정책 | 대상 | 내용 |
+|------|------|------|
+| `default-deny-all` | 전체 Pod | ingress + egress 전면 차단 |
+| `allow-ingress-alb` | backend api | ALB → 8080 허용 |
+| `allow-ingress-from-backend` | ai-api | utterai-prod-api ns → 8080 허용 |
+| `allow-ingress-prometheus` | api, ai-api | monitoring ns → 8080 허용 (scrape) |
+| `allow-egress-dns` | 전체 Pod | 53/UDP, 53/TCP 허용 |
+| `allow-egress-aws` | 전체 Pod | 443 (SQS/S3/Bedrock/SM VPC Endpoint) |
+| `allow-egress-aws` | backend | + 5432 (RDS), 6379 (Redis) |
+| `allow-egress-ai-api` | backend api | utterai-prod-ai-worker ns → 8080 허용 |
+
+**적용 파일**:
+- `k8s/apps/backend/overlays/prod/network-policy.yaml`
+- `k8s/apps/ai-worker/overlays/prod/network-policy.yaml`
+
+---
+
+### 3-E. PodDisruptionBudget ✅ 적용 완료 (2026-06-16)
+
+유지보수(노드 drain, 업그레이드) 중 최소 가용 Pod 수 보장.
+
+| 대상 | `minAvailable` | 이유 |
+|------|---------------|------|
+| `utterai-api-blue` | 1 | prod replicas: 2 |
+| `utterai-api-green` | 1 | prod replicas: 2 |
+| `utterai-ai-api` | 1 | prod replicas: 2 |
+| cpu-worker, ml-gpu-worker, batch-worker | 미적용 | KEDA 0-scale 허용 필요 |
+
+**적용 파일**:
+- `k8s/apps/backend/overlays/prod/pdb.yaml`
+- `k8s/apps/ai-worker/overlays/prod/pdb.yaml`
+
+---
+
+### 3-F. ArgoCD Admin 자격증명
 
 Helm 기본 배포 시 `admin` 초기 비밀번호가 Pod 이름 기반으로 자동 생성되고 영구 유지될 수 있다.
 
@@ -293,7 +337,7 @@ resource "helm_release" "argocd" {
 
 ---
 
-### 3-E. Namespace PSA 레이블 — k8s prod overlay에 적용 완료
+### 3-G. Namespace PSA 레이블 — k8s prod overlay에 적용 완료
 
 `k8s/apps/backend/overlays/prod/namespace.yaml`과 `k8s/apps/ai-worker/overlays/prod/namespace.yaml`에 이미 적용되어 있다.
 
@@ -317,6 +361,13 @@ labels:
 ---
 
 ## 4. 우선순위별 TODO 목록
+
+### 적용 완료 (2026-06-16)
+
+| 항목 | 파일 |
+|------|------|
+| NetworkPolicy — AWS VPC CNI native (`ENABLE_NETWORK_POLICY=true`), 네임스페이스별 deny-all + 허용 정책 | `terraform/modules/eks/main.tf`, `k8s/apps/*/overlays/prod/network-policy.yaml` |
+| PodDisruptionBudget — backend blue/green `minAvailable: 1`, ai-api `minAvailable: 1` | `k8s/apps/*/overlays/prod/pdb.yaml` |
 
 ### Prod 배포 불가 — 반드시 완료 후 배포
 

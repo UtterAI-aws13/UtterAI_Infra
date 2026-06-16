@@ -1,0 +1,95 @@
+---
+# 기본 차단: 모든 ingress/egress 거부 후 아래 정책으로 명시적 허용
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+# ALB → backend Pod (8080)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-alb
+spec:
+  podSelector:
+    matchLabels:
+      app: utterai-api
+  policyTypes:
+  - Ingress
+  ingress:
+  - ports:
+    - port: 8080
+---
+# Prometheus scrape (monitoring namespace → 8080)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-prometheus
+spec:
+  podSelector:
+    matchLabels:
+      app: utterai-api
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+    ports:
+    - port: 8080
+---
+# DNS 조회 허용
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-dns
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+---
+# AWS 서비스 (VPC Endpoint HTTPS, RDS, Redis)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-aws
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - port: 443   # SQS, S3, Secrets Manager, Bedrock VPC Endpoint
+    - port: 5432  # RDS PostgreSQL
+    - port: 6379  # Redis
+---
+# backend → ai-api (utterai-prod-ai-worker namespace, 8080)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-ai-api
+spec:
+  podSelector:
+    matchLabels:
+      app: utterai-api
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          utterai.io/environment: prod
+    ports:
+    - port: 8080
