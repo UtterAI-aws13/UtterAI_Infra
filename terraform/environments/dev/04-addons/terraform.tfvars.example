@@ -1,0 +1,2 @@
+alertmanager_slack_enabled = true
+alertmanager_slack_channel = "#aws-alerts"
