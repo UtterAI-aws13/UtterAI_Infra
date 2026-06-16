@@ -46,6 +46,16 @@ module "eks_addons" {
   alertmanager_slack_secret_manager_name = var.alertmanager_slack_secret_manager_name
 }
 
+# ── ALB DNS 자동 조회 ─────────────────────────────────────────────────────────
+# AWS LBC가 Ingress 생성 시 자동으로 태그를 부착하므로 DNS 하드코딩 불필요
+
+data "aws_lb" "api" {
+  tags = {
+    "elbv2.k8s.aws/cluster" = data.terraform_remote_state.eks.outputs.cluster_name
+    "ingress.k8s.aws/stack" = "utterai-dev"
+  }
+}
+
 # ── CloudFront ────────────────────────────────────────────────────────────────
 
 module "cloudfront" {
@@ -55,5 +65,5 @@ module "cloudfront" {
   environment         = var.environment
   frontend_bucket_id  = data.terraform_remote_state.services.outputs.frontend_bucket_name
   frontend_bucket_arn = data.terraform_remote_state.services.outputs.frontend_bucket_arn
-  alb_dns_name        = var.alb_dns_name
+  alb_dns_name        = data.aws_lb.api.dns_name
 }
