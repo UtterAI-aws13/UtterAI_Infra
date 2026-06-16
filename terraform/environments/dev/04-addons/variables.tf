@@ -21,7 +21,7 @@ variable "alb_dns_name" {
 
 variable "alertmanager_slack_enabled" {
   type        = bool
-  default     = false
+  default     = true
   description = "Enable Slack notifications from Alertmanager. Requires alertmanager-slack-webhook Secret in monitoring namespace."
 }
 
@@ -51,7 +51,7 @@ variable "alertmanager_slack_secret_manager_name" {
 
 variable "grafana_admin_credentials_enabled" {
   type        = bool
-  default     = false
+  default     = true
   description = "Use an existing Kubernetes Secret synced from AWS Secrets Manager for Grafana admin credentials."
 }
 
