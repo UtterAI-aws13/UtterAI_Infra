@@ -13,3 +13,11 @@ output "alertmanager_slack_secret_manager_name" {
 output "alertmanager_slack_secret_manager_arn" {
   value = module.eks_addons.alertmanager_slack_secret_manager_arn
 }
+
+output "grafana_admin_secret_manager_name" {
+  value = module.eks_addons.grafana_admin_secret_manager_name
+}
+
+output "grafana_admin_secret_manager_arn" {
+  value = module.eks_addons.grafana_admin_secret_manager_arn
+}

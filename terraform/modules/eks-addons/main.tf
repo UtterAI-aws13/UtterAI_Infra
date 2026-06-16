@@ -11,28 +11,36 @@ locals {
       group_wait      = "30s"
       group_interval  = "5m"
       repeat_interval = "4h"
-    }
-    receivers = [
-      merge(
+      routes = [
         {
-          name = local.alertmanager_receiver_name
-        },
-        var.alertmanager_slack_enabled ? {
-          slack_configs = [
-            {
-              api_url_file  = "/etc/alertmanager/secrets/${var.alertmanager_slack_webhook_secret_name}/${var.alertmanager_slack_webhook_secret_key}"
-              channel       = var.alertmanager_slack_channel
-              send_resolved = true
-              title         = "[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}"
-              text          = "{{ range .Alerts }}*Severity:* {{ .Labels.severity }}\n*Namespace:* {{ .Labels.namespace }}\n*Summary:* {{ .Annotations.summary }}\n*Description:* {{ .Annotations.description }}\n{{ end }}"
-            }
+          receiver = "null"
+          matchers = [
+            "alertname = Watchdog"
           ]
-        } : {}
-      ),
-      {
-        name = "null"
-      }
-    ]
+        }
+      ]
+    }
+    receivers = concat(
+      [
+        merge(
+          {
+            name = local.alertmanager_receiver_name
+          },
+          var.alertmanager_slack_enabled ? {
+            slack_configs = [
+              {
+                api_url_file  = "/etc/alertmanager/secrets/${var.alertmanager_slack_webhook_secret_name}/${var.alertmanager_slack_webhook_secret_key}"
+                channel       = var.alertmanager_slack_channel
+                send_resolved = true
+                title         = "[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}"
+                text          = "{{ range .Alerts }}*Severity:* {{ .Labels.severity }}\n*Namespace:* {{ .Labels.namespace }}\n*Summary:* {{ .Annotations.summary }}\n*Description:* {{ .Annotations.description }}\n{{ end }}"
+              }
+            ]
+          } : {}
+        )
+      ],
+      var.alertmanager_slack_enabled ? [{ name = "null" }] : []
+    )
   }
 
   alertmanager_spec = merge(
@@ -60,6 +68,12 @@ locals {
 resource "aws_secretsmanager_secret" "alertmanager_slack_webhook" {
   name                    = var.alertmanager_slack_secret_manager_name
   description             = "Slack incoming webhook URL for Alertmanager notifications."
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret" "grafana_admin_credentials" {
+  name                    = var.grafana_admin_secret_manager_name
+  description             = "Grafana admin credentials for the kube-prometheus-stack Grafana instance."
   recovery_window_in_days = 0
 }
 
@@ -121,9 +135,22 @@ resource "helm_release" "kube_prometheus_stack" {
   wait             = true
   wait_for_jobs    = true
 
+  depends_on = [kubernetes_manifest.grafana_admin_credentials]
+
   values = [
     yamlencode({
       fullnameOverride = "utterai-monitoring"
+
+      # EKS manages these control plane components outside worker nodes, so
+      # Prometheus cannot reliably scrape their endpoints from the cluster.
+      defaultRules = {
+        rules = {
+          etcd                   = false
+          kubeControllerManager  = false
+          kubeSchedulerAlerting  = false
+          kubeSchedulerRecording = false
+        }
+      }
 
       prometheus = {
         prometheusSpec = {
@@ -150,22 +177,31 @@ resource "helm_release" "kube_prometheus_stack" {
         }
       }
 
-      grafana = {
-        enabled = true
-        service = {
-          type = "ClusterIP"
-        }
-        defaultDashboardsTimezone = "Asia/Seoul"
-        additionalDataSources = [
-          {
-            name      = "Loki"
-            type      = "loki"
-            access    = "proxy"
-            url       = "http://loki-gateway.monitoring.svc.cluster.local"
-            isDefault = false
+      grafana = merge(
+        {
+          enabled = true
+          service = {
+            type = "ClusterIP"
           }
-        ]
-      }
+          defaultDashboardsTimezone = "Asia/Seoul"
+          additionalDataSources = [
+            {
+              name      = "Loki"
+              type      = "loki"
+              access    = "proxy"
+              url       = "http://loki-gateway.monitoring.svc.cluster.local"
+              isDefault = false
+            }
+          ]
+        },
+        var.grafana_admin_credentials_enabled ? {
+          admin = {
+            existingSecret = var.grafana_admin_kubernetes_secret_name
+            userKey        = var.grafana_admin_user_key
+            passwordKey    = var.grafana_admin_password_key
+          }
+        } : {}
+      )
 
       kubeStateMetrics = {
         enabled = true
@@ -180,6 +216,18 @@ resource "helm_release" "kube_prometheus_stack" {
         serviceMonitor = {
           cAdvisor = true
         }
+      }
+
+      kubeControllerManager = {
+        enabled = false
+      }
+
+      kubeEtcd = {
+        enabled = false
+      }
+
+      kubeScheduler = {
+        enabled = false
       }
 
       alertmanager = {
@@ -489,7 +537,50 @@ resource "kubernetes_manifest" "alertmanager_slack_webhook" {
   }
 
   depends_on = [
-    helm_release.kube_prometheus_stack,
+    helm_release.external_secrets,
+  ]
+}
+
+resource "kubernetes_manifest" "grafana_admin_credentials" {
+  count = var.grafana_admin_credentials_enabled ? 1 : 0
+
+  manifest = {
+    apiVersion = "external-secrets.io/v1beta1"
+    kind       = "ExternalSecret"
+    metadata = {
+      name      = var.grafana_admin_kubernetes_secret_name
+      namespace = "monitoring"
+    }
+    spec = {
+      refreshInterval = "1h"
+      secretStoreRef = {
+        name = var.external_secrets_cluster_store_name
+        kind = "ClusterSecretStore"
+      }
+      target = {
+        name           = var.grafana_admin_kubernetes_secret_name
+        creationPolicy = "Owner"
+      }
+      data = [
+        {
+          secretKey = var.grafana_admin_user_key
+          remoteRef = {
+            key      = aws_secretsmanager_secret.grafana_admin_credentials.name
+            property = replace(var.grafana_admin_user_key, "-", "_")
+          }
+        },
+        {
+          secretKey = var.grafana_admin_password_key
+          remoteRef = {
+            key      = aws_secretsmanager_secret.grafana_admin_credentials.name
+            property = replace(var.grafana_admin_password_key, "-", "_")
+          }
+        }
+      ]
+    }
+  }
+
+  depends_on = [
     helm_release.external_secrets,
   ]
 }

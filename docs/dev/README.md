@@ -26,6 +26,7 @@
 ## 관련 Runbook
 
 - [Monitoring Runbook](../monitoring-runbook.md): Grafana 접속, Prometheus/Loki 확인, port-forward, 기본 트러블슈팅
+- [Troubleshooting](../troubleshooting.md): EKS/Terraform/Observability 적용 중 반복될 수 있는 문제와 해결 패턴
 
 ---
 
@@ -456,6 +457,34 @@ terraform plan
 terraform apply   # 약 10~15분
 ```
 
+Alertmanager Slack 알림을 운영할 때는 `alertmanager_slack_enabled=true`를 함께 적용한다. Slack webhook URL은 `terraform.tfvars`에 넣지 않고 Secrets Manager에만 저장한다.
+
+```bash
+terraform plan -var='alertmanager_slack_enabled=true'
+terraform apply -var='alertmanager_slack_enabled=true'
+```
+
+Grafana admin credential을 Secrets Manager/External Secrets로 관리할 때는 Secrets Manager에 JSON 값을 먼저 넣은 뒤 `grafana_admin_credentials_enabled=true`를 함께 적용한다.
+
+```bash
+aws secretsmanager put-secret-value \
+  --secret-id utterai-dev/grafana-admin-credentials \
+  --secret-string '{"admin_user":"admin","admin_password":"<GRAFANA_ADMIN_PASSWORD>"}'
+
+terraform plan \
+  -var='alertmanager_slack_enabled=true' \
+  -var='grafana_admin_credentials_enabled=true'
+terraform apply \
+  -var='alertmanager_slack_enabled=true' \
+  -var='grafana_admin_credentials_enabled=true'
+```
+
+반복 적용 시 로컬 전용 `terraform.tfvars`를 사용할 수 있다. 이 파일은 `.gitignore` 대상이다.
+
+```bash
+cp terraform.tfvars.example terraform.tfvars
+```
+
 설치 순서 (Terraform 내부 의존 관계에 의해 자동 제어):
 
 ```
@@ -655,6 +684,8 @@ kubectl get nodes -L workload -w
 ---
 
 ## 10. 알려진 이슈 및 트러블슈팅
+
+반복될 수 있는 EKS/Terraform/Observability 문제는 [Troubleshooting](../troubleshooting.md)에 먼저 추가한다. 이 섹션에는 Dev 배포 가이드 안에서 바로 알아야 하는 대표 이슈만 남긴다.
 
 ### LBC Webhook으로 인한 Helm 릴리스 실패
 
