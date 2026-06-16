@@ -734,6 +734,7 @@ terraform apply
 
 ## 참고
 
+- Terraform 레이어 의존 흐름 (output 연결, 리소스 설치 상세): [`docs/dev/terraform-dependency-flow.md`](./terraform-dependency-flow.md)
 - EKS 아키텍처 상세 설계: [`docs/eks-architecture-flow.md`](../eks-architecture-flow.md)
 - Dev vs Prod 환경 비교: [`docs/README.md`](../README.md)
 - Dev 보안 전체 현황: [`docs/dev/security-overview.md`](./security-overview.md)
