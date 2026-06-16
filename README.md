@@ -10,8 +10,8 @@ UtterAI_Infra/
 │   ├── modules/        # 재사용 가능한 공통 모듈
 │   └── environments/   # 환경별 변수 조합 (dev / prod)
 │
-├── k8s/                # Kubernetes 매니페스트 (Namespace, RBAC, Workload, Ingress)
-├── k8s-demo/           # Kustomize 구조 (base + overlays) — ArgoCD 배포 대상
+├── k8s/               # Kustomize 구조 (base + overlays) — Argo CD 배포 대상
+├── k8s-legacy/        # Legacy raw Kubernetes 매니페스트 (보관용)
 │
 ├── docs/               # 인프라 설계 및 운영 문서
 │   ├── dev/            # Dev 환경 가이드, 보안, 부하 테스트 시나리오
@@ -34,7 +34,7 @@ UtterAI_Infra/
 
 ## Observability
 
-EKS 클러스터 내부 관측성은 `terraform/modules/eks-addons/`의 `kube-prometheus-stack`과 `k8s/observability/`의 OpenTelemetry Collector 매니페스트를 기준으로 관리한다.
+EKS 클러스터 내부 관측성은 `terraform/modules/eks-addons/`의 `kube-prometheus-stack`과 `k8s/platform/observability/`의 OpenTelemetry Collector 매니페스트를 기준으로 관리한다.
 
 ## Branch Strategy
 

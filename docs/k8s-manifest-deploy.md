@@ -1,14 +1,14 @@
 # Kubernetes 매니페스트 배포 방식 가이드
 
-> **현재 상태**: `k8s/` 폴더 방식(레거시)에서 `k8s-demo/` Kustomize + GitOps 방식으로 전환 완료 (dev 기준).
+> **현재 상태**: `k8s-legacy/` 폴더 방식(레거시)에서 `k8s/` Kustomize + GitOps 방식으로 전환 완료 (dev 기준).
 
 ---
 
 ## 목차
 
 1. [두 방식 비교 요약](#1-두-방식-비교-요약)
-2. [k8s/ 방식 — envsubst 직접 주입 (레거시)](#2-k8s-방식--envsubst-직접-주입-레거시)
-3. [k8s-demo/ 방식 — Kustomize + GitOps](#3-k8s-demo-방식--kustomize--gitops)
+2. [k8s-legacy/ 방식 — envsubst 직접 주입 (레거시)](#2-k8s-legacy-방식--envsubst-직접-주입-레거시)
+3. [k8s/ 방식 — Kustomize + GitOps](#3-k8s-방식--kustomize--gitops)
 4. [Kustomize base / overlay 동작 원리](#4-kustomize-base--overlay-동작-원리)
 5. [시크릿 및 설정값 관리](#5-시크릿-및-설정값-관리)
 6. [ArgoCD GitOps 연동](#6-argocd-gitops-연동)
@@ -20,7 +20,7 @@
 
 ## 1. 두 방식 비교 요약
 
-| 항목 | `k8s/` 방식 (레거시) | `k8s-demo/` 방식 (현행) |
+| 항목 | `k8s-legacy/` 방식 (레거시) | `k8s/` 방식 (현행) |
 |------|---------------------|------------------------|
 | 배포 트리거 | 수동 스크립트 실행 | ArgoCD 자동 Sync (GitOps) |
 | 환경 값 주입 | `envsubst` (쉘 변수 치환) | Kustomize overlay + dev-config-update workflow |
@@ -35,12 +35,12 @@
 
 ---
 
-## 2. k8s/ 방식 — envsubst 직접 주입 (레거시)
+## 2. k8s-legacy/ 방식 — envsubst 직접 주입 (레거시)
 
 ### 디렉토리 구조
 
 ```
-k8s/
+k8s-legacy/
 ├── namespaces/namespaces.yaml
 ├── rbac/
 │   ├── serviceaccounts.yaml     # ${AWS_ACCOUNT_ID} 플레이스홀더 포함
@@ -67,10 +67,10 @@ k8s/
     └── grafana-dashboard-ca-karpenter.yaml
 
 scripts/
-└── k8s-deploy.sh                 # 배포 실행 스크립트
+└── k8s-deploy-legacy.sh                 # 배포 실행 스크립트
 ```
 
-### k8s-deploy.sh 동작 순서
+### k8s-deploy-legacy.sh 동작 순서
 
 ```bash
 # 1. 환경 변수 수집 (AWS + Terraform output)
@@ -82,12 +82,12 @@ REDIS_ENDPOINT=$(terraform output -raw redis_endpoint)
 # 2. envsubst로 플레이스홀더 치환 후 kubectl apply
 apply() { envsubst < "$1" | kubectl apply -f -; }
 
-kubectl apply -f k8s/namespaces/
-kubectl apply -f k8s/observability/
-apply k8s/rbac/serviceaccounts.yaml     # ${AWS_ACCOUNT_ID} 치환
-kubectl apply -f k8s/secrets/
-apply k8s/workloads/*.yaml              # ${BACKEND_TAG} 등 치환
-apply k8s/ingress/*.yaml                # ${ACM_CERTIFICATE_ARN} 치환
+kubectl apply -f k8s-legacy/namespaces/
+kubectl apply -f k8s-legacy/observability/
+apply k8s-legacy/rbac/serviceaccounts.yaml     # ${AWS_ACCOUNT_ID} 치환
+kubectl apply -f k8s-legacy/secrets/
+apply k8s-legacy/workloads/*.yaml              # ${BACKEND_TAG} 등 치환
+apply k8s-legacy/ingress/*.yaml                # ${ACM_CERTIFICATE_ARN} 치환
 ```
 
 ### 한계점
@@ -99,12 +99,12 @@ apply k8s/ingress/*.yaml                # ${ACM_CERTIFICATE_ARN} 치환
 
 ---
 
-## 3. k8s-demo/ 방식 — Kustomize + GitOps
+## 3. k8s/ 방식 — Kustomize + GitOps
 
 ### 디렉토리 구조 (현재 기준)
 
 ```
-k8s-demo/
+k8s/
 ├── apps/
 │   ├── ai-worker/
 │   │   ├── base/                              # dev/prod 공통 리소스
@@ -212,7 +212,7 @@ overlays/prod/           → + ScaledObject + ClusterTriggerAuthentication (KEDA
 
 ### overlay 렌더링 3단계
 
-`kubectl kustomize k8s-demo/apps/ai-worker/overlays/prod` 실행 시:
+`kubectl kustomize k8s/apps/ai-worker/overlays/prod` 실행 시:
 
 ```
 1단계: 리소스 수집
@@ -307,7 +307,7 @@ spec:
   source:
     repoURL: https://github.com/UtterAI-aws13/UtterAI_Infra
     targetRevision: main
-    path: k8s-demo/apps/ai-worker/overlays/dev
+    path: k8s/apps/ai-worker/overlays/dev
   syncPolicy:
     automated:
       prune: true      # Git에서 삭제된 리소스 → 클러스터에서도 삭제
@@ -322,7 +322,7 @@ spec:
 # deploy/argocd/prod/backend-prod.yaml
 spec:
   source:
-    path: k8s-demo/apps/backend/overlays/prod
+    path: k8s/apps/backend/overlays/prod
   syncPolicy:
     # automated 없음 → 수동으로 ArgoCD UI/CLI에서 Sync 실행해야 함
     syncOptions:
@@ -333,9 +333,9 @@ spec:
 
 | Namespace | 생성 파일 |
 |-----------|-----------|
-| `utterai-api` | `k8s-demo/apps/backend/overlays/dev/namespace.yaml` |
-| `utterai-ai-api`, `utterai-ai-cpu`, `utterai-ai-gpu`, `utterai-batch` | `k8s-demo/apps/ai-worker/overlays/dev/namespace.yaml` |
-| `utterai-observability` | `k8s-demo/platform/observability/base/namespace.yaml` |
+| `utterai-api` | `k8s/apps/backend/overlays/dev/namespace.yaml` |
+| `utterai-ai-api`, `utterai-ai-cpu`, `utterai-ai-gpu`, `utterai-batch` | `k8s/apps/ai-worker/overlays/dev/namespace.yaml` |
+| `utterai-observability` | `k8s/platform/observability/base/namespace.yaml` |
 
 ---
 
@@ -359,10 +359,10 @@ spec:
 PR 생성 또는 브랜치 push 시 dev/prod overlay가 오류 없이 렌더링되는지 검증합니다.
 
 ```
-트리거: k8s-demo/apps/ai-worker/** 변경 시 (PR or push)
+트리거: k8s/apps/ai-worker/** 변경 시 (PR or push)
   ↓
-kubectl kustomize k8s-demo/apps/ai-worker/overlays/dev → 렌더링 성공 여부 확인
-kubectl kustomize k8s-demo/apps/ai-worker/overlays/prod → 렌더링 성공 여부 확인
+kubectl kustomize k8s/apps/ai-worker/overlays/dev → 렌더링 성공 여부 확인
+kubectl kustomize k8s/apps/ai-worker/overlays/prod → 렌더링 성공 여부 확인
 namespace, image 포함 여부 검증
 ```
 
@@ -568,8 +568,8 @@ prod 환경 구성 전 아래 항목을 채워야 합니다:
 
 ```bash
 # overlay 렌더링 검증
-kubectl kustomize k8s-demo/apps/ai-worker/overlays/dev
-kubectl kustomize k8s-demo/apps/backend/overlays/prod
+kubectl kustomize k8s/apps/ai-worker/overlays/dev
+kubectl kustomize k8s/apps/backend/overlays/prod
 
 # ArgoCD 수동 Sync (prod)
 argocd app sync utterai-backend-prod

@@ -41,9 +41,9 @@ jobs:
           TARGET_BRANCH="main"
 
           if [ "$TARGET_ENV" = "dev" ]; then
-            OVERLAY_PATH="k8s-demo/apps/backend/overlays/dev"
+            OVERLAY_PATH="k8s/apps/backend/overlays/dev"
           elif [ "$TARGET_ENV" = "prod" ]; then
-            OVERLAY_PATH="k8s-demo/apps/backend/overlays/prod"
+            OVERLAY_PATH="k8s/apps/backend/overlays/prod"
           else
             echo "target_env는 dev 또는 prod만 허용합니다."
             exit 1
@@ -173,7 +173,7 @@ jobs:
           fi
 
           git checkout -b "$UPDATE_BRANCH"
-          git add k8s-demo/apps/backend/overlays
+          git add k8s/apps/backend/overlays
           git commit -m "ci(backend): promote $TARGET_ENV traffic to $PROMOTE_COLOR"
           git push origin "$UPDATE_BRANCH"
 

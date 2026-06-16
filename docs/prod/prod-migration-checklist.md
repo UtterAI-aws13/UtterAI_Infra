@@ -1,7 +1,7 @@
 # Prod 전환 체크리스트 — Terraform & K8s 매니페스트
 
-> 작성일: 2026-06-11  
-> Dev → Prod 전환 시 추가·변경이 필요한 항목을 레이어별로 정리한다.  
+> 작성일: 2026-06-11
+> Dev → Prod 전환 시 추가·변경이 필요한 항목을 레이어별로 정리한다.
 > Dev 코드를 기준으로 **무엇이 없고, 무엇이 달라져야 하는지**에 집중한다.
 
 ---
@@ -138,7 +138,7 @@ resource "aws_wafv2_web_acl_association" "this" {
 
 ### 1-C. `terraform/modules/karpenter/`
 
-Dev는 Cluster Autoscaler를 사용하지만 Prod는 **Karpenter + KEDA** 구조다.  
+Dev는 Cluster Autoscaler를 사용하지만 Prod는 **Karpenter + KEDA** 구조다.
 Karpenter 설치 자체는 Helm으로, NodePool/EC2NodeClass는 별도 K8s 매니페스트로 관리한다.
 
 ```hcl
@@ -316,7 +316,7 @@ resource "aws_eks_cluster" "this" {
 
 ### 2-B. `modules/rds` → Aurora로 교체
 
-Dev는 RDS Single Instance(`aws_db_instance`)를 사용하지만, Prod는 **Aurora PostgreSQL Cluster**(`aws_rds_cluster`)로 바꿔야 한다.  
+Dev는 RDS Single Instance(`aws_db_instance`)를 사용하지만, Prod는 **Aurora PostgreSQL Cluster**(`aws_rds_cluster`)로 바꿔야 한다.
 `modules/aurora`가 이미 존재하므로 해당 모듈을 호출한다.
 
 | 파라미터 | Dev (rds) | Prod (aurora) |
@@ -335,7 +335,7 @@ Dev는 RDS Single Instance(`aws_db_instance`)를 사용하지만, Prod는 **Auro
 
 ### 2-C. `modules/redis` — Replication Group 교체
 
-Dev는 `aws_elasticache_cluster`(암호화 미지원)를 사용한다.  
+Dev는 `aws_elasticache_cluster`(암호화 미지원)를 사용한다.
 Prod는 `aws_elasticache_replication_group`으로 교체해야 TLS/Auth가 활성화된다.
 
 | 파라미터 | Dev | Prod |
@@ -470,7 +470,7 @@ terraform {
 
 ## 4. K8s 매니페스트 — 주입 방식 변경
 
-### 현재 Dev 방식: envsubst + k8s-deploy.sh
+### 현재 Dev 방식: envsubst + k8s-deploy-legacy.sh
 
 ```bash
 envsubst < manifest.yaml | kubectl apply -f -
@@ -481,13 +481,13 @@ envsubst < manifest.yaml | kubectl apply -f -
 - 수동 실행 스크립트 → 감사 추적 없음
 - Argo CD Auto-Sync 불가 (GitOps 아님)
 
-### Prod 방식: Kustomize + ArgoCD (k8s-demo/ 구조 활용)
+### Prod 방식: Kustomize + ArgoCD (k8s/ 구조 활용)
 
-`k8s-demo/` 하위의 Kustomize base/overlays 구조가 이미 있다.  
+`k8s/` 하위의 Kustomize base/overlays 구조가 이미 있다.
 Prod 배포는 이 구조를 ArgoCD가 감시해서 자동으로 적용한다.
 
 ```
-k8s-demo/apps/
+k8s/apps/
 ├── backend/
 │   ├── base/                   ← Dev와 공통 정의
 │   └── overlays/
@@ -503,8 +503,8 @@ k8s-demo/apps/
 **이미지 태그 주입:** envsubst 대신 ArgoCD Image Updater 또는 CI에서 `kustomize edit set image` 사용
 
 ```bash
-# CI에서 이미지 태그 업데이트 (k8s-deploy.sh 대체)
-cd k8s-demo/apps/backend/overlays/prod
+# CI에서 이미지 태그 업데이트 (k8s-deploy-legacy.sh 대체)
+cd k8s/apps/backend/overlays/prod
 kustomize edit set image \
   utterai-backend=123456789.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend:${GIT_SHA}
 git commit -am "ci: update prod image to ${GIT_SHA}"
@@ -516,7 +516,7 @@ git push
 
 ## 5. K8s 매니페스트 — 파일별 변경 내용
 
-### 5-A. `k8s/namespaces/namespaces.yaml` — PSA 레이블 추가
+### 5-A. `k8s-legacy/namespaces/namespaces.yaml` — PSA 레이블 추가
 
 ```yaml
 # Prod에서는 모든 워크로드 네임스페이스에 PSA enforce 적용
@@ -534,7 +534,7 @@ metadata:
 
 ---
 
-### 5-B. `k8s/workloads/api-deployment.yaml`
+### 5-B. `k8s-legacy/workloads/api-deployment.yaml`
 
 | 항목 | Dev | Prod |
 |------|-----|------|
@@ -584,7 +584,7 @@ spec:
 
 ---
 
-### 5-C. `k8s/workloads/cpu-worker-deployment.yaml`
+### 5-C. `k8s-legacy/workloads/cpu-worker-deployment.yaml`
 
 | 항목 | Dev | Prod |
 |------|-----|------|
@@ -597,7 +597,7 @@ spec:
 
 ---
 
-### 5-D. `k8s/workloads/ml-gpu-worker-deployment.yaml`
+### 5-D. `k8s-legacy/workloads/ml-gpu-worker-deployment.yaml`
 
 | 항목 | Dev | Prod |
 |------|-----|------|
@@ -609,7 +609,7 @@ spec:
 
 ---
 
-### 5-E. `k8s/workloads/hpa-*.yaml`
+### 5-E. `k8s-legacy/workloads/hpa-*.yaml`
 
 | HPA | Dev minReplicas | Prod minReplicas | Dev maxReplicas | Prod maxReplicas |
 |-----|----------------|-----------------|----------------|-----------------|
@@ -622,7 +622,7 @@ Prod에서 cpu/gpu worker HPA는 KEDA ScaledObject로 대체되므로 충돌 방
 
 ---
 
-### 5-F. `k8s/ingress/api-ingress.yaml`
+### 5-F. `k8s-legacy/ingress/api-ingress.yaml`
 
 | 항목 | Dev | Prod |
 |------|-----|------|
@@ -643,7 +643,7 @@ annotations:
 
 ---
 
-### 5-G. `k8s/rbac/serviceaccounts.yaml`
+### 5-G. `k8s-legacy/rbac/serviceaccounts.yaml`
 
 IRSA role ARN의 `utterai-dev-` → `utterai-prod-` 교체, 계정 ID도 Prod 계정으로.
 
@@ -657,7 +657,7 @@ eks.amazonaws.com/role-arn: arn:aws:iam::${PROD_ACCOUNT_ID}:role/utterai-prod-ap
 
 ---
 
-### 5-H. `k8s/secrets/*-external-secret.yaml`
+### 5-H. `k8s-legacy/secrets/*-external-secret.yaml`
 
 시크릿 경로의 `utterai-dev/` → `utterai-prod/` 교체.
 
@@ -675,9 +675,9 @@ remoteRef:
 
 ---
 
-### 5-I. `k8s/secrets/cluster-secret-store.yaml`
+### 5-I. `k8s-legacy/secrets/cluster-secret-store.yaml`
 
-Prod에서는 `ClusterSecretStore` 대신 **네임스페이스별 `SecretStore`** 로 분리한다.  
+Prod에서는 `ClusterSecretStore` 대신 **네임스페이스별 `SecretStore`** 로 분리한다.
 (`security-gaps.md` §4 참고)
 
 ```yaml
@@ -707,7 +707,7 @@ spec:
 ### 6-A. Karpenter NodePool + EC2NodeClass (CPU Worker)
 
 ```yaml
-# k8s/karpenter/cpu-worker-nodepool.yaml
+# k8s-legacy/karpenter/cpu-worker-nodepool.yaml
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
@@ -761,7 +761,7 @@ spec:
 ### 6-B. Karpenter NodePool + EC2NodeClass (GPU Worker)
 
 ```yaml
-# k8s/karpenter/gpu-worker-nodepool.yaml
+# k8s-legacy/karpenter/gpu-worker-nodepool.yaml
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
@@ -800,7 +800,7 @@ spec:
 ### 6-C. KEDA ScaledObject (CPU Worker)
 
 ```yaml
-# k8s/keda/cpu-worker-scaledobject.yaml
+# k8s-legacy/keda/cpu-worker-scaledobject.yaml
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -826,7 +826,7 @@ spec:
 ### 6-D. KEDA ScaledObject (GPU Worker)
 
 ```yaml
-# k8s/keda/gpu-worker-scaledobject.yaml
+# k8s-legacy/keda/gpu-worker-scaledobject.yaml
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -854,7 +854,7 @@ spec:
 ### 6-E. PodDisruptionBudget
 
 ```yaml
-# k8s/pdb/pdb.yaml
+# k8s-legacy/pdb/pdb.yaml
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
@@ -901,7 +901,7 @@ spec:
 16. 배포 후 5분 CloudWatch 알람 모니터링
 ```
 
-> **주의**: 6단계(Aurora)까지는 데이터가 없으므로 destroy/recreate 자유.  
+> **주의**: 6단계(Aurora)까지는 데이터가 없으므로 destroy/recreate 자유.
 > 7단계 이후 실 데이터가 들어오면 삭제 금지. `deletion_protection = true` 설정 확인 후 진행.
 
 ---

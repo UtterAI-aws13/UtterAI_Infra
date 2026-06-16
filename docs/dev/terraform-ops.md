@@ -80,7 +80,7 @@ EKS를 내리기 전에 Load Balancer Controller가 생성한 ALB를 먼저 해�
 kubectl delete ingress --all -A
 
 # 워크로드 전체 삭제 (선택)
-kubectl delete -f k8s/workloads/ --ignore-not-found
+kubectl delete -f k8s-legacy/workloads/ --ignore-not-found
 ```
 
 ALB가 삭제됐는지 확인:

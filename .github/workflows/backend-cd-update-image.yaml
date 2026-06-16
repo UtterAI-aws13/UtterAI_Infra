@@ -66,12 +66,12 @@ jobs:
 
           if [ "$TARGET_ENV" = "dev" ]; then
             TARGET_BRANCH="main"
-            OVERLAY_PATH="k8s-demo/apps/backend/overlays/dev"
+            OVERLAY_PATH="k8s/apps/backend/overlays/dev"
             EXPECTED_TAG_PREFIX="dev-"
             DEPLOY_STRATEGY="rolling"
           elif [ "$TARGET_ENV" = "prod" ]; then
             TARGET_BRANCH="main"
-            OVERLAY_PATH="k8s-demo/apps/backend/overlays/prod"
+            OVERLAY_PATH="k8s/apps/backend/overlays/prod"
             EXPECTED_TAG_PREFIX="prod-"
             DEPLOY_STRATEGY="blue-green"
           else
@@ -271,7 +271,7 @@ jobs:
           fi
 
           git checkout -b "$UPDATE_BRANCH"
-          git add k8s-demo/apps/backend/overlays
+          git add k8s/apps/backend/overlays
           git commit -m "ci(backend): update $TARGET_ENV image tag to $IMAGE_TAG"
           git push origin "$UPDATE_BRANCH"
 

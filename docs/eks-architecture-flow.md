@@ -227,7 +227,7 @@ infra/
       ai-gpu-irsa.tf
       batch-irsa.tf
 
-  k8s/
+  k8s-legacy/
     namespaces/
       namespace.yaml
 

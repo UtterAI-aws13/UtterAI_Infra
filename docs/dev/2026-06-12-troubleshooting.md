@@ -17,7 +17,7 @@ utterai-ai-gpu    utterai-ml-gpu-worker 0/1   ContainerStatusUnknown
 
 ### 원인
 
-`k8s/rbac/serviceaccounts.yaml`에 IRSA ARN이 `${AWS_ACCOUNT_ID}` 플레이스홀더로 정의되어 있으나, 배포 시 `envsubst` 없이 `kubectl apply -f`를 직접 실행해 Account ID가 빈 문자열로 치환됨.
+`k8s-legacy/rbac/serviceaccounts.yaml`에 IRSA ARN이 `${AWS_ACCOUNT_ID}` 플레이스홀더로 정의되어 있으나, 배포 시 `envsubst` 없이 `kubectl apply -f`를 직접 실행해 Account ID가 빈 문자열로 치환됨.
 
 ```yaml
 # 의도한 값
@@ -57,14 +57,14 @@ kubectl annotate serviceaccount -n utterai-ai-cpu utterai-cpu-worker-sa \
 
 # 소스 파일 재적용 (envsubst로 Account ID 주입)
 export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-for f in k8s/rbac/*.yaml; do
+for f in k8s-legacy/rbac/*.yaml; do
   envsubst < "$f" | kubectl apply -f -
 done
 ```
 
 ### 재발 방지
 
-`k8s/rbac/*.yaml`은 반드시 `scripts/k8s-deploy.sh`를 통해 배포할 것. 스크립트 내부에서 `aws sts get-caller-identity`로 Account ID를 자동 주입한 뒤 `envsubst`를 실행함.
+`k8s-legacy/rbac/*.yaml`은 반드시 `scripts/k8s-deploy-legacy.sh`를 통해 배포할 것. 스크립트 내부에서 `aws sts get-caller-identity`로 Account ID를 자동 주입한 뒤 `envsubst`를 실행함.
 
 ---
 
@@ -84,7 +84,7 @@ INFO:  Shutting down
 
 ### 원인
 
-`k8s/workloads/ai-api-deployment.yaml`의 readiness/liveness probe 경로가 `/health`로 설정되어 있었으나 실제 FastAPI 앱의 헬스체크 엔드포인트는 `/health/ready`와 `/health/live`.
+`k8s-legacy/workloads/ai-api-deployment.yaml`의 readiness/liveness probe 경로가 `/health`로 설정되어 있었으나 실제 FastAPI 앱의 헬스체크 엔드포인트는 `/health/ready`와 `/health/live`.
 
 ```yaml
 # 수정 전
@@ -100,7 +100,7 @@ ai-api는 DB 연결이 없으므로 readiness도 `/health/live`를 사용한다 
 
 ### 해결
 
-**수정 파일**: `k8s/workloads/ai-api-deployment.yaml`
+**수정 파일**: `k8s-legacy/workloads/ai-api-deployment.yaml`
 
 ```yaml
 # 수정 후
@@ -206,7 +206,7 @@ API pod는 Running 상태이고 ALB까지 연결은 정상이나, CloudFront URL
 인프라 코드 전반에 이전 배포 시 사용했던 CloudFront 도메인(`d4kxfdssuth29.cloudfront.net`)이 하드코딩되어 있었음. 실제 배포된 CloudFront 배포의 도메인은 `d129p1nkqgquw3.cloudfront.net`.
 
 영향 범위:
-- `k8s/workloads/api-deployment.yaml` ConfigMap — `FRONTEND_ORIGIN`, `CORS_ALLOW_ORIGINS`
+- `k8s-legacy/workloads/api-deployment.yaml` ConfigMap — `FRONTEND_ORIGIN`, `CORS_ALLOW_ORIGINS`
 - `terraform/environments/dev/03-services/main.tf` — `frontend_domain`
 
 ### 진단 명령어
@@ -220,7 +220,7 @@ aws cloudfront list-distributions \
 
 ### 해결
 
-**수정 파일**: `k8s/workloads/api-deployment.yaml`
+**수정 파일**: `k8s-legacy/workloads/api-deployment.yaml`
 
 ```yaml
 # 수정 전
@@ -279,7 +279,7 @@ CORS_ORIGINS: "[\"https://d129p1nkqgquw3.cloudfront.net\",\"http://localhost:517
 
 ### 해결
 
-**수정 파일**: `k8s/workloads/api-deployment.yaml`
+**수정 파일**: `k8s-legacy/workloads/api-deployment.yaml`
 
 ```yaml
 CORS_ORIGINS: "[\"https://d129p1nkqgquw3.cloudfront.net\",\"http://localhost:5173\"]"
@@ -353,7 +353,7 @@ terraform apply -target=module.eks.aws_eks_node_group.worker
 
 **② ephemeral-storage limit 추가**
 
-`k8s/workloads/cpu-worker-deployment.yaml`:
+`k8s-legacy/workloads/cpu-worker-deployment.yaml`:
 ```yaml
 resources:
   requests:
@@ -366,7 +366,7 @@ resources:
     ephemeral-storage: "20Gi"
 ```
 
-`k8s/workloads/batch-worker-deployment.yaml`:
+`k8s-legacy/workloads/batch-worker-deployment.yaml`:
 ```yaml
 resources:
   requests:
@@ -381,7 +381,7 @@ resources:
 
 **③ 미사용 이미지 자동 정리 DaemonSet**
 
-`k8s/workloads/image-pruner.yaml` 신규 생성 — worker 노드에서 1시간마다 `crictl rmi --prune` 실행:
+`k8s-legacy/workloads/image-pruner.yaml` 신규 생성 — worker 노드에서 1시간마다 `crictl rmi --prune` 실행:
 
 ```yaml
 apiVersion: apps/v1
@@ -411,7 +411,7 @@ spec:
 ```
 
 ```bash
-kubectl apply -f k8s/workloads/image-pruner.yaml
+kubectl apply -f k8s-legacy/workloads/image-pruner.yaml
 # 결과: 3개 worker 노드에 DaemonSet Pod 기동 확인
 ```
 
@@ -634,11 +634,11 @@ kubectl delete pod <old-crashloop-pod> -n utterai-ai-gpu
 
 | 파일 | 변경 내용 |
 |------|-----------|
-| `k8s/workloads/ai-api-deployment.yaml` | probe 경로 `/health` → `/health/live` |
-| `k8s/workloads/api-deployment.yaml` | CloudFront 도메인 교정, CORS_ORIGINS JSON 배열 형식 |
-| `k8s/workloads/cpu-worker-deployment.yaml` | ephemeral-storage requests/limits 추가 |
-| `k8s/workloads/batch-worker-deployment.yaml` | ephemeral-storage requests/limits 추가 |
-| `k8s/workloads/image-pruner.yaml` | DaemonSet 신규 생성 (worker 노드 이미지 자동 GC) |
+| `k8s-legacy/workloads/ai-api-deployment.yaml` | probe 경로 `/health` → `/health/live` |
+| `k8s-legacy/workloads/api-deployment.yaml` | CloudFront 도메인 교정, CORS_ORIGINS JSON 배열 형식 |
+| `k8s-legacy/workloads/cpu-worker-deployment.yaml` | ephemeral-storage requests/limits 추가 |
+| `k8s-legacy/workloads/batch-worker-deployment.yaml` | ephemeral-storage requests/limits 추가 |
+| `k8s-legacy/workloads/image-pruner.yaml` | DaemonSet 신규 생성 (worker 노드 이미지 자동 GC) |
 | `terraform/modules/eks/main.tf` | `aws_launch_template.gpu` 추가, GPU node group `disk_size` 제거 → launch template 연결 |
 | `terraform/modules/eks/variables.tf` | `worker_node_disk_size` 변수 추가 (default 50) |
 | `terraform/environments/dev/02-eks/main.tf` | `worker_node_disk_size` 모듈 전달 추가 |

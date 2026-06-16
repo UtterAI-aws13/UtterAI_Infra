@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - "k8s-demo/apps/ai-worker/**"
+      - "k8s/apps/ai-worker/**"
       - "deploy/argocd/**"
       - ".github/workflows/ai-kustomize-ci.yaml"
 
@@ -14,7 +14,7 @@ on:
       - main
       - "feature/**"
     paths:
-      - "k8s-demo/apps/ai-worker/**"
+      - "k8s/apps/ai-worker/**"
       - "deploy/argocd/**"
       - ".github/workflows/ai-kustomize-ci.yaml"
 
@@ -35,7 +35,7 @@ jobs:
 
       - name: Render dev overlay
         run: |
-          kubectl kustomize k8s-demo/apps/ai-worker/overlays/dev > /tmp/ai-worker-dev.yaml
+          kubectl kustomize k8s/apps/ai-worker/overlays/dev > /tmp/ai-worker-dev.yaml
           grep "namespace: utterai-ai-api" /tmp/ai-worker-dev.yaml
           grep "namespace: utterai-ai-cpu" /tmp/ai-worker-dev.yaml
           grep "namespace: utterai-ai-gpu" /tmp/ai-worker-dev.yaml
@@ -44,5 +44,5 @@ jobs:
 
       - name: Render prod overlay
         run: |
-          kubectl kustomize k8s-demo/apps/ai-worker/overlays/prod > /tmp/ai-worker-prod.yaml
+          kubectl kustomize k8s/apps/ai-worker/overlays/prod > /tmp/ai-worker-prod.yaml
           grep "image:" /tmp/ai-worker-prod.yaml

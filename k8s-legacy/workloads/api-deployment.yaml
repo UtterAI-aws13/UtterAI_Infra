@@ -62,7 +62,7 @@ spec:
                   key: DB_PASSWORD
       containers:
         - name: api
-          # ${BACKEND_TAG}: k8s-deploy.sh에서 ECR 최신 이미지 태그로 envsubst 치환
+          # ${BACKEND_TAG}: k8s-deploy-legacy.sh에서 ECR 최신 이미지 태그로 envsubst 치환
           image: ${AWS_ACCOUNT_ID}.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend:${BACKEND_TAG}
           ports:
             - containerPort: 8080
@@ -131,7 +131,7 @@ spec:
       targetPort: 8080
 ---
 # ConfigMap — 비민감 앱 설정
-# ${RDS_ENDPOINT}, ${REDIS_ENDPOINT}, ${AWS_ACCOUNT_ID}는 k8s-deploy.sh envsubst가 치환
+# ${RDS_ENDPOINT}, ${REDIS_ENDPOINT}, ${AWS_ACCOUNT_ID}는 k8s-deploy-legacy.sh envsubst가 치환
 apiVersion: v1
 kind: ConfigMap
 metadata:

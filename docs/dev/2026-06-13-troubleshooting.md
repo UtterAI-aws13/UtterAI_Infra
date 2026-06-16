@@ -61,7 +61,7 @@ bucket = os.environ["S3_BUCKET_REPORT"]
 ```bash
 # 환경변수 주입 후 deployment 재배포
 export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-envsubst < k8s/workloads/ml-gpu-worker-deployment.yaml | kubectl apply -f -
+envsubst < k8s-legacy/workloads/ml-gpu-worker-deployment.yaml | kubectl apply -f -
 kubectl rollout restart deployment/utterai-ml-gpu-worker -n utterai-ai-gpu
 ```
 
@@ -141,7 +141,7 @@ env:
 
 ```bash
 export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-envsubst < k8s/workloads/ml-gpu-worker-deployment.yaml | kubectl apply -f -
+envsubst < k8s-legacy/workloads/ml-gpu-worker-deployment.yaml | kubectl apply -f -
 kubectl rollout status deployment/utterai-ml-gpu-worker -n utterai-ai-gpu
 ```
 
@@ -176,7 +176,7 @@ aws sqs get-queue-attributes \
 
 | 파일 | 변경 내용 |
 |------|-----------|
-| `k8s/workloads/ml-gpu-worker-deployment.yaml` | `S3_BUCKET_REPORT` 환경변수 추가, `ai-worker-secret`에서 `BE_DB_*` 환경변수(HOST/PORT/USER/PASSWORD/NAME) 주입 추가 |
+| `k8s-legacy/workloads/ml-gpu-worker-deployment.yaml` | `S3_BUCKET_REPORT` 환경변수 추가, `ai-worker-secret`에서 `BE_DB_*` 환경변수(HOST/PORT/USER/PASSWORD/NAME) 주입 추가 |
 
 ## AI 레포 수정 필요 사항 (AI팀)
 
@@ -343,7 +343,7 @@ kubectl rollout restart deployment/utterai-ml-gpu-worker -n utterai-ai-gpu
 
 | 파일 | 변경 내용 |
 |------|-----------|
-| `k8s/workloads/ml-gpu-worker-deployment.yaml` | `S3_BUCKET_REPORT` 추가, `DB_*` → `BE_DB_*` env 이름 수정 |
+| `k8s-legacy/workloads/ml-gpu-worker-deployment.yaml` | `S3_BUCKET_REPORT` 추가, `DB_*` → `BE_DB_*` env 이름 수정 |
 | `terraform/modules/irsa/main.tf` | GPU worker IRSA에 `utterai-dev-reports` s3:PutObject 권한 추가 |
 | `docs/dev/README.md` | 5.6절 EKS 접근 권한 및 kubeconfig 설정 가이드 추가 |
 
