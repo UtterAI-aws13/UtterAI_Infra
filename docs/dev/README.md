@@ -25,8 +25,8 @@
 
 ## 관련 Runbook
 
-- [Monitoring Runbook](../monitoring-runbook.md): Grafana 접속, Prometheus/Loki 확인, port-forward, 기본 트러블슈팅
-- [Troubleshooting](../troubleshooting.md): EKS/Terraform/Observability 적용 중 반복될 수 있는 문제와 해결 패턴
+- [Monitoring Runbook](../shared/monitoring-runbook.md): Grafana 접속, Prometheus/Loki 확인, port-forward, 기본 트러블슈팅
+- [Troubleshooting](./troubleshooting/2026-06-16.md): EKS/Terraform/Observability 적용 중 반복될 수 있는 문제와 해결 패턴
 
 ---
 
@@ -765,10 +765,10 @@ terraform apply
 
 ## 참고
 
-- Terraform 레이어 의존 흐름 (output 연결, 리소스 설치 상세): [`docs/dev/terraform-dependency-flow.md`](./terraform-dependency-flow.md)
-- EKS 아키텍처 상세 설계: [`docs/eks-architecture-flow.md`](../eks-architecture-flow.md)
+- Terraform 레이어 의존 흐름 (output 연결, 리소스 설치 상세): [`docs/dev/terraform/dependency-flow.md`](./terraform/dependency-flow.md)
+- EKS 아키텍처 상세 설계: [`docs/shared/eks-architecture-flow.md`](../shared/eks-architecture-flow.md)
 - Dev vs Prod 환경 비교: [`docs/README.md`](../README.md)
-- Dev 보안 전체 현황: [`docs/dev/security-overview.md`](./security-overview.md)
-- Dev 보안 수정 이력: [`docs/dev/security-hardening.md`](./security-hardening.md)
+- Dev 보안 전체 현황: [`docs/dev/security/overview.md`](./security/overview.md)
+- Dev 보안 수정 이력: [`docs/dev/security/hardening.md`](./security/hardening.md)
 - 부하 테스트 시나리오: [`docs/dev/load-test-scenarios.md`](./load-test-scenarios.md)
 - 브랜치/커밋 규칙: [`CONTRIBUTING.md`](../../CONTRIBUTING.md)

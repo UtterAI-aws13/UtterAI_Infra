@@ -113,7 +113,7 @@ resource "aws_cloudwatch_log_group" "flow_logs" {
 
 ### 2-C. WAF 연결
 
-`prod-migration-checklist.md §1-B`에 ALB WAF 코드가 있다.
+`migration-checklist.md §1-B`에 ALB WAF 코드가 있다.
 CloudFront WAF는 `us-east-1`에 `scope = "CLOUDFRONT"`로 별도 WebACL 생성 필요.
 
 ```hcl
@@ -343,8 +343,8 @@ labels:
 
 ## 관련 문서
 
-- [Dev 보안 전체 현황](../dev/security-overview.md)
-- [Dev 보안 미비점 상세](../dev/security-gaps.md)
-- [Dev 보안 하드닝 이력](../dev/security-hardening.md)
+- [Dev 보안 전체 현황](../dev/security/overview.md)
+- [Dev 보안 미비점 상세](../dev/security/gaps.md)
+- [Dev 보안 하드닝 이력](../dev/security/hardening.md)
 - [Prod 인프라 가이드](./README.md) — §21(PSS+Kyverno 계획), §22(Cilium 계획), §23(Secrets 계획)
-- [Prod 전환 체크리스트](./prod-migration-checklist.md)
+- [Prod 전환 체크리스트](./migration-checklist.md)

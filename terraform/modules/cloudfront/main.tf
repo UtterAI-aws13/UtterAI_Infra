@@ -2,6 +2,31 @@ locals {
   prefix = "${var.project_name}-${var.environment}"
 }
 
+# CloudFront → ALB 구간은 HTTP only이므로 FastAPI의 307 redirect가 http:// 절대 URL로 생성됨.
+# viewer response에서 절대 URL을 상대 경로로 바꿔 브라우저가 CloudFront HTTPS URL로 따라가도록 함.
+resource "aws_cloudfront_function" "redirect_rewrite" {
+  name    = "${local.prefix}-redirect-rewrite"
+  runtime = "cloudfront-js-2.0"
+  publish = true
+  code    = <<-EOF
+    function handler(event) {
+      var response = event.response;
+      var headers  = response.headers;
+
+      if (headers.location) {
+        var loc = headers.location.value;
+        if (loc.indexOf('http://') === 0 || loc.indexOf('https://') === 0) {
+          var afterProto = loc.indexOf('//') + 2;
+          var pathStart  = loc.indexOf('/', afterProto);
+          headers.location = { value: pathStart >= 0 ? loc.slice(pathStart) : '/' };
+        }
+      }
+
+      return response;
+    }
+  EOF
+}
+
 resource "aws_cloudfront_origin_access_control" "frontend" {
   name                              = "${local.prefix}-frontend-oac"
   origin_access_control_origin_type = "s3"
@@ -78,6 +103,11 @@ resource "aws_cloudfront_distribution" "frontend" {
         cookies {
           forward = "all"
         }
+      }
+
+      function_association {
+        event_type   = "viewer-response"
+        function_arn = aws_cloudfront_function.redirect_rewrite.arn
       }
     }
   }

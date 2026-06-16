@@ -1,7 +1,7 @@
 # Terraform 운영 가이드
 
 dev 환경 인프라의 apply/destroy 절차를 정리한다.  
-레이어 간 output 연결과 리소스 설치 흐름은 [terraform-dependency-flow.md](./terraform-dependency-flow.md) 참고.
+레이어 간 output 연결과 리소스 설치 흐름은 [dependency-flow.md](./dependency-flow.md) 참고.
 
 ---
 

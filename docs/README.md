@@ -8,8 +8,13 @@ UtterAI 클라우드 인프라는 Dev와 Prod 두 환경으로 완전히 분리�
 
 - [Dev 환경 가이드](./dev/README.md)
 - [Prod 환경 가이드](./prod/README.md)
-- [Monitoring Runbook](./monitoring-runbook.md)
-- [Troubleshooting](./troubleshooting.md)
+
+## 공유 문서
+
+- [Monitoring Runbook](./shared/monitoring-runbook.md)
+- [Troubleshooting](./dev/troubleshooting/2026-06-16.md)
+- [EKS 아키텍처 흐름](./shared/eks-architecture-flow.md)
+- [K8s 매니페스트 배포 가이드](./shared/k8s-manifest-deploy.md)
 
 ---
 
@@ -73,7 +78,7 @@ UtterAI 클라우드 인프라는 Dev와 Prod 두 환경으로 완전히 분리�
 
 ## 아키텍처 다이어그램
 
-![UtterAI AWS Architecture](./AWSdiagram_UtterAI.drawio.png)
+![UtterAI AWS Architecture](./assets/AWSdiagram_UtterAI.drawio.png)
 
 ---
 

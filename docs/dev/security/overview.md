@@ -434,6 +434,6 @@ spec:
 
 ## 관련 문서
 
-- [보안 수정 이력](./security-hardening.md) — 이번에 수정한 항목 상세
-- [Dev 환경 배포 가이드](./README.md)
-- [인프라 환경 개요](../README.md)
+- [보안 수정 이력](./hardening.md) — 이번에 수정한 항목 상세
+- [Dev 환경 배포 가이드](../README.md)
+- [인프라 환경 개요](../../README.md)

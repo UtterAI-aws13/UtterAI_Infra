@@ -10,4 +10,4 @@ resources:
 images:
 - name: utterai-backend
   newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend'
-  newTag: dev-ba5a2b8
+  newTag: dev-c575f4c

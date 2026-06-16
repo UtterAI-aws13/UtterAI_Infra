@@ -454,6 +454,6 @@ variable "allowed_cidr_blocks" {
 
 ## 관련 문서
 
-- [보안 전체 현황](./security-overview.md)
-- [보안 수정 이력](./security-hardening.md)
-- [Dev 환경 배포 가이드](./README.md)
+- [보안 전체 현황](./overview.md)
+- [보안 수정 이력](./hardening.md)
+- [Dev 환경 배포 가이드](../README.md)
