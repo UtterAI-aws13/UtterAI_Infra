@@ -47,7 +47,7 @@
 | **Pod SecurityContext** | Prod overlay에 부분 적용 (`runAsNonRoot`, `allowPrivilegeEscalation: false`, `capabilities.drop` 있음) | `readOnlyRootFilesystem`, `seccompProfile` 추가 필요 / ml-gpu-worker는 securityContext 전체 누락 (§3-B) |
 | **readOnlyRootFilesystem** | 없음 | Prod overlay에 추가 예정 |
 | **seccompProfile** | 없음 | PSS restricted 강제로 자동 요건화 |
-| **PSA 레이블** | 없음 (`k8s/namespaces/`) | `k8s-demo` prod overlay에 적용 완료 (`utterai-prod-api`: restricted, `utterai-prod-ai-worker`: baseline) |
+| **PSA 레이블** | 없음 (`k8s-legacy/namespaces/`) | `k8s` prod overlay에 적용 완료 (`utterai-prod-api`: restricted, `utterai-prod-ai-worker`: baseline) |
 | **Kyverno** | 없음 | 설치 + ClusterPolicy 4종 |
 | **NetworkPolicy** | 없음 | Cilium + 기본 deny-all |
 | **ClusterSecretStore** | 클러스터 전체 공유 | 네임스페이스별 SecretStore 분리 |
@@ -192,7 +192,7 @@ resource "aws_ecr_repository" "this" {
 
 ### 3-A. ALB ACM 인증서 + WAF 연결
 
-현재 `k8s-demo/apps/backend/overlays/prod/patch-ingress.yaml`의 `certificate-arn`이 `TODO` 상태.
+현재 `k8s/apps/backend/overlays/prod/patch-ingress.yaml`의 `certificate-arn`이 `TODO` 상태.
 
 ```yaml
 annotations:
@@ -209,12 +209,12 @@ annotations:
 현재 prod overlay 상태:
 - `backend` (blue/green): `runAsNonRoot`, `allowPrivilegeEscalation: false`, `capabilities.drop` 있음 / `readOnlyRootFilesystem`, `seccompProfile` **없음**
 - `ai-api`, `cpu-worker`: 동일하게 `readOnlyRootFilesystem`, `seccompProfile` **없음**
-- **`ml-gpu-worker`: securityContext 자체가 patch에 없음** (`k8s-demo/apps/ai-worker/overlays/prod/patch-deployment.yaml`에서 `replicas: 1`만 정의)
+- **`ml-gpu-worker`: securityContext 자체가 patch에 없음** (`k8s/apps/ai-worker/overlays/prod/patch-deployment.yaml`에서 `replicas: 1`만 정의)
 
 PSS `restricted` 레이블 적용 시 `seccompProfile`은 자동 요건이 되므로 반드시 추가해야 배포가 통과된다.
 
 ```yaml
-# k8s-demo/apps/backend/overlays/prod/patch-deployment.yaml
+# k8s/apps/backend/overlays/prod/patch-deployment.yaml
 containers:
   - name: api
     securityContext:
@@ -246,7 +246,7 @@ volumeMounts:
 Dev는 `ClusterSecretStore` 하나가 클러스터 전체를 커버한다. 악의적 사용자가 새 네임스페이스에 `ExternalSecret`을 만들면 `utterai-prod/*` 전체를 꺼낼 수 있다.
 
 ```yaml
-# k8s-demo/apps/backend/overlays/prod/secret-store.yaml
+# k8s/apps/backend/overlays/prod/secret-store.yaml
 apiVersion: external-secrets.io/v1beta1
 kind: SecretStore
 metadata:
@@ -293,18 +293,18 @@ resource "helm_release" "argocd" {
 
 ---
 
-### 3-E. Namespace PSA 레이블 — k8s-demo prod overlay에 적용 완료
+### 3-E. Namespace PSA 레이블 — k8s prod overlay에 적용 완료
 
-`k8s-demo/apps/backend/overlays/prod/namespace.yaml`과 `k8s-demo/apps/ai-worker/overlays/prod/namespace.yaml`에 이미 적용되어 있다.
+`k8s/apps/backend/overlays/prod/namespace.yaml`과 `k8s/apps/ai-worker/overlays/prod/namespace.yaml`에 이미 적용되어 있다.
 
 ```yaml
-# k8s-demo/apps/backend/overlays/prod/namespace.yaml (utterai-prod-api) — 적용 완료
+# k8s/apps/backend/overlays/prod/namespace.yaml (utterai-prod-api) — 적용 완료
 labels:
   pod-security.kubernetes.io/enforce: restricted
   pod-security.kubernetes.io/warn: restricted
   pod-security.kubernetes.io/audit: restricted
 
-# k8s-demo/apps/ai-worker/overlays/prod/namespace.yaml (utterai-prod-ai-worker) — 적용 완료
+# k8s/apps/ai-worker/overlays/prod/namespace.yaml (utterai-prod-ai-worker) — 적용 완료
 # GPU NVIDIA Device Plugin 특성상 restricted 적용 시 스케줄링 실패 가능 → baseline
 labels:
   pod-security.kubernetes.io/enforce: baseline
@@ -312,7 +312,7 @@ labels:
   pod-security.kubernetes.io/audit: restricted
 ```
 
-> `k8s/namespaces/namespaces.yaml` (Dev base 네임스페이스)에는 PSA 레이블 없음 — Dev는 의도적으로 미적용.
+> `k8s-legacy/namespaces/namespaces.yaml` (Dev base 네임스페이스)에는 PSA 레이블 없음 — Dev는 의도적으로 미적용.
 
 ---
 
@@ -322,19 +322,19 @@ labels:
 
 | # | 항목 | 파일 |
 |---|------|------|
-| 1 | ALB ACM 인증서 ARN 주입 | `k8s-demo/apps/backend/overlays/prod/patch-ingress.yaml` |
+| 1 | ALB ACM 인증서 ARN 주입 | `k8s/apps/backend/overlays/prod/patch-ingress.yaml` |
 | 2 | EKS etcd KMS 봉투 암호화 | `terraform/environments/prod/02-eks/main.tf` (신규) |
-| 3 | Per-Namespace SecretStore 생성 | `k8s-demo/apps/*/overlays/prod/` (신규) |
+| 3 | Per-Namespace SecretStore 생성 | `k8s/apps/*/overlays/prod/` (신규) |
 | 4 | ArgoCD admin 비밀번호 관리 | `terraform/modules/eks-addons/main.tf` |
 | 5 | WAF 연결 (ALB + CloudFront) | `terraform/modules/waf/` (신규 모듈) |
-| 6 | ml-gpu-worker securityContext 추가 | `k8s-demo/apps/ai-worker/overlays/prod/patch-deployment.yaml` |
+| 6 | ml-gpu-worker securityContext 추가 | `k8s/apps/ai-worker/overlays/prod/patch-deployment.yaml` |
 
 ### 조기 적용 권장
 
 | # | 항목 | 파일 |
 |---|------|------|
 | 7 | VPC Flow Logs 활성화 | `terraform/environments/prod/01-network/` (신규) |
-| 8 | readOnlyRootFilesystem + seccompProfile 추가 | `k8s-demo/apps/*/overlays/prod/patch-deployment.yaml` |
+| 8 | readOnlyRootFilesystem + seccompProfile 추가 | `k8s/apps/*/overlays/prod/patch-deployment.yaml` |
 | 9 | ECR imageTagMutability IMMUTABLE 설정 | `terraform/modules/ecr/main.tf` |
 | 10 | Redis tfstate 토큰 노출 해소 (Terraform 1.10+) | `terraform/modules/redis/main.tf` |
 | 11 | Redis Prod: num_cache_nodes=2, multi-AZ, Prod CMK | `terraform/environments/prod/03-services/main.tf` (신규) |

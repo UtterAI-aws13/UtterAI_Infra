@@ -131,7 +131,7 @@ jobs:
               File.write(path, docs.map(&:to_yaml).join("---\n"))
             end
 
-            backend_config_file = "k8s-demo/apps/backend/base/configmap.yaml"
+            backend_config_file = "k8s/apps/backend/base/configmap.yaml"
             backend_config = YAML.load_file(backend_config_file)
             backend_data = backend_config.fetch("data")
             backend_data["DB_HOST"] = ENV.fetch("RDS_ENDPOINT")
@@ -140,12 +140,12 @@ jobs:
             backend_data["SQS_REPORT_ANALYSIS_QUEUE_URL"] = ENV.fetch("REPORT_ANALYSIS_QUEUE_URL")
             File.write(backend_config_file, backend_config.to_yaml)
 
-            backend_sa_file = "k8s-demo/apps/backend/base/serviceaccount.yaml"
+            backend_sa_file = "k8s/apps/backend/base/serviceaccount.yaml"
             backend_sa = YAML.load_file(backend_sa_file)
             backend_sa["metadata"]["annotations"]["eks.amazonaws.com/role-arn"] = ENV.fetch("BACKEND_API_ROLE_ARN")
             File.write(backend_sa_file, backend_sa.to_yaml)
 
-            ai_sa_file = "k8s-demo/apps/ai-worker/base/serviceaccount.yaml"
+            ai_sa_file = "k8s/apps/ai-worker/base/serviceaccount.yaml"
             ai_sas = YAML.load_stream(File.read(ai_sa_file)).compact
             ai_role_by_name = {
               "utterai-ai-api-sa" => ENV.fetch("AI_API_ROLE_ARN"),
@@ -166,10 +166,10 @@ jobs:
               "SQS_RAG_INGEST_QUEUE_URL" => ENV.fetch("RAG_INGEST_QUEUE_URL")
             }
             %w[
-              k8s-demo/apps/ai-worker/base/ai-api-deployment.yaml
-              k8s-demo/apps/ai-worker/base/cpu-worker-deployment.yaml
-              k8s-demo/apps/ai-worker/base/ml-gpu-worker-deployment.yaml
-              k8s-demo/apps/ai-worker/base/batch-worker-deployment.yaml
+              k8s/apps/ai-worker/base/ai-api-deployment.yaml
+              k8s/apps/ai-worker/base/cpu-worker-deployment.yaml
+              k8s/apps/ai-worker/base/ml-gpu-worker-deployment.yaml
+              k8s/apps/ai-worker/base/batch-worker-deployment.yaml
             ].each do |file|
               docs = YAML.load_stream(File.read(file)).compact
               docs.each do |doc|
@@ -185,10 +185,10 @@ jobs:
             end
 
             {
-              "k8s-demo/apps/backend/overlays/dev/kustomization.yaml" => {
+              "k8s/apps/backend/overlays/dev/kustomization.yaml" => {
                 "utterai-backend" => ENV.fetch("ECR_BACKEND_URL")
               },
-              "k8s-demo/apps/ai-worker/overlays/dev/kustomization.yaml" => {
+              "k8s/apps/ai-worker/overlays/dev/kustomization.yaml" => {
                 "utterai-ai-cpu" => ENV.fetch("ECR_AI_CPU_URL"),
                 "utterai-ai-gpu" => ENV.fetch("ECR_AI_GPU_URL")
               }
@@ -205,12 +205,12 @@ jobs:
 
       - name: Validate Kustomize render
         run: |
-          kubectl kustomize k8s-demo/platform/dev > /tmp/platform-dev.yaml
-          kubectl kustomize k8s-demo/apps/backend/overlays/dev > /tmp/backend-dev.yaml
-          kubectl kustomize k8s-demo/apps/ai-worker/overlays/dev > /tmp/ai-worker-dev.yaml
+          kubectl kustomize k8s/platform/dev > /tmp/platform-dev.yaml
+          kubectl kustomize k8s/apps/backend/overlays/dev > /tmp/backend-dev.yaml
+          kubectl kustomize k8s/apps/ai-worker/overlays/dev > /tmp/ai-worker-dev.yaml
 
-          if grep -R '\${[A-Z0-9_]\+}' k8s-demo; then
-            echo "k8s-demo manifest에 envsubst placeholder가 남아 있습니다."
+          if grep -R '\${[A-Z0-9_]\+}' k8s; then
+            echo "k8s manifest에 envsubst placeholder가 남아 있습니다."
             exit 1
           fi
 
@@ -234,15 +234,15 @@ jobs:
           fi
 
           git checkout -b "$UPDATE_BRANCH"
-          git add k8s-demo/apps/backend k8s-demo/apps/ai-worker
-          git commit -m "ci(dev): update k8s-demo runtime config"
+          git add k8s/apps/backend k8s/apps/ai-worker
+          git commit -m "ci(dev): update k8s runtime config"
           git push origin "$UPDATE_BRANCH"
 
           PR_URL="$(gh pr create \
             --base "$TARGET_BRANCH" \
             --head "$UPDATE_BRANCH" \
-            --title "ci(dev): update k8s-demo runtime config" \
-            --body "dev 환경의 k8s-demo GitOps runtime config를 갱신합니다.
+            --title "ci(dev): update k8s runtime config" \
+            --body "dev 환경의 k8s GitOps runtime config를 갱신합니다.
 
           변경 대상:
           - backend ConfigMap의 RDS/Redis endpoint

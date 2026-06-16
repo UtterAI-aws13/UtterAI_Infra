@@ -81,17 +81,17 @@ SQS 파이프라인:
 
 | 디렉토리 | 파일 | 내용 |
 |---|---|---|
-| `k8s/namespaces/` | `namespaces.yaml` | utterai-api, utterai-ai-api, utterai-ai-cpu, utterai-ai-gpu, utterai-batch, utterai-observability |
-| `k8s/rbac/` | `serviceaccounts.yaml` | SA 5개 + IRSA role-arn annotation |
-| `k8s/rbac/` | `rolebindings.yaml` | 각 SA에 K8s 내부 최소 권한 |
-| `k8s/secrets/` | `cluster-secret-store.yaml` | ClusterSecretStore: `aws-secrets-manager` |
-| `k8s/secrets/` | `backend-api-external-secret.yaml` | utterai-api — DB_PASSWORD, JWT_SECRET_KEY 등 |
-| `k8s/secrets/` | `ai-worker-external-secret.yaml` | utterai-ai-gpu + utterai-batch — DB 접속 정보 |
-| `k8s/secrets/` | `gpu-worker-external-secret.yaml` | utterai-ai-gpu — HF_TOKEN |
-| `k8s/ingress/` | `api-ingress.yaml` | ALB internet-facing, HTTPS 리다이렉트 |
-| `k8s/workloads/` | `*-deployment.yaml` | API, AI API, CPU Worker, ML GPU Worker, Batch Worker |
-| `k8s/workloads/` | `hpa-*.yaml` | 각 워크로드 HPA |
-| `k8s-demo/apps/backend/` | `base/` + `overlays/dev/` | Kustomize 구조 (별도 배포) |
+| `k8s-legacy/namespaces/` | `namespaces.yaml` | utterai-api, utterai-ai-api, utterai-ai-cpu, utterai-ai-gpu, utterai-batch, utterai-observability |
+| `k8s-legacy/rbac/` | `serviceaccounts.yaml` | SA 5개 + IRSA role-arn annotation |
+| `k8s-legacy/rbac/` | `rolebindings.yaml` | 각 SA에 K8s 내부 최소 권한 |
+| `k8s-legacy/secrets/` | `cluster-secret-store.yaml` | ClusterSecretStore: `aws-secrets-manager` |
+| `k8s-legacy/secrets/` | `backend-api-external-secret.yaml` | utterai-api — DB_PASSWORD, JWT_SECRET_KEY 등 |
+| `k8s-legacy/secrets/` | `ai-worker-external-secret.yaml` | utterai-ai-gpu + utterai-batch — DB 접속 정보 |
+| `k8s-legacy/secrets/` | `gpu-worker-external-secret.yaml` | utterai-ai-gpu — HF_TOKEN |
+| `k8s-legacy/ingress/` | `api-ingress.yaml` | ALB internet-facing, HTTPS 리다이렉트 |
+| `k8s-legacy/workloads/` | `*-deployment.yaml` | API, AI API, CPU Worker, ML GPU Worker, Batch Worker |
+| `k8s-legacy/workloads/` | `hpa-*.yaml` | 각 워크로드 HPA |
+| `k8s/apps/backend/` | `base/` + `overlays/dev/` | Kustomize 구조 (별도 배포) |
 
 ---
 
@@ -123,7 +123,7 @@ UtterAI_Infra/
 │       ├── cloudfront/
 │       └── ecr/
 │
-├── k8s/
+├── k8s-legacy/
 │   ├── namespaces/
 │   ├── rbac/
 │   ├── secrets/
@@ -132,7 +132,7 @@ UtterAI_Infra/
 │   └── apps/backend/             ← Kustomize base/overlays (별도 배포)
 │
 └── scripts/
-    ├── k8s-deploy.sh             ← 워크로드 배포 자동화
+    ├── k8s-deploy-legacy.sh             ← 워크로드 배포 자동화
     └── migrate-state.sh          ← State 마이그레이션 (단일 루트 → 4 레이어)
 ```
 
@@ -494,17 +494,17 @@ kubectl get clustersecretstore
 
 ### 7.2 자동 배포 스크립트 실행
 
-`scripts/k8s-deploy.sh`가 아래 작업을 순서대로 수행한다:
+`scripts/k8s-deploy-legacy.sh`가 아래 작업을 순서대로 수행한다:
 
 1. `aws sts get-caller-identity`로 `AWS_ACCOUNT_ID` 조회
 2. ECR에서 각 이미지의 최신 태그(`BACKEND_TAG`, `AI_CPU_TAG`, `AI_GPU_TAG`) 조회
 3. `terraform output`에서 `RDS_ENDPOINT`, `REDIS_ENDPOINT` 자동 조회
-4. `k8s/namespaces/` → `k8s/rbac/` → `k8s/secrets/` → `k8s/workloads/` → `k8s/ingress/` 순서로 `envsubst | kubectl apply`
+4. `k8s-legacy/namespaces/` → `k8s-legacy/rbac/` → `k8s-legacy/secrets/` → `k8s-legacy/workloads/` → `k8s-legacy/ingress/` 순서로 `envsubst | kubectl apply`
 
 ```bash
 # ACM ARN을 환경변수로 export 후 프로젝트 루트에서 실행
 export ACM_CERTIFICATE_ARN="<5.3에서 발급한 ARN>"
-bash scripts/k8s-deploy.sh
+bash scripts/k8s-deploy-legacy.sh
 ```
 
 ### 7.3 배포 후 확인
@@ -562,14 +562,14 @@ aws route53 change-resource-record-sets \
 
 ```bash
 # dev overlay 적용
-kubectl apply -k k8s-demo/apps/backend/overlays/dev
+kubectl apply -k k8s/apps/backend/overlays/dev
 ```
 
 ---
 
 ## 8. 플레이스홀더 치환 목록
 
-### 자동 주입 (k8s-deploy.sh가 처리)
+### 자동 주입 (k8s-deploy-legacy.sh가 처리)
 
 | 변수 | 사용 위치 | 값 출처 |
 |---|---|---|
@@ -700,7 +700,7 @@ terraform apply
 
 | 항목 | 설명 |
 |---|---|
-| **Karpenter NodePool / EC2NodeClass** | `k8s/nodepools/` 미구성. 동적 스케일링이 필요하면 추가 필요 |
+| **Karpenter NodePool / EC2NodeClass** | `k8s-legacy/nodepools/` 미구성. 동적 스케일링이 필요하면 추가 필요 |
 | **Bastion Host** | Dev DB 직접 접근용. EC2 + SG 생성 필요 |
 | **CloudWatch 알람** | `dev-backend-5xx-rate`, `dev-rds-cpu`, `dev-sqs-dlq-count` |
 
@@ -708,7 +708,7 @@ terraform apply
 
 | 항목 | 설명 |
 |---|---|
-| GitHub Actions `dev-deploy.yaml` | `develop` push → Docker 빌드 → ECR push → `k8s-deploy.sh` 실행 |
+| GitHub Actions `dev-deploy.yaml` | `develop` push → Docker 빌드 → ECR push → `k8s-deploy-legacy.sh` 실행 |
 | ArgoCD Application 설정 | dev 클러스터 Auto-Sync (Shared Tooling Account에서 구성) |
 
 ### 선택 구현

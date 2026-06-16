@@ -947,7 +947,7 @@ Scrape 대상:
   - ServiceMonitor: otel-collector.utterai-observability
 ```
 
-애플리케이션 Pod는 OTLP HTTP로 Collector에 metrics를 전송하고, Collector는 `prom-exporter` service port(`8889`)에서 Prometheus scrape endpoint를 노출한다. `ServiceMonitor`는 `k8s/observability/otel-collector.yaml`에 함께 정의한다.
+애플리케이션 Pod는 OTLP HTTP로 Collector에 metrics를 전송하고, Collector는 `prom-exporter` service port(`8889`)에서 Prometheus scrape endpoint를 노출한다. `ServiceMonitor`는 `k8s/platform/observability/base/otel-collector.yaml`에 함께 정의한다.
 
 ### 12.6 Grafana
 
@@ -964,7 +964,7 @@ Grafana 데이터 소스:
   - UtterAI CA vs Karpenter (node autoscaling 전환 검증)
 ```
 
-`UtterAI CA vs Karpenter` dashboard는 `k8s/observability/grafana-dashboard-ca-karpenter.yaml`에 정의한다. Dev에서는 CA baseline을 먼저 수집하고, Karpenter 설치 후 같은 dashboard에서 `karpenter_*` 지표와 비교한다.
+`UtterAI CA vs Karpenter` dashboard는 `k8s/platform/observability/base/grafana-dashboard-ca-karpenter.yaml`에 정의한다. Dev에서는 CA baseline을 먼저 수집하고, Karpenter 설치 후 같은 dashboard에서 `karpenter_*` 지표와 비교한다.
 
 ### 12.7 Alerting
 
@@ -1313,7 +1313,7 @@ audit:   위반 내역을 감사 로그에 기록 (배포는 됨)
 - hostNetwork / hostPID / hostIPC: false 필수
 ```
 
-실제 Namespace YAML (`k8s-demo/apps/backend/overlays/prod/namespace.yaml`):
+실제 Namespace YAML (`k8s/apps/backend/overlays/prod/namespace.yaml`):
 ```yaml
 labels:
   pod-security.kubernetes.io/enforce: restricted

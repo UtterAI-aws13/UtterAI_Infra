@@ -175,7 +175,7 @@ condition: "StringEquals"
 
 ## 6. Secrets 관리
 
-**파일**: `terraform/modules/secrets/main.tf`, `k8s/secrets/`
+**파일**: `terraform/modules/secrets/main.tf`, `k8s-legacy/secrets/`
 
 ### Secrets Manager 시크릿 목록
 
@@ -214,7 +214,7 @@ Pod 컨테이너 환경 변수
 
 ## 7. Kubernetes RBAC
 
-**파일**: `k8s/rbac/serviceaccounts.yaml`, `k8s/rbac/rolebindings.yaml`
+**파일**: `k8s-legacy/rbac/serviceaccounts.yaml`, `k8s-legacy/rbac/rolebindings.yaml`
 
 ### ServiceAccount — IRSA 매핑
 
@@ -241,7 +241,7 @@ AWS 리소스 접근은 IRSA, Kubernetes 리소스 접근은 Role로 이중 제�
 
 ## 8. Kubernetes Namespace 격리
 
-**파일**: `k8s/namespaces/namespaces.yaml`
+**파일**: `k8s-legacy/namespaces/namespaces.yaml`
 
 | Namespace | 역할 | 외부 노출 | 주요 아웃바운드 |
 |-----------|------|-----------|----------------|
@@ -259,12 +259,12 @@ NetworkPolicy 미구현 → 네임스페이스 격리는 SG 레벨에서만 강�
 
 ## 9. External Secrets — Secret 주입 흐름
 
-**파일**: `k8s/secrets/`
+**파일**: `k8s-legacy/secrets/`
 
 ### ClusterSecretStore
 
 ```yaml
-# k8s/secrets/cluster-secret-store.yaml
+# k8s-legacy/secrets/cluster-secret-store.yaml
 kind: ClusterSecretStore
 metadata:
   name: aws-secrets-manager
@@ -294,7 +294,7 @@ spec:
 
 ## 10. Ingress 및 외부 노출 제어
 
-**파일**: `k8s-demo/apps/backend/base/ingress.yaml`, `k8s-demo/apps/backend/overlays/`
+**파일**: `k8s/apps/backend/base/ingress.yaml`, `k8s/apps/backend/overlays/`
 
 ### ALB Ingress 구성
 
@@ -367,7 +367,7 @@ GPU 워커 300초: 추론 작업 완료까지 충분한 드레인 시간 확보.
 
 ### Pod SecurityContext (Prod overlay 적용)
 
-**파일**: `k8s-demo/apps/backend/overlays/prod/patch-deployment.yaml`, `k8s-demo/apps/ai-worker/overlays/prod/patch-deployment.yaml`
+**파일**: `k8s/apps/backend/overlays/prod/patch-deployment.yaml`, `k8s/apps/ai-worker/overlays/prod/patch-deployment.yaml`
 
 > **2026-06-10 수정**: Prod overlay에 아래 설정 추가. Dev base는 개발 편의를 위해 미적용.
 

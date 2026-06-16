@@ -1,34 +1,34 @@
-# k8s-demo Kustomize 구조 이해
+# k8s Kustomize 구조 이해
 
-이 디렉토리는 기존 `k8s/` 아래에 있던 실제 Kubernetes manifest를 Kustomize 방식으로 옮기기 위한 초안입니다.
+이 디렉토리는 기존 `k8s-legacy/` 아래에 있던 실제 Kubernetes manifest를 Kustomize 방식으로 옮기기 위한 초안입니다.
 
 현재 기준을 헷갈리지 않기 위해 먼저 구분합니다.
 
 ```text
-k8s/
+k8s-legacy/
   지금까지 수동 배포와 테스트에 사용하던 실제 Kubernetes manifest 원본
 
-k8s-demo/
-  k8s/의 실제 운영 의도를 Kustomize 구조로 옮기는 마이그레이션 대상
+k8s/
+  k8s-legacy/의 실제 운영 의도를 Kustomize 구조로 옮기는 마이그레이션 대상
 ```
 
-즉 `k8s-demo/`는 단순 예제 폴더가 아니라, 앞으로 Argo CD와 GitOps 배포가 바라보게 만들 Kustomize 구조입니다. 다만 아직은 `k8s/`의 모든 의도가 완전히 옮겨졌는지 계속 비교하면서 다듬어야 합니다.
+즉 `k8s/`는 단순 예제 폴더가 아니라, 앞으로 Argo CD와 GitOps 배포가 바라보게 만들 Kustomize 구조입니다. 다만 아직은 `k8s-legacy/`의 모든 의도가 완전히 옮겨졌는지 계속 비교하면서 다듬어야 합니다.
 
 ---
 
 ## 1. Kustomize를 왜 쓰는가
 
-기존 `k8s/` 방식은 여러 YAML 파일을 직접 순서대로 적용하는 방식입니다.
+기존 `k8s-legacy/` 방식은 여러 YAML 파일을 직접 순서대로 적용하는 방식입니다.
 
 ```bash
-kubectl apply -f k8s/namespaces/
-kubectl apply -f k8s/rbac/
-kubectl apply -f k8s/secrets/
-kubectl apply -f k8s/workloads/
-kubectl apply -f k8s/ingress/
+kubectl apply -f k8s-legacy/namespaces/
+kubectl apply -f k8s-legacy/rbac/
+kubectl apply -f k8s-legacy/secrets/
+kubectl apply -f k8s-legacy/workloads/
+kubectl apply -f k8s-legacy/ingress/
 ```
 
-또는 `scripts/k8s-deploy.sh`가 `envsubst`로 값을 치환한 뒤 `kubectl apply`를 실행했습니다.
+또는 `scripts/k8s-deploy-legacy.sh`가 `envsubst`로 값을 치환한 뒤 `kubectl apply`를 실행했습니다.
 
 이 방식은 처음에는 단순하지만, 환경이 늘어나면 관리가 어려워집니다.
 
@@ -56,10 +56,10 @@ overlays/prod:
 
 ## 2. 전체 구조
 
-현재 `k8s-demo/` 구조는 다음과 같습니다.
+현재 `k8s/` 구조는 다음과 같습니다.
 
 ```text
-k8s-demo/
+k8s/
 ├── apps/
 │   ├── backend/
 │   │   ├── base/
@@ -145,7 +145,7 @@ prod HPA 범위
 prod 보안 설정
 ```
 
-현재 `k8s/` 원본이 dev 실제값 중심이므로, `k8s-demo`도 dev 구조가 더 구체적입니다. prod overlay는 렌더가 깨지지 않도록 유지하면서, 추후 prod 실제값이 확정되면 별도로 보강해야 합니다.
+현재 `k8s-legacy/` 원본이 dev 실제값 중심이므로, `k8s`도 dev 구조가 더 구체적입니다. prod overlay는 렌더가 깨지지 않도록 유지하면서, 추후 prod 실제값이 확정되면 별도로 보강해야 합니다.
 
 ---
 
@@ -154,7 +154,7 @@ prod 보안 설정
 위치:
 
 ```text
-k8s-demo/apps/backend
+k8s/apps/backend
 ```
 
 backend는 외부 사용자 요청을 받는 메인 API입니다.
@@ -172,7 +172,7 @@ User
 ### 4.1 backend/base 파일 설명
 
 ```text
-k8s-demo/apps/backend/base/
+k8s/apps/backend/base/
 ├── configmap.yaml
 ├── deployment-blue.yaml
 ├── deployment-green.yaml
@@ -256,7 +256,7 @@ livenessProbe:
 위치:
 
 ```text
-k8s-demo/apps/backend/overlays/dev
+k8s/apps/backend/overlays/dev
 ```
 
 역할:
@@ -289,10 +289,10 @@ GitHub Actions CD는 이 `newTag`를 새 image tag로 바꾸는 PR을 만들게 
 위치:
 
 ```text
-k8s-demo/apps/ai-worker
+k8s/apps/ai-worker
 ```
 
-AI 쪽은 하나의 Pod만 있는 구조가 아닙니다. 기존 `k8s/` 실제 구조처럼 역할별 namespace가 분리되어 있습니다.
+AI 쪽은 하나의 Pod만 있는 구조가 아닙니다. 기존 `k8s-legacy/` 실제 구조처럼 역할별 namespace가 분리되어 있습니다.
 
 ```text
 utterai-ai-api:
@@ -311,7 +311,7 @@ utterai-batch:
 ### 5.1 ai-worker/base 파일 설명
 
 ```text
-k8s-demo/apps/ai-worker/base/
+k8s/apps/ai-worker/base/
 ├── ai-api-deployment.yaml
 ├── ai-api-service.yaml
 ├── batch-worker-deployment.yaml
@@ -438,7 +438,7 @@ DB 접속 정보는 ConfigMap이 아니라 ExternalSecret이 만든 Kubernetes S
 위치:
 
 ```text
-k8s-demo/platform/external-secrets/base
+k8s/platform/external-secrets/base
 ```
 
 현재 포함된 리소스:
@@ -464,7 +464,7 @@ secretStoreRef:
 위치:
 
 ```text
-k8s-demo/platform/observability/base
+k8s/platform/observability/base
 ```
 
 현재 포함된 리소스:
@@ -545,7 +545,7 @@ Kustomize는 실제 적용 전에 최종 YAML을 렌더링해서 확인할 수 �
 ```bash
 cd UtterAI_Infra
 
-kubectl kustomize k8s-demo/apps/backend/overlays/dev > /tmp/backend-dev.yaml
+kubectl kustomize k8s/apps/backend/overlays/dev > /tmp/backend-dev.yaml
 ```
 
 확인:
@@ -559,7 +559,7 @@ grep "utterai-api" /tmp/backend-dev.yaml
 실제 dev cluster에 수동 적용:
 
 ```bash
-kubectl apply -k k8s-demo/apps/backend/overlays/dev
+kubectl apply -k k8s/apps/backend/overlays/dev
 ```
 
 상태 확인:
@@ -576,7 +576,7 @@ kubectl describe pod -n utterai-api <pod-name>
 ```bash
 cd UtterAI_Infra
 
-kubectl kustomize k8s-demo/apps/ai-worker/overlays/dev > /tmp/ai-worker-dev.yaml
+kubectl kustomize k8s/apps/ai-worker/overlays/dev > /tmp/ai-worker-dev.yaml
 ```
 
 확인:
@@ -590,7 +590,7 @@ grep "ExternalSecret" /tmp/ai-worker-dev.yaml
 실제 dev cluster에 수동 적용:
 
 ```bash
-kubectl apply -k k8s-demo/apps/ai-worker/overlays/dev
+kubectl apply -k k8s/apps/ai-worker/overlays/dev
 ```
 
 상태 확인:
@@ -607,13 +607,13 @@ kubectl get pods -n utterai-batch
 ```bash
 cd UtterAI_Infra
 
-kubectl kustomize k8s-demo/platform/external-secrets/base > /tmp/platform-external-secrets.yaml
+kubectl kustomize k8s/platform/external-secrets/base > /tmp/platform-external-secrets.yaml
 ```
 
 수동 적용:
 
 ```bash
-kubectl apply -k k8s-demo/platform/external-secrets/base
+kubectl apply -k k8s/platform/external-secrets/base
 ```
 
 ### 8.4 platform Observability 렌더링
@@ -621,13 +621,13 @@ kubectl apply -k k8s-demo/platform/external-secrets/base
 ```bash
 cd UtterAI_Infra
 
-kubectl kustomize k8s-demo/platform/observability/base > /tmp/platform-observability.yaml
+kubectl kustomize k8s/platform/observability/base > /tmp/platform-observability.yaml
 ```
 
 수동 적용:
 
 ```bash
-kubectl apply -k k8s-demo/platform/observability/base
+kubectl apply -k k8s/platform/observability/base
 ```
 
 주의:
@@ -662,10 +662,10 @@ ClusterSecretStore가 먼저 적용되어야 앱별 ExternalSecret이 정상 동
 ```bash
 cd UtterAI_Infra
 
-kubectl apply -k k8s-demo/platform/external-secrets/base
-kubectl apply -k k8s-demo/platform/observability/base
-kubectl apply -k k8s-demo/apps/backend/overlays/dev
-kubectl apply -k k8s-demo/apps/ai-worker/overlays/dev
+kubectl apply -k k8s/platform/external-secrets/base
+kubectl apply -k k8s/platform/observability/base
+kubectl apply -k k8s/apps/backend/overlays/dev
+kubectl apply -k k8s/apps/ai-worker/overlays/dev
 ```
 
 다만 운영 원칙상 최종 목표는 수동 apply가 아니라 Argo CD sync입니다.
@@ -679,9 +679,9 @@ PR merge
 
 ---
 
-## 10. 기존 k8s/와 비교할 때 보는 기준
+## 10. 기존 k8s-legacy/와 비교할 때 보는 기준
 
-마이그레이션 작업을 계속할 때는 항상 기존 `k8s/`와 비교해야 합니다.
+마이그레이션 작업을 계속할 때는 항상 기존 `k8s-legacy/`와 비교해야 합니다.
 
 확인 기준:
 
@@ -704,15 +704,15 @@ Ingress annotation이 같은가?
 중요:
 
 ```text
-k8s-demo에 파일이 있다고 해서 migration이 끝난 것은 아닙니다.
-k8s/ 원본과 비교해서 실제 운영 의도가 보존되어야 migration이 끝난 것입니다.
+k8s에 파일이 있다고 해서 migration이 끝난 것은 아닙니다.
+k8s-legacy/ 원본과 비교해서 실제 운영 의도가 보존되어야 migration이 끝난 것입니다.
 ```
 
 ---
 
 ## 11. 지금 남아 있는 주의사항
 
-현재 `k8s-demo`는 dev 실제값을 우선 반영한 상태입니다.
+현재 `k8s`는 dev 실제값을 우선 반영한 상태입니다.
 
 주의할 점:
 
@@ -740,12 +740,12 @@ kubectl get nodes --show-labels | grep ai-gpu
 
 ## 12. 한 줄 요약
 
-`k8s-demo/`는 기존 `k8s/`의 실제 운영 manifest를 Kustomize 방식으로 옮겨, 나중에 Argo CD가 안정적으로 배포할 수 있게 만드는 전환용 구조입니다.
+`k8s/`는 기존 `k8s-legacy/`의 실제 운영 manifest를 Kustomize 방식으로 옮겨, 나중에 Argo CD가 안정적으로 배포할 수 있게 만드는 전환용 구조입니다.
 
 ```text
-k8s/ 원본을 읽고
-  -> k8s-demo/base에 공통 리소스를 두고
-  -> k8s-demo/overlays/dev, prod에서 환경별 값을 나누고
+k8s-legacy/ 원본을 읽고
+  -> k8s/base에 공통 리소스를 두고
+  -> k8s/overlays/dev, prod에서 환경별 값을 나누고
   -> kubectl kustomize로 검증하고
   -> Argo CD가 Git 상태를 cluster에 반영하게 만든다.
 ```

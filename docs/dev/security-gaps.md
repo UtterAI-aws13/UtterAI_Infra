@@ -1,9 +1,9 @@
 # UtterAI Dev 환경 — 보안 미비점 상세 분석
 
-> 작성일: 2026-06-11  
+> 작성일: 2026-06-11
 > 범위: EKS 클러스터 구성 시점 보안 점검 (Manifest 주입 포함)
 
-기존 `security-overview.md`·`security-hardening.md`에서 다루지 않은 항목을 중심으로 정리한다.  
+기존 `security-overview.md`·`security-hardening.md`에서 다루지 않은 항목을 중심으로 정리한다.
 각 항목은 **위험도**, **현재 상태**, **해결 방향** 순으로 기술한다.
 
 ---
@@ -11,7 +11,7 @@
 ## 목차
 
 1. [envsubst Manifest 주입 보안 위험](#1-envsubst-manifest-주입-보안-위험)
-2. [k8s/ 기본 매니페스트 securityContext 누락](#2-k8s-기본-매니페스트-securitycontext-누락)
+2. [k8s-legacy/ 기본 매니페스트 securityContext 누락](#2-k8s-기본-매니페스트-securitycontext-누락)
 3. [Kubernetes Secrets KMS 봉투 암호화 미설정](#3-kubernetes-secrets-kms-봉투-암호화-미설정)
 4. [ClusterSecretStore 네임스페이스 제한 없음](#4-clustersecretstore-네임스페이스-제한-없음)
 5. [Namespace PodSecurityAdmission 레이블 없음](#5-namespace-podsecurityadmission-레이블-없음)
@@ -24,7 +24,7 @@
 
 ## 1. envsubst Manifest 주입 보안 위험
 
-**파일**: `scripts/k8s-deploy.sh`  
+**파일**: `scripts/k8s-deploy-legacy.sh`
 **위험도**: 높음
 
 ### 현재 구조
@@ -41,8 +41,8 @@ apply() {
 
 #### (1) 변수 범위 미지정 → 의도치 않은 치환
 
-`envsubst`를 인자 없이 호출하면 현재 셸 환경의 **모든 변수**를 치환한다.  
-YAML 안에 `$HOME`, `$PATH`, `$USER` 같은 문자열이 있으면 호스트 값으로 교체된다.  
+`envsubst`를 인자 없이 호출하면 현재 셸 환경의 **모든 변수**를 치환한다.
+YAML 안에 `$HOME`, `$PATH`, `$USER` 같은 문자열이 있으면 호스트 값으로 교체된다.
 컨테이너 커맨드·스크립트 인라인 예제에 `$var` 형태가 있으면 조용히 깨진다.
 
 ```bash
@@ -56,8 +56,8 @@ envsubst '${AWS_ACCOUNT_ID} ${BACKEND_TAG} ${AI_CPU_TAG} ${AI_GPU_TAG} ${RDS_END
 
 #### (2) 빈 변수 허용 → 잘못된 매니페스트 적용
 
-`latest_tag()` 함수가 ECR에서 태그를 못 찾으면 빈 문자열을 반환한다.  
-`${BACKEND_TAG}`가 비어있으면 이미지 주소가 `...amazonaws.com/utterai-backend:` 로 주입되어  
+`latest_tag()` 함수가 ECR에서 태그를 못 찾으면 빈 문자열을 반환한다.
+`${BACKEND_TAG}`가 비어있으면 이미지 주소가 `...amazonaws.com/utterai-backend:` 로 주입되어
 `ImagePullBackOff`가 아닌 예기치 않은 이미지(레지스트리 기본값)를 참조할 수 있다.
 
 ```bash
@@ -71,7 +71,7 @@ export BACKEND_TAG=$(latest_tag "utterai-backend")
 
 #### (3) dry-run 없이 즉시 apply → 검증 기회 없음
 
-치환된 YAML을 서버에 보내기 전 유효성 검사가 없다.  
+치환된 YAML을 서버에 보내기 전 유효성 검사가 없다.
 스키마 오류·네임스페이스 충돌을 사전에 잡지 못한다.
 
 ```bash
@@ -88,15 +88,15 @@ envsubst '...' < "$1" | kubectl apply --dry-run=server -f - \
 
 ---
 
-## 2. k8s/ 기본 매니페스트 securityContext 누락
+## 2. k8s-legacy/ 기본 매니페스트 securityContext 누락
 
-**파일**: `k8s/workloads/*.yaml`  
+**파일**: `k8s-legacy/workloads/*.yaml`
 **위험도**: 중간 (Dev 허용 범위이나 점진 적용 권장)
 
-`security-hardening.md` #3 에서 Prod overlay(`k8s-demo/`) 에 securityContext를 추가했으나,  
-**실제 배포에 사용되는 `k8s/workloads/` 기본 매니페스트에는 전혀 적용되지 않았다.**
+`security-hardening.md` #3 에서 Prod overlay(`k8s/`) 에 securityContext를 추가했으나,
+**실제 배포에 사용되는 `k8s-legacy/workloads/` 기본 매니페스트에는 전혀 적용되지 않았다.**
 
-현재 `k8s/workloads/` 내 모든 Deployment에 아래 항목이 없다:
+현재 `k8s-legacy/workloads/` 내 모든 Deployment에 아래 항목이 없다:
 
 | 설정 | 기본 동작 | 위험 |
 |------|----------|------|
@@ -108,7 +108,7 @@ envsubst '...' < "$1" | kubectl apply --dry-run=server -f - \
 ### 적용 가이드
 
 ```yaml
-# k8s/workloads/api-deployment.yaml — containers 하위에 추가
+# k8s-legacy/workloads/api-deployment.yaml — containers 하위에 추가
 containers:
   - name: api
     securityContext:
@@ -120,7 +120,7 @@ containers:
       readOnlyRootFilesystem: true  # /tmp, /var 등 필요 시 emptyDir 마운트 별도 설정
 ```
 
-> **예외**: `cpu-worker`, `ml-gpu-worker`는 `HF_HOME: /tmp/huggingface`를 사용하므로  
+> **예외**: `cpu-worker`, `ml-gpu-worker`는 `HF_HOME: /tmp/huggingface`를 사용하므로
 > `readOnlyRootFilesystem: true` 적용 시 `/tmp`를 emptyDir로 마운트해야 한다.
 
 ```yaml
@@ -137,10 +137,10 @@ volumeMounts:
 
 ## 3. Kubernetes Secrets KMS 봉투 암호화 미설정
 
-**파일**: `terraform/modules/eks/main.tf`  
+**파일**: `terraform/modules/eks/main.tf`
 **위험도**: 중간
 
-EKS 클러스터의 etcd에 저장되는 Kubernetes Secret은 기본적으로 AWS 관리형 키로만 암호화된다.  
+EKS 클러스터의 etcd에 저장되는 Kubernetes Secret은 기본적으로 AWS 관리형 키로만 암호화된다.
 커스텀 KMS CMK를 사용한 **봉투 암호화(envelope encryption)**가 미설정된 상태다.
 
 ### 현재 상태
@@ -180,12 +180,12 @@ resource "aws_eks_cluster" "this" {
 
 ## 4. ClusterSecretStore 네임스페이스 제한 없음
 
-**파일**: `k8s/secrets/cluster-secret-store.yaml`  
+**파일**: `k8s-legacy/secrets/cluster-secret-store.yaml`
 **위험도**: 중간
 
-현재 `ClusterSecretStore`는 인증 섹션(`auth`) 없이 ESO Pod의 IRSA에 전적으로 의존한다.  
-`ClusterSecretStore`는 클러스터 전체 네임스페이스에서 참조 가능하므로,  
-악의적 사용자가 새 네임스페이스에 `ExternalSecret`을 생성하면 `utterai-dev/*` 범위의  
+현재 `ClusterSecretStore`는 인증 섹션(`auth`) 없이 ESO Pod의 IRSA에 전적으로 의존한다.
+`ClusterSecretStore`는 클러스터 전체 네임스페이스에서 참조 가능하므로,
+악의적 사용자가 새 네임스페이스에 `ExternalSecret`을 생성하면 `utterai-dev/*` 범위의
 Secrets Manager 시크릿 전체를 꺼낼 수 있다.
 
 ### 현재 상태
@@ -202,8 +202,8 @@ spec:
 
 ### 개선 방향 (우선순위 낮음)
 
-ClusterSecretStore 대신 **네임스페이스별 SecretStore**로 분리한다.  
-각 워크로드 네임스페이스에 독립적인 SecretStore를 두면, 한 네임스페이스가  
+ClusterSecretStore 대신 **네임스페이스별 SecretStore**로 분리한다.
+각 워크로드 네임스페이스에 독립적인 SecretStore를 두면, 한 네임스페이스가
 다른 네임스페이스의 시크릿을 참조하는 구조가 근본적으로 차단된다.
 
 ```yaml
@@ -224,18 +224,18 @@ spec:
             name: utterai-api-sa   # 해당 SA의 IRSA만 사용
 ```
 
-> Dev 현시점은 IRSA 정책 범위(`utterai-dev/*`)로 1차 제어 중이므로 허용.  
+> Dev 현시점은 IRSA 정책 범위(`utterai-dev/*`)로 1차 제어 중이므로 허용.
 > Prod에서는 SecretStore 분리 + IRSA 범위 최소화를 강하게 권장.
 
 ---
 
 ## 5. Namespace PodSecurityAdmission 레이블 없음
 
-**파일**: `k8s/namespaces/namespaces.yaml`  
+**파일**: `k8s-legacy/namespaces/namespaces.yaml`
 **위험도**: 중간
 
-Kubernetes 1.25+의 내장 **PodSecurity Admission(PSA)**을 사용하면 네임스페이스 레벨에서  
-Pod 보안 기준(`privileged` / `baseline` / `restricted`)을 강제할 수 있다.  
+Kubernetes 1.25+의 내장 **PodSecurity Admission(PSA)**을 사용하면 네임스페이스 레벨에서
+Pod 보안 기준(`privileged` / `baseline` / `restricted`)을 강제할 수 있다.
 현재 모든 네임스페이스에 PSA 레이블이 없어 어떤 Pod도 보안 기준 검사를 받지 않는다.
 
 ### 현재 상태
@@ -282,11 +282,11 @@ metadata:
 
 ## 6. 이미지 Digest 고정 없음 (Mutable Tag)
 
-**파일**: `scripts/k8s-deploy.sh`, `k8s/workloads/*.yaml`  
+**파일**: `scripts/k8s-deploy-legacy.sh`, `k8s-legacy/workloads/*.yaml`
 **위험도**: 중간
 
-`latest_tag()`는 ECR에서 **가장 최근에 push된 이미지 태그**를 가져온다.  
-태그는 mutable(덮어쓰기 가능)하므로, 동일 태그로 악성 이미지가 push되면  
+`latest_tag()`는 ECR에서 **가장 최근에 push된 이미지 태그**를 가져온다.
+태그는 mutable(덮어쓰기 가능)하므로, 동일 태그로 악성 이미지가 push되면
 다음 배포 시 자동으로 악성 버전이 적용된다.
 
 ### 현재 동작
@@ -327,11 +327,11 @@ image: 123456789.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend@sha256:abc
 
 ## 7. PodDisruptionBudget 없음
 
-**파일**: `k8s/workloads/`  
+**파일**: `k8s-legacy/workloads/`
 **위험도**: 낮음
 
-노드 드레인(업그레이드, Spot 회수) 시 `PodDisruptionBudget(PDB)`이 없으면  
-kubectl이 Deployment의 모든 Pod를 동시에 제거할 수 있다.  
+노드 드레인(업그레이드, Spot 회수) 시 `PodDisruptionBudget(PDB)`이 없으면
+kubectl이 Deployment의 모든 Pod를 동시에 제거할 수 있다.
 `utterai-api` 처럼 외부 트래픽을 받는 서비스는 순간적으로 0개가 될 수 있다.
 
 ### 개선
@@ -349,18 +349,18 @@ spec:
       app: utterai-api
 ```
 
-적용 대상: `utterai-api` (외부 트래픽), `utterai-ai-api` (내부 트래픽)  
+적용 대상: `utterai-api` (외부 트래픽), `utterai-ai-api` (내부 트래픽)
 워커류(`cpu`, `gpu`, `batch`)는 SQS 기반 비동기 처리이므로 PDB 우선순위 낮음.
 
 ---
 
 ## 8. ArgoCD 기본 admin 자격증명 유지
 
-**파일**: `terraform/modules/eks-addons/main.tf`  
+**파일**: `terraform/modules/eks-addons/main.tf`
 **위험도**: 중간
 
-ArgoCD는 Helm 기본값으로 배포될 경우 `admin` 계정 비밀번호가  
-**Pod 이름 기반 자동 생성값**으로 초기화된다.  
+ArgoCD는 Helm 기본값으로 배포될 경우 `admin` 계정 비밀번호가
+**Pod 이름 기반 자동 생성값**으로 초기화된다.
 별도 Secret 주입이나 SSO 설정이 없으면 초기 비밀번호가 영구적으로 유지될 수 있다.
 
 ### 현재 상태
@@ -399,11 +399,11 @@ values = [yamlencode({
 
 ## 9. EKS API Public Endpoint CIDR 제한 없음
 
-**파일**: `terraform/modules/eks/main.tf`  
+**파일**: `terraform/modules/eks/main.tf`
 **위험도**: 중간 (security-overview.md §13에도 언급, 상세 보완)
 
-`endpoint_public_access = true` 이지만 `public_access_cidrs`를 지정하지 않아  
-전 세계 어디서나 EKS API 서버에 접근 시도할 수 있다.  
+`endpoint_public_access = true` 이지만 `public_access_cidrs`를 지정하지 않아
+전 세계 어디서나 EKS API 서버에 접근 시도할 수 있다.
 인증이 필요하므로 즉각적 침해는 어렵지만, brute-force 또는 취약한 kubeconfig 유출 시 위험하다.
 
 ### 현재 상태
@@ -441,7 +441,7 @@ variable "allowed_cidr_blocks" {
 | # | 항목 | 위험도 | 공수 | Prod 전 필수 |
 |---|------|--------|------|-------------|
 | 1 | envsubst 변수 범위 명시 + 빈값 가드 | 높음 | 낮음 (스크립트 수정) | ✅ |
-| 2 | k8s/ 매니페스트 securityContext 추가 | 중간 | 낮음 (YAML 추가) | ✅ |
+| 2 | k8s-legacy/ 매니페스트 securityContext 추가 | 중간 | 낮음 (YAML 추가) | ✅ |
 | 3 | EKS Public Endpoint CIDR 제한 | 중간 | 낮음 (변수 추가) | ✅ |
 | 4 | Kubernetes Secrets KMS 암호화 | 중간 | 중간 (클러스터 재구성) | 권장 |
 | 5 | Namespace PSA 레이블 | 중간 | 낮음 (YAML 레이블 추가) | 권장 |

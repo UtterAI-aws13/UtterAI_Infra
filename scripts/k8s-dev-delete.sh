@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# k8s-demo dev Argo CD 리소스 정리 스크립트
+# k8s dev Argo CD 리소스 정리 스크립트
 #
 # AWS 인프라 자체를 destroy하지 않고, Argo CD Application과 dev 앱 namespace를
 # 정리합니다. EKS/RDS/Redis/S3/SQS/ECR은 그대로 둡니다.
@@ -20,7 +20,7 @@ require_command() {
 require_command aws
 require_command kubectl
 
-echo "== UtterAI k8s-demo dev Argo CD delete =="
+echo "== UtterAI k8s dev Argo CD delete =="
 
 aws eks update-kubeconfig \
   --region "$AWS_REGION" \
