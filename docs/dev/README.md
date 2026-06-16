@@ -87,7 +87,9 @@ SQS 파이프라인:
 | `k8s-legacy/rbac/` | `rolebindings.yaml` | 각 SA에 K8s 내부 최소 권한 |
 | `k8s-legacy/secrets/` | `cluster-secret-store.yaml` | ClusterSecretStore: `aws-secrets-manager` |
 | `k8s-legacy/secrets/` | `backend-api-external-secret.yaml` | utterai-api — DB_PASSWORD, JWT_SECRET_KEY 등 |
-| `k8s-legacy/secrets/` | `ai-worker-external-secret.yaml` | utterai-ai-gpu + utterai-batch — DB 접속 정보 |
+| `k8s-legacy/secrets/` | `ai-worker-external-secret.yaml` | utterai-ai-gpu — BE DB 접속 정보 (utterai) |
+| `k8s-legacy/secrets/` | `rag-ingest-external-secret.yaml` | utterai-batch — AI DB 접속 정보 (utterai_ai) |
+| `k8s-legacy/secrets/` | `cpu-worker-external-secret.yaml` | utterai-ai-cpu — HF_TOKEN + AI DB + BE DB |
 | `k8s-legacy/secrets/` | `gpu-worker-external-secret.yaml` | utterai-ai-gpu — HF_TOKEN |
 | `k8s-legacy/ingress/` | `api-ingress.yaml` | ALB internet-facing, HTTPS 리다이렉트 |
 | `k8s-legacy/workloads/` | `*-deployment.yaml` | API, AI API, CPU Worker, ML GPU Worker, Batch Worker |
@@ -260,20 +262,32 @@ aws secretsmanager create-secret \
   }' \
   --region ap-northeast-2
 
-# 2. AI/배치 워커 DB 접속 정보
+# 2. ML GPU Worker BE DB 접속 정보 (utterai DB — transcripts, analysis_jobs)
 export RDS_ENDPOINT=$(cd terraform/environments/dev/03-services && terraform output -raw rds_endpoint)
 aws secretsmanager create-secret \
   --name "utterai-dev/ai-worker-secret" \
   --secret-string "{
     \"DB_USER\": \"utterai\",
-    \"DB_PASSWORD\": \"<AI 워커용 DB 비밀번호>\",
+    \"DB_PASSWORD\": \"<BE RDS 비밀번호>\",
     \"DB_HOST\": \"${RDS_ENDPOINT}\",
     \"DB_PORT\": \"5432\",
     \"DB_NAME\": \"utterai\"
   }" \
   --region ap-northeast-2
 
-# 3. GPU 워커 HuggingFace 토큰
+# 3. CPU Worker / Batch Worker AI DB 접속 정보 (utterai_ai DB — rag_chunks)
+aws secretsmanager create-secret \
+  --name "utterai-dev/rag-ingest-secret" \
+  --secret-string "{
+    \"DB_USER\": \"utterai\",
+    \"DB_PASSWORD\": \"<AI RDS 비밀번호>\",
+    \"DB_HOST\": \"${RDS_ENDPOINT}\",
+    \"DB_PORT\": \"5432\",
+    \"DB_NAME\": \"utterai_ai\"
+  }" \
+  --region ap-northeast-2
+
+# 4. GPU 워커 HuggingFace 토큰
 aws secretsmanager create-secret \
   --name "utterai-dev/gpu-worker-secret" \
   --secret-string '{"HF_TOKEN": "<HuggingFace Access Token>"}' \
