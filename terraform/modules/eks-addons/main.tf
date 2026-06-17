@@ -321,7 +321,7 @@ resource "helm_release" "kubecost" {
         thanos = {
           objectStore = {
             enabled = var.kubecost_s3_bucket_name != "" ? true : false
-            config  = var.kubecost_s3_bucket_name != "" ? yamlencode({
+            config = var.kubecost_s3_bucket_name != "" ? yamlencode({
               type = "S3"
               config = {
                 bucket   = var.kubecost_s3_bucket_name
