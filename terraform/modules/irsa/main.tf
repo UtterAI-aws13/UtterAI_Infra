@@ -479,6 +479,7 @@ resource "aws_iam_role_policy" "karpenter" {
           "ec2:DescribeInstanceTypeOfferings",
           "ec2:DescribeInstanceTypes",
           "ec2:DescribeLaunchTemplates",
+          "ec2:DescribeNetworkInterfaces",
           "ec2:DescribeSecurityGroups",
           "ec2:DescribeSpotPriceHistory",
           "ec2:DescribeSubnets",
@@ -491,6 +492,11 @@ resource "aws_iam_role_policy" "karpenter" {
         Effect   = "Allow"
         Action   = ["iam:PassRole"]
         Resource = ["arn:aws:iam::${var.aws_account_id}:role/${local.prefix}-eks-node-role"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["eks:DescribeCluster"]
+        Resource = ["arn:aws:eks:${var.aws_region}:${var.aws_account_id}:cluster/*"]
       },
       {
         Effect   = "Allow"
