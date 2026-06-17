@@ -45,6 +45,10 @@ AWS Managed Services
 Prometheus Alerts
   -> Alertmanager
   -> Slack
+
+Kubernetes Cost Metrics
+  -> Kubecost
+  -> existing Prometheus
 ```
 
 주요 네임스페이스:
@@ -52,6 +56,7 @@ Prometheus Alerts
 | Namespace | 역할 |
 |---|---|
 | `monitoring` | Grafana, Prometheus, kube-state-metrics, node-exporter, Loki, Promtail |
+| `kubecost` | Kubecost cost-analyzer |
 | `utterai-observability` | OpenTelemetry Collector |
 | `utterai-api`, `utterai-ai-*`, `utterai-batch` | 애플리케이션 워크로드 |
 
@@ -230,6 +235,87 @@ OpenTelemetry Collector scrape 여부:
 ```promql
 up{job=~".*otel.*"}
 ```
+
+## Kubecost / Cost 확인
+
+Kubecost는 별도 Prometheus/Grafana를 띄우지 않고, `monitoring` namespace의 기존 `kube-prometheus-stack` Prometheus를 조회한다.
+
+현재 dev 기본값:
+
+| 항목 | 값 | 이유 |
+|---|---|---|
+| Chart | `cost-analyzer` `2.8.6` | 2026-06-17 기준 chart repo 최신 안정 항목 (2.9.x는 3.0 마이그레이션 전용 버전) |
+| Namespace | `kubecost` | 모니터링 시스템과 비용 UI 분리 |
+| Prometheus | `utterai-monitoring-prometheus.monitoring.svc.cluster.local:9090` | 기존 Prometheus 재사용 |
+| Bundled Prometheus/Grafana | disabled | 중복 리소스와 비용 방지 |
+| PersistentVolume | dev disabled, prod enabled | dev는 EBS 비용 최소화, prod는 재시작 후 데이터 보존 |
+| Network costs / Forecasting / Diagnostics | disabled | v1 비용 관측을 가볍게 시작 |
+
+Terraform 적용:
+
+```bash
+cd ~/utter-ai/UtterAI_Infra
+terraform -chdir=terraform/environments/dev/04-addons plan \
+  -var='kubecost_enabled=true'
+terraform -chdir=terraform/environments/dev/04-addons apply \
+  -var='kubecost_enabled=true'
+```
+
+반복 적용 시 로컬 전용 `terraform.tfvars`에 유지할 수 있다.
+
+```hcl
+kubecost_enabled = true
+kubecost_persistent_volume_enabled = false
+```
+
+Pod와 Service 확인:
+
+```bash
+kubectl get pods -n kubecost
+kubectl get svc -n kubecost
+kubectl get servicemonitor -n kubecost
+```
+
+Kubecost UI는 외부에 직접 노출하지 않고 로컬 `port-forward`로 접속한다.
+
+```bash
+kubectl port-forward -n kubecost svc/kubecost 9090:9090
+```
+
+브라우저에서 접속:
+
+```text
+http://localhost:9090
+```
+
+Prometheus scrape 확인:
+
+```promql
+up{namespace="kubecost"}
+kubecost_cluster_info
+node_total_hourly_cost
+```
+
+`node_total_hourly_cost`가 바로 보이지 않으면 Kubecost가 초기 ETL을 끝낼 때까지 몇 분 기다린 뒤 다시 확인한다.
+
+### Kubecost 비용 주의사항
+
+Kubecost 자체도 Pod 리소스를 사용한다. dev에서는 아래 설정으로 시작한다.
+
+```text
+kubecost_persistent_volume_enabled = false
+networkCosts.enabled = false
+forecasting.enabled = false
+diagnostics.enabled = false
+```
+
+더 정확한 네트워크 비용, 장기 비용 추이, 재시작 후 비용 데이터 보존이 필요해지면 순서대로 켠다.
+
+| 단계 | 켜는 값 | 비용/영향 |
+|---|---|---|
+| 비용 데이터 보존 | `kubecost_persistent_volume_enabled=true` | EBS PVC 비용 추가 |
+| 네트워크 비용 | `networkCosts.enabled=true` | DaemonSet 리소스 추가 |
+| 예측 | `forecasting.enabled=true` | 모델링 Pod 리소스 추가 |
 
 ## Alertmanager / Slack 알림 확인
 

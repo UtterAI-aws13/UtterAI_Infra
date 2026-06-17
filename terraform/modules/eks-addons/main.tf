@@ -239,6 +239,123 @@ resource "helm_release" "kube_prometheus_stack" {
   ]
 }
 
+# ── Kubecost ─────────────────────────────────────────────────────────────────
+
+resource "helm_release" "kubecost" {
+  count = var.kubecost_enabled ? 1 : 0
+
+  name             = "kubecost"
+  repository       = "https://kubecost.github.io/cost-analyzer/"
+  chart            = "cost-analyzer"
+  version          = var.kubecost_chart_version
+  namespace        = var.kubecost_namespace
+  create_namespace = true
+  cleanup_on_fail  = true
+  wait             = true
+  wait_for_jobs    = true
+  timeout          = 600
+
+  depends_on = [helm_release.kube_prometheus_stack]
+
+  values = [
+    yamlencode({
+      fullnameOverride = "kubecost"
+
+      global = {
+        clusterId = var.cluster_name
+        prometheus = {
+          enabled = false
+          fqdn    = "http://utterai-monitoring-prometheus.monitoring.svc.cluster.local:9090"
+        }
+        grafana = {
+          enabled    = false
+          domainName = "kube-prometheus-stack-grafana.monitoring.svc.cluster.local"
+          proxy      = false
+        }
+      }
+
+      service = {
+        type = "ClusterIP"
+      }
+
+      persistentVolume = {
+        enabled = var.kubecost_persistent_volume_enabled
+        size    = var.kubecost_persistent_volume_size
+      }
+
+      kubecostFrontend = {
+        resources = {
+          requests = {
+            cpu    = "10m"
+            memory = "64Mi"
+          }
+          limits = {
+            cpu    = "200m"
+            memory = "256Mi"
+          }
+        }
+      }
+
+      kubecostModel = {
+        etlDailyStoreDurationDays   = var.kubecost_etl_daily_store_duration_days
+        etlHourlyStoreDurationHours = var.kubecost_etl_hourly_store_duration_hours
+        maxQueryConcurrency         = 3
+        resources = {
+          requests = {
+            cpu    = "100m"
+            memory = "256Mi"
+          }
+          limits = {
+            cpu    = "500m"
+            memory = "1Gi"
+          }
+        }
+      }
+
+      kubecostAggregator = {
+        deployMethod = "singlepod"
+      }
+
+      prometheus = {
+        server = {
+          enabled = false
+        }
+      }
+
+      grafana = {
+        enabled = false
+      }
+
+      serviceMonitor = {
+        enabled       = true
+        interval      = "60s"
+        scrapeTimeout = "30s"
+        aggregatorMetrics = {
+          enabled       = true
+          interval      = "60s"
+          scrapeTimeout = "30s"
+        }
+      }
+
+      prometheusRule = {
+        enabled = false
+      }
+
+      networkCosts = {
+        enabled = false
+      }
+
+      forecasting = {
+        enabled = false
+      }
+
+      diagnostics = {
+        enabled = false
+      }
+    })
+  ]
+}
+
 # ── Grafana Loki / Promtail ──────────────────────────────────────────────────
 
 resource "helm_release" "loki" {

@@ -78,3 +78,15 @@ variable "grafana_admin_password_key" {
   default     = "admin-password"
   description = "Secret key containing the Grafana admin password."
 }
+
+variable "kubecost_enabled" {
+  type        = bool
+  default     = true
+  description = "Install Kubecost cost-analyzer for dev cost visibility."
+}
+
+variable "kubecost_persistent_volume_enabled" {
+  type        = bool
+  default     = true
+  description = "Enable Kubecost PVC storage to keep cost history."
+}

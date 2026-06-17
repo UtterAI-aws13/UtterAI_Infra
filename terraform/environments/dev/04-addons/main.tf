@@ -50,6 +50,9 @@ module "eks_addons" {
   grafana_admin_kubernetes_secret_name = var.grafana_admin_kubernetes_secret_name
   grafana_admin_user_key               = var.grafana_admin_user_key
   grafana_admin_password_key           = var.grafana_admin_password_key
+
+  kubecost_enabled                   = var.kubecost_enabled
+  kubecost_persistent_volume_enabled = var.kubecost_persistent_volume_enabled
 }
 
 # ── ALB DNS 자동 조회 ─────────────────────────────────────────────────────────

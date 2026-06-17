@@ -89,3 +89,45 @@ variable "external_secrets_cluster_store_name" {
   default     = "aws-secrets-manager"
   description = "Existing ClusterSecretStore name used by ExternalSecret resources."
 }
+
+variable "kubecost_enabled" {
+  type        = bool
+  default     = true
+  description = "Install Kubecost cost-analyzer for Kubernetes cost visibility."
+}
+
+variable "kubecost_chart_version" {
+  type        = string
+  default     = "2.8.6"
+  description = "Kubecost cost-analyzer Helm chart version."
+}
+
+variable "kubecost_namespace" {
+  type        = string
+  default     = "kubecost"
+  description = "Namespace where Kubecost is installed."
+}
+
+variable "kubecost_persistent_volume_enabled" {
+  type        = bool
+  default     = true
+  description = "Enable Kubecost PVC storage to keep cost history."
+}
+
+variable "kubecost_persistent_volume_size" {
+  type        = string
+  default     = "10Gi"
+  description = "Kubecost PVC size when persistent storage is enabled."
+}
+
+variable "kubecost_etl_daily_store_duration_days" {
+  type        = number
+  default     = 14
+  description = "Number of days Kubecost keeps daily ETL data."
+}
+
+variable "kubecost_etl_hourly_store_duration_hours" {
+  type        = number
+  default     = 49
+  description = "Number of hours Kubecost keeps hourly ETL data. Must stay below Prometheus retention."
+}
