@@ -4,9 +4,10 @@ kind: Kustomization
 resources:
 - namespace.yaml
 - "../../base"
-- hpa-cpu-worker.yaml
-- hpa-ml-gpu-worker.yaml
-- hpa-batch-worker.yaml
+- keda-trigger-auth.yaml
+- scaledobject-cpu-worker.yaml
+- scaledobject-ml-gpu-worker.yaml
+- scaledobject-batch-worker.yaml
 images:
 - name: utterai-ai-cpu
   newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-cpu'

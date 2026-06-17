@@ -81,6 +81,47 @@ module "secrets" {
   environment  = var.environment
 }
 
+# ── Karpenter Interruption Queue ─────────────────────────────────────────────
+# Spot 중단 및 rebalance 이벤트를 Karpenter가 수신하기 위한 SQS 큐.
+# 큐 이름은 클러스터 이름과 동일해야 한다 (Karpenter Helm 설정 interruptionQueue 값과 일치).
+
+resource "aws_sqs_queue" "karpenter_interruption" {
+  name                      = var.cluster_name
+  message_retention_seconds = 300
+  sqs_managed_sse_enabled   = true
+}
+
+resource "aws_sqs_queue_policy" "karpenter_interruption" {
+  queue_url = aws_sqs_queue.karpenter_interruption.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect    = "Allow"
+        Principal = { Service = ["events.amazonaws.com", "sqs.amazonaws.com"] }
+        Action    = "sqs:SendMessage"
+        Resource  = aws_sqs_queue.karpenter_interruption.arn
+      }
+    ]
+  })
+}
+
+resource "aws_cloudwatch_event_rule" "karpenter_spot_interruption" {
+  name        = "${var.cluster_name}-spot-interruption"
+  description = "Karpenter spot interruption"
+
+  event_pattern = jsonencode({
+    source      = ["aws.ec2"]
+    detail-type = ["EC2 Spot Instance Interruption Warning", "EC2 Instance Rebalance Recommendation", "EC2 Instance State-change Notification"]
+  })
+}
+
+resource "aws_cloudwatch_event_target" "karpenter_spot_interruption" {
+  rule = aws_cloudwatch_event_rule.karpenter_spot_interruption.name
+  arn  = aws_sqs_queue.karpenter_interruption.arn
+}
+
 # ── ECR ──────────────────────────────────────────────────────────────────────
 
 module "ecr" {

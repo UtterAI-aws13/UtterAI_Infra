@@ -3,7 +3,7 @@ output "lbc_release_name" {
 }
 
 output "cluster_autoscaler_release_name" {
-  value = helm_release.cluster_autoscaler.name
+  value = try(helm_release.cluster_autoscaler[0].name, null)
 }
 
 output "metrics_server_release_name" {

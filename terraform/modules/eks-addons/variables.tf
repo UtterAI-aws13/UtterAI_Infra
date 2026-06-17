@@ -155,3 +155,27 @@ variable "loki_irsa_role_arn" {
   default     = ""
   description = "IAM Role ARN for Loki Service Account."
 }
+
+variable "cluster_autoscaler_enabled" {
+  type        = bool
+  default     = true
+  description = "Install Cluster Autoscaler. Set to false when switching to Karpenter."
+}
+
+variable "keda_enabled" {
+  type        = bool
+  default     = false
+  description = "Install KEDA for SQS-based pod autoscaling."
+}
+
+variable "karpenter_enabled" {
+  type        = bool
+  default     = false
+  description = "Install Karpenter for node autoscaling. Requires karpenter_irsa_role_arn."
+}
+
+variable "karpenter_irsa_role_arn" {
+  type        = string
+  default     = ""
+  description = "IAM Role ARN for the Karpenter controller Service Account."
+}

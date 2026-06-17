@@ -1,0 +1,30 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: utterai-cpu-worker-scaledobject
+  namespace: utterai-ai-cpu
+spec:
+  scaleTargetRef:
+    name: utterai-cpu-worker
+  minReplicaCount: 0
+  maxReplicaCount: 3
+  cooldownPeriod: 120
+  triggers:
+    - type: aws-sqs-queue
+      authenticationRef:
+        name: keda-aws-pod-identity
+        kind: ClusterTriggerAuthentication
+      metadata:
+        queueURL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-audio-preprocess-queue"
+        queueLength: "5"
+        awsRegion: ap-northeast-2
+        identityOwner: pod
+    - type: aws-sqs-queue
+      authenticationRef:
+        name: keda-aws-pod-identity
+        kind: ClusterTriggerAuthentication
+      metadata:
+        queueURL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-report-analysis-queue"
+        queueLength: "5"
+        awsRegion: ap-northeast-2
+        identityOwner: pod

@@ -5,3 +5,4 @@ resources:
   - ../external-secrets/base
   - ../observability/base
   - ../image-pruner/base
+  - ../karpenter/overlays/dev

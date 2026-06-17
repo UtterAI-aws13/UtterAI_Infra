@@ -37,3 +37,7 @@ output "kubecost_role_arn" {
 output "loki_role_arn" {
   value = aws_iam_role.loki.arn
 }
+
+output "karpenter_role_arn" {
+  value = aws_iam_role.karpenter.arn
+}

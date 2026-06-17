@@ -435,6 +435,89 @@ resource "aws_iam_role_policy" "kubecost" {
   })
 }
 
+# ── Karpenter IRSA ───────────────────────────────────────────────────────────
+
+resource "aws_iam_role" "karpenter" {
+  name = "${local.prefix}-karpenter-irsa-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = var.oidc_provider_arn }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${local.oidc_aud}" = "sts.amazonaws.com"
+          "${local.oidc_sub}" = "system:serviceaccount:karpenter:karpenter"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "karpenter" {
+  name = "${local.prefix}-karpenter-policy"
+  role = aws_iam_role.karpenter.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateFleet",
+          "ec2:CreateLaunchTemplate",
+          "ec2:CreateTags",
+          "ec2:DeleteLaunchTemplate",
+          "ec2:DescribeAvailabilityZones",
+          "ec2:DescribeImages",
+          "ec2:DescribeInstances",
+          "ec2:DescribeInstanceTypeOfferings",
+          "ec2:DescribeInstanceTypes",
+          "ec2:DescribeLaunchTemplates",
+          "ec2:DescribeSecurityGroups",
+          "ec2:DescribeSpotPriceHistory",
+          "ec2:DescribeSubnets",
+          "ec2:RunInstances",
+          "ec2:TerminateInstances",
+        ]
+        Resource = ["*"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["iam:PassRole"]
+        Resource = ["arn:aws:iam::${var.aws_account_id}:role/${local.prefix}-eks-node-role"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["ssm:GetParameter"]
+        Resource = ["arn:aws:ssm:*:*:parameter/aws/service/*"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["pricing:GetProducts"]
+        Resource = ["*"]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes",
+          "sqs:GetQueueUrl",
+          "sqs:ReceiveMessage",
+        ]
+        Resource = ["arn:aws:sqs:${var.aws_region}:${var.aws_account_id}:${var.cluster_name}"]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["iam:CreateInstanceProfile", "iam:TagInstanceProfile", "iam:AddRoleToInstanceProfile", "iam:RemoveRoleFromInstanceProfile", "iam:DeleteInstanceProfile", "iam:GetInstanceProfile"]
+        Resource = ["*"]
+      },
+    ]
+  })
+}
+
 # ── Loki IRSA ─────────────────────────────────────────────────────────────────
 
 resource "aws_iam_role" "loki" {

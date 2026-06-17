@@ -135,3 +135,7 @@ output "loki_bucket_name" {
 output "loki_role_arn" {
   value = module.irsa.loki_role_arn
 }
+
+output "karpenter_role_arn" {
+  value = module.irsa.karpenter_role_arn
+}

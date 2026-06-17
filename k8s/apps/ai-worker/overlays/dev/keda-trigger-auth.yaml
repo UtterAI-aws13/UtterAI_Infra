@@ -1,0 +1,7 @@
+apiVersion: keda.sh/v1alpha1
+kind: ClusterTriggerAuthentication
+metadata:
+  name: keda-aws-pod-identity
+spec:
+  podIdentity:
+    provider: aws

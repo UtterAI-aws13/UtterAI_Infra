@@ -39,6 +39,11 @@ module "eks_addons" {
   eso_irsa_role_arn                = data.terraform_remote_state.services.outputs.eso_role_arn
   vpc_id                           = data.terraform_remote_state.network.outputs.vpc_id
 
+  cluster_autoscaler_enabled = false
+  keda_enabled               = true
+  karpenter_enabled          = true
+  karpenter_irsa_role_arn    = data.terraform_remote_state.services.outputs.karpenter_role_arn
+
   alertmanager_slack_enabled             = var.alertmanager_slack_enabled
   alertmanager_slack_channel             = var.alertmanager_slack_channel
   alertmanager_slack_webhook_secret_name = var.alertmanager_slack_webhook_secret_name
