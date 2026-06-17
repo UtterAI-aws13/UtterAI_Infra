@@ -156,7 +156,8 @@ resource "aws_security_group" "node" {
   }
 
   tags = {
-    Name = "${local.prefix}-eks-node-sg"
+    Name                     = "${local.prefix}-eks-node-sg"
+    "karpenter.sh/discovery" = var.cluster_name
   }
 }
 

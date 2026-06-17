@@ -532,6 +532,7 @@ resource "helm_release" "promtail" {
 # ── Cluster Autoscaler ────────────────────────────────────────────────────────
 
 resource "helm_release" "cluster_autoscaler" {
+  count           = var.cluster_autoscaler_enabled ? 1 : 0
   name            = "cluster-autoscaler"
   repository      = "https://kubernetes.github.io/autoscaler"
   chart           = "cluster-autoscaler"
@@ -766,6 +767,96 @@ resource "helm_release" "nvidia_device_plugin" {
         value    = "ai-gpu"
         effect   = "NoSchedule"
       }]
+    })
+  ]
+}
+
+# ── KEDA ─────────────────────────────────────────────────────────────────────
+
+resource "helm_release" "keda" {
+  count = var.keda_enabled ? 1 : 0
+
+  name             = "keda"
+  repository       = "https://kedacore.github.io/charts"
+  chart            = "keda"
+  version          = "2.16.1"
+  namespace        = "keda"
+  create_namespace = true
+  cleanup_on_fail  = true
+  wait             = true
+  wait_for_jobs    = true
+
+  depends_on = [helm_release.aws_load_balancer_controller]
+
+  values = [
+    yamlencode({
+      resources = {
+        operator = {
+          requests = { cpu = "50m", memory = "128Mi" }
+          limits   = { cpu = "500m", memory = "512Mi" }
+        }
+        metricServer = {
+          requests = { cpu = "50m", memory = "64Mi" }
+          limits   = { cpu = "200m", memory = "256Mi" }
+        }
+      }
+      tolerations = [
+        {
+          key      = "CriticalAddonsOnly"
+          operator = "Exists"
+          effect   = "NoSchedule"
+        }
+      ]
+    })
+  ]
+}
+
+# ── Karpenter ─────────────────────────────────────────────────────────────────
+
+resource "helm_release" "karpenter" {
+  count = var.karpenter_enabled && var.karpenter_irsa_role_arn != "" ? 1 : 0
+
+  name             = "karpenter"
+  repository       = "oci://public.ecr.aws/karpenter"
+  chart            = "karpenter"
+  version          = "1.3.3"
+  namespace        = "karpenter"
+  create_namespace = true
+  cleanup_on_fail  = true
+  wait             = true
+  wait_for_jobs    = true
+
+  depends_on = [helm_release.aws_load_balancer_controller]
+
+  values = [
+    yamlencode({
+      serviceAccount = {
+        annotations = {
+          "eks.amazonaws.com/role-arn" = var.karpenter_irsa_role_arn
+        }
+      }
+      settings = {
+        clusterName     = var.cluster_name
+        clusterEndpoint = var.cluster_endpoint
+        interruptionQueue = var.cluster_name
+      }
+      resources = {
+        requests = { cpu = "100m", memory = "256Mi" }
+        limits   = { cpu = "500m", memory = "1Gi" }
+      }
+      tolerations = [
+        {
+          key      = "CriticalAddonsOnly"
+          operator = "Exists"
+          effect   = "NoSchedule"
+        }
+      ]
+      controller = {
+        resources = {
+          requests = { cpu = "100m", memory = "256Mi" }
+          limits   = { cpu = "500m", memory = "1Gi" }
+        }
+      }
     })
   ]
 }
