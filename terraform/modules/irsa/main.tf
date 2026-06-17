@@ -160,7 +160,7 @@ resource "aws_iam_role_policy" "api" {
       {
         Effect   = "Allow"
         Action   = ["sqs:SendMessage"]
-        Resource = [var.audio_preprocess_queue_arn]
+        Resource = [var.audio_preprocess_queue_arn, var.report_analysis_queue_arn]
       },
       {
         Effect   = "Allow"
@@ -230,9 +230,12 @@ resource "aws_iam_role_policy" "ai_cpu" {
         Resource = ["${var.reports_bucket_arn}/*"]
       },
       {
-        Effect   = "Allow"
-        Action   = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
-        Resource = ["arn:aws:bedrock:${var.aws_region}::foundation-model/*"]
+        Effect = "Allow"
+        Action = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
+        Resource = [
+          "arn:aws:bedrock:*::foundation-model/*",
+          "arn:aws:bedrock:${var.aws_region}:${var.aws_account_id}:inference-profile/*",
+        ]
       },
     ]
   })
@@ -341,7 +344,7 @@ resource "aws_iam_role_policy" "batch" {
       {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
-        Resource = ["arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:${local.prefix}/db-password*"]
+        Resource = ["arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:${local.prefix}/*"]
       },
     ]
   })
