@@ -7,6 +7,8 @@ locals {
     template   = "${local.prefix}-template"
     rag_ingest = "${local.prefix}-rag-ingest"
     reports    = "${local.prefix}-reports"
+    kubecost   = "${local.prefix}-kubecost"
+    loki       = "${local.prefix}-loki"
   }
 }
 

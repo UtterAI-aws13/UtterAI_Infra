@@ -296,6 +296,14 @@ resource "helm_release" "kubecost" {
         }
       }
 
+      serviceAccount = {
+        create = true
+        name   = "kubecost"
+        annotations = {
+          "eks.amazonaws.com/role-arn" = var.kubecost_irsa_role_arn
+        }
+      }
+
       kubecostModel = {
         etlDailyStoreDurationDays   = var.kubecost_etl_daily_store_duration_days
         etlHourlyStoreDurationHours = var.kubecost_etl_hourly_store_duration_hours
@@ -308,6 +316,18 @@ resource "helm_release" "kubecost" {
           limits = {
             cpu    = "500m"
             memory = "1Gi"
+          }
+        }
+        thanos = {
+          objectStore = {
+            enabled = var.kubecost_s3_bucket_name != "" ? true : false
+            config  = var.kubecost_s3_bucket_name != "" ? yamlencode({
+              type = "S3"
+              config = {
+                bucket   = var.kubecost_s3_bucket_name
+                endpoint = "s3.${var.aws_region}.amazonaws.com"
+              }
+            }) : ""
           }
         }
       }
@@ -375,6 +395,14 @@ resource "helm_release" "loki" {
     yamlencode({
       deploymentMode = "SingleBinary"
 
+      serviceAccount = {
+        create = true
+        name   = "loki"
+        annotations = {
+          "eks.amazonaws.com/role-arn" = var.loki_irsa_role_arn
+        }
+      }
+
       loki = {
         auth_enabled = false
         commonConfig = {
@@ -382,10 +410,14 @@ resource "helm_release" "loki" {
           replication_factor = 1
         }
         storage = {
-          type = "filesystem"
-          filesystem = {
-            chunks_directory = "/tmp/loki/chunks"
-            rules_directory  = "/tmp/loki/rules"
+          type = "s3"
+          bucketNames = {
+            chunks = var.loki_s3_bucket_name
+            ruler  = var.loki_s3_bucket_name
+            admin  = var.loki_s3_bucket_name
+          }
+          s3 = {
+            region = var.aws_region
           }
         }
         storage_config = {

@@ -87,6 +87,6 @@ variable "kubecost_enabled" {
 
 variable "kubecost_persistent_volume_enabled" {
   type        = bool
-  default     = true
-  description = "Enable Kubecost PVC storage to keep cost history."
+  default     = false
+  description = "Enable Kubecost PVC storage to keep cost history. Disabled when S3/Thanos is used."
 }

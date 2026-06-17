@@ -29,3 +29,11 @@ output "batch_role_arn" {
 output "eso_role_arn" {
   value = aws_iam_role.eso.arn
 }
+
+output "kubecost_role_arn" {
+  value = aws_iam_role.kubecost.arn
+}
+
+output "loki_role_arn" {
+  value = aws_iam_role.loki.arn
+}

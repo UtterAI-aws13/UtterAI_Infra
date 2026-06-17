@@ -386,3 +386,94 @@ resource "aws_iam_role_policy" "eso" {
     ]
   })
 }
+
+# ── Kubecost IRSA ────────────────────────────────────────────────────────────
+
+resource "aws_iam_role" "kubecost" {
+  name = "${local.prefix}-kubecost-irsa-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = var.oidc_provider_arn }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${local.oidc_aud}" = "sts.amazonaws.com"
+          "${local.oidc_sub}" = "system:serviceaccount:kubecost:kubecost"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "kubecost" {
+  name = "${local.prefix}-kubecost-policy"
+  role = aws_iam_role.kubecost.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket",
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+        Resource = [
+          var.kubecost_bucket_arn,
+          "${var.kubecost_bucket_arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+# ── Loki IRSA ─────────────────────────────────────────────────────────────────
+
+resource "aws_iam_role" "loki" {
+  name = "${local.prefix}-loki-irsa-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = var.oidc_provider_arn }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${local.oidc_aud}" = "sts.amazonaws.com"
+          "${local.oidc_sub}" = "system:serviceaccount:monitoring:loki"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "loki" {
+  name = "${local.prefix}-loki-policy"
+  role = aws_iam_role.loki.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket",
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:GetObjectVersion"
+        ]
+        Resource = [
+          var.loki_bucket_arn,
+          "${var.loki_bucket_arn}/*"
+        ]
+      }
+    ]
+  })
+}

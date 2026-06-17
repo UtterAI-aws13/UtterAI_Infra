@@ -131,3 +131,27 @@ variable "kubecost_etl_hourly_store_duration_hours" {
   default     = 49
   description = "Number of hours Kubecost keeps hourly ETL data. Must stay below Prometheus retention."
 }
+
+variable "kubecost_s3_bucket_name" {
+  type        = string
+  default     = ""
+  description = "S3 bucket name for Kubecost Thanos storage."
+}
+
+variable "kubecost_irsa_role_arn" {
+  type        = string
+  default     = ""
+  description = "IAM Role ARN for Kubecost Service Account."
+}
+
+variable "loki_s3_bucket_name" {
+  type        = string
+  default     = ""
+  description = "S3 bucket name for Loki storage."
+}
+
+variable "loki_irsa_role_arn" {
+  type        = string
+  default     = ""
+  description = "IAM Role ARN for Loki Service Account."
+}
