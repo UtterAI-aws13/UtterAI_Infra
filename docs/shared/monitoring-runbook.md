@@ -36,7 +36,7 @@ Kubernetes Metrics/Exporters
 
 Pod stdout/stderr logs
   -> Promtail
-  -> Loki
+  -> Loki (S3 backend: utterai-{env}-loki)
   -> Grafana Explore
 
 AWS Managed Services
@@ -45,6 +45,11 @@ AWS Managed Services
 Prometheus Alerts
   -> Alertmanager
   -> Slack
+
+Kubernetes Cost Metrics
+  -> Kubecost (Thanos S3 backend: utterai-{env}-kubecost)
+  -> existing Prometheus
+  -> IRSA를 통한 S3 접근
 ```
 
 주요 네임스페이스:
@@ -52,6 +57,7 @@ Prometheus Alerts
 | Namespace | 역할 |
 |---|---|
 | `monitoring` | Grafana, Prometheus, kube-state-metrics, node-exporter, Loki, Promtail |
+| `kubecost` | Kubecost cost-analyzer |
 | `utterai-observability` | OpenTelemetry Collector |
 | `utterai-api`, `utterai-ai-*`, `utterai-batch` | 애플리케이션 워크로드 |
 
@@ -231,6 +237,107 @@ OpenTelemetry Collector scrape 여부:
 up{job=~".*otel.*"}
 ```
 
+## Kubecost / Cost 확인
+
+Kubecost는 별도 Prometheus/Grafana를 띄우지 않고, `monitoring` namespace의 기존 `kube-prometheus-stack` Prometheus를 조회한다.
+
+현재 dev 기본값:
+
+| 항목 | 값 | 이유 |
+|---|---|---|
+| Chart | `cost-analyzer` `2.8.6` | 2026-06-17 기준 chart repo 최신 안정 항목 (2.9.x는 3.0 마이그레이션 전용 버전) |
+| Namespace | `kubecost` | 모니터링 시스템과 비용 UI 분리 |
+| Prometheus | `utterai-monitoring-prometheus.monitoring.svc.cluster.local:9090` | 기존 Prometheus 재사용 |
+| Bundled Prometheus/Grafana | disabled | 중복 리소스와 비용 방지 |
+| PersistentVolume | disabled (S3/Thanos 사용) | S3에 장기 데이터 저장, 로컬 EBS 불필요 |
+| Thanos S3 Backend | `utterai-dev-kubecost` 버킷 | IRSA로 S3 접근, 장기 비용 데이터 보존 |
+| Network costs / Forecasting / Diagnostics | disabled | v1 비용 관측을 가볍게 시작 |
+
+Terraform 적용:
+
+```bash
+cd ~/utter-ai/UtterAI_Infra
+terraform -chdir=terraform/environments/dev/04-addons plan \
+  -var='kubecost_enabled=true'
+terraform -chdir=terraform/environments/dev/04-addons apply \
+  -var='kubecost_enabled=true'
+```
+
+반복 적용 시 로컬 전용 `terraform.tfvars`에 유지할 수 있다.
+
+```hcl
+kubecost_enabled = true
+kubecost_persistent_volume_enabled = false
+```
+
+Pod와 Service 확인:
+
+```bash
+kubectl get pods -n kubecost
+kubectl get svc -n kubecost
+kubectl get servicemonitor -n kubecost
+```
+
+Kubecost UI는 외부에 직접 노출하지 않고 로컬 `port-forward`로 접속한다.
+
+```bash
+kubectl port-forward -n kubecost svc/kubecost 9090:9090
+```
+
+브라우저에서 접속:
+
+```text
+http://localhost:9090
+```
+
+Prometheus scrape 확인:
+
+```promql
+up{namespace="kubecost"}
+kubecost_cluster_info
+node_total_hourly_cost
+```
+
+`node_total_hourly_cost`가 바로 보이지 않으면 Kubecost가 초기 ETL을 끝낼 때까지 몇 분 기다린 뒤 다시 확인한다.
+
+### Kubecost S3/Thanos 연동
+
+Kubecost는 Thanos를 통해 S3에 비용 데이터를 장기 저장한다.
+
+```text
+저장 흐름:
+  Kubecost cost-model -> Thanos sidecar -> S3 (utterai-{env}-kubecost)
+  IAM: IRSA (utterai-{env}-kubecost-irsa-role) -> S3 put/get/list/delete 권한
+```
+
+S3 데이터 확인:
+
+```bash
+aws s3 ls s3://utterai-dev-kubecost/ --recursive | head -10
+```
+
+IRSA 설정 확인:
+
+```bash
+kubectl get sa -n kubecost kubecost -o jsonpath='{.metadata.annotations}'
+```
+
+### Kubecost 비용 주의사항
+
+Kubecost 자체도 Pod 리소스를 사용한다. dev에서는 아래 설정으로 시작한다.
+
+```text
+kubecost_persistent_volume_enabled = false  # S3/Thanos로 대체
+networkCosts.enabled = false
+forecasting.enabled = false
+diagnostics.enabled = false
+```
+
+| 단계 | 켜는 값 | 비용/영향 |
+|---|---|---|
+| 네트워크 비용 | `networkCosts.enabled=true` | DaemonSet 리소스 추가 |
+| 예측 | `forecasting.enabled=true` | 모델링 Pod 리소스 추가 |
+
 ## Alertmanager / Slack 알림 확인
 
 Alertmanager는 Prometheus alert를 받아 Slack으로 전달한다. Dev 기준 Slack webhook URL은 Git에 기록하지 않고 AWS Secrets Manager에만 저장한다.
@@ -386,23 +493,41 @@ Grafana에서 확인:
 {namespace=~"utterai-.*"} |= "ERROR"
 ```
 
-## 현재 Loki 저장 방식
+## Loki 저장 방식 (S3 Backend)
 
-현재 dev 검증용 Loki는 임시 저장소 모드다.
+Loki는 S3를 storage backend로 사용한다.
 
 ```text
-singleBinary.persistence.enabled = false
-```
+저장 흐름:
+  Promtail -> Loki (SingleBinary) -> S3 (utterai-{env}-loki)
+  IAM: IRSA (utterai-{env}-loki-irsa-role) -> S3 put/get/list/delete 권한
 
-의미:
+설정:
+  loki.storage.type = "s3"
+  loki.storage.bucketNames.chunks = utterai-{env}-loki
+  loki.storage.bucketNames.ruler  = utterai-{env}-loki
+  loki.storage.bucketNames.admin  = utterai-{env}-loki
+  singleBinary.persistence.enabled = false  # S3로 대체
+```
 
 | 항목 | 설명 |
 |---|---|
-| 장점 | EBS PVC를 만들지 않으므로 비용/설정 부담이 작다 |
-| 단점 | Loki Pod가 재시작되면 저장된 로그가 사라질 수 있다 |
-| 목적 | Grafana에서 로그 수집 흐름이 되는지 확인하는 dev 검증용 |
+| Backend | S3 (`utterai-dev-loki` / `utterai-prod-loki`) |
+| 인증 | IRSA (Pod ServiceAccount에 IAM Role 매핑) |
+| 로컬 PVC | 비활성 (S3에 직접 저장) |
+| 장점 | Pod 재시작 시에도 로그 보존, 무제한 용량 |
 
-prod 또는 장기 보관 단계에서는 S3 backend 또는 EBS PVC 기반 저장소로 전환한다.
+S3 데이터 확인:
+
+```bash
+aws s3 ls s3://utterai-dev-loki/ --recursive | head -10
+```
+
+IRSA 설정 확인:
+
+```bash
+kubectl get sa -n monitoring loki -o jsonpath='{.metadata.annotations}'
+```
 
 ## 자주 보는 kubectl 명령
 
@@ -530,4 +655,4 @@ kubectl get alertmanager -n monitoring
 `port-forward`는 로컬 터미널 프로세스라서 `Ctrl+C`로 끄면 된다.  
 Grafana/Prometheus/Loki 자체는 EKS 안에서 계속 실행된다.
 
-현재 Loki는 임시 저장소라 PVC/EBS 비용은 만들지 않는다. 다만 Pod 리소스는 기존 노드에서 사용한다.
+Kubecost와 Loki의 데이터는 S3에 저장되므로 Pod 재시작 시에도 데이터가 보존된다. S3 버킷 비용은 AWS 청구서에서 확인한다.

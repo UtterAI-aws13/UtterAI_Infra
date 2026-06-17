@@ -38,3 +38,19 @@ output "reports_bucket_arn" {
   value = aws_s3_bucket.buckets["reports"].arn
 }
 
+output "kubecost_bucket_name" {
+  value = aws_s3_bucket.buckets["kubecost"].id
+}
+
+output "kubecost_bucket_arn" {
+  value = aws_s3_bucket.buckets["kubecost"].arn
+}
+
+output "loki_bucket_name" {
+  value = aws_s3_bucket.buckets["loki"].id
+}
+
+output "loki_bucket_arn" {
+  value = aws_s3_bucket.buckets["loki"].arn
+}
+

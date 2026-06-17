@@ -119,3 +119,19 @@ output "cluster_autoscaler_role_arn" {
 output "eso_role_arn" {
   value = module.irsa.eso_role_arn
 }
+
+output "kubecost_bucket_name" {
+  value = module.s3.kubecost_bucket_name
+}
+
+output "kubecost_role_arn" {
+  value = module.irsa.kubecost_role_arn
+}
+
+output "loki_bucket_name" {
+  value = module.s3.loki_bucket_name
+}
+
+output "loki_role_arn" {
+  value = module.irsa.loki_role_arn
+}

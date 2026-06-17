@@ -2,3 +2,6 @@ alertmanager_slack_enabled = true
 alertmanager_slack_channel = "#aws-alerts"
 
 grafana_admin_credentials_enabled = true
+
+kubecost_enabled = true
+kubecost_persistent_volume_enabled = true
