@@ -239,6 +239,143 @@ resource "helm_release" "kube_prometheus_stack" {
   ]
 }
 
+# ── Kubecost ─────────────────────────────────────────────────────────────────
+
+resource "helm_release" "kubecost" {
+  count = var.kubecost_enabled ? 1 : 0
+
+  name             = "kubecost"
+  repository       = "https://kubecost.github.io/cost-analyzer/"
+  chart            = "cost-analyzer"
+  version          = var.kubecost_chart_version
+  namespace        = var.kubecost_namespace
+  create_namespace = true
+  cleanup_on_fail  = true
+  wait             = true
+  wait_for_jobs    = true
+  timeout          = 600
+
+  depends_on = [helm_release.kube_prometheus_stack]
+
+  values = [
+    yamlencode({
+      fullnameOverride = "kubecost"
+
+      global = {
+        clusterId = var.cluster_name
+        prometheus = {
+          enabled = false
+          fqdn    = "http://utterai-monitoring-prometheus.monitoring.svc.cluster.local:9090"
+        }
+        grafana = {
+          enabled    = false
+          domainName = "kube-prometheus-stack-grafana.monitoring.svc.cluster.local"
+          proxy      = false
+        }
+      }
+
+      service = {
+        type = "ClusterIP"
+      }
+
+      persistentVolume = {
+        enabled = var.kubecost_persistent_volume_enabled
+        size    = var.kubecost_persistent_volume_size
+      }
+
+      kubecostFrontend = {
+        resources = {
+          requests = {
+            cpu    = "10m"
+            memory = "64Mi"
+          }
+          limits = {
+            cpu    = "200m"
+            memory = "256Mi"
+          }
+        }
+      }
+
+      serviceAccount = {
+        create = true
+        name   = "kubecost"
+        annotations = {
+          "eks.amazonaws.com/role-arn" = var.kubecost_irsa_role_arn
+        }
+      }
+
+      kubecostModel = {
+        etlDailyStoreDurationDays   = var.kubecost_etl_daily_store_duration_days
+        etlHourlyStoreDurationHours = var.kubecost_etl_hourly_store_duration_hours
+        maxQueryConcurrency         = 3
+        resources = {
+          requests = {
+            cpu    = "100m"
+            memory = "256Mi"
+          }
+          limits = {
+            cpu    = "500m"
+            memory = "1Gi"
+          }
+        }
+        thanos = {
+          objectStore = {
+            enabled = var.kubecost_s3_bucket_name != "" ? true : false
+            config = var.kubecost_s3_bucket_name != "" ? yamlencode({
+              type = "S3"
+              config = {
+                bucket   = var.kubecost_s3_bucket_name
+                endpoint = "s3.${var.aws_region}.amazonaws.com"
+              }
+            }) : ""
+          }
+        }
+      }
+
+      kubecostAggregator = {
+        deployMethod = "singlepod"
+      }
+
+      prometheus = {
+        server = {
+          enabled = false
+        }
+      }
+
+      grafana = {
+        enabled = false
+      }
+
+      serviceMonitor = {
+        enabled       = true
+        interval      = "60s"
+        scrapeTimeout = "30s"
+        aggregatorMetrics = {
+          enabled       = true
+          interval      = "60s"
+          scrapeTimeout = "30s"
+        }
+      }
+
+      prometheusRule = {
+        enabled = false
+      }
+
+      networkCosts = {
+        enabled = false
+      }
+
+      forecasting = {
+        enabled = false
+      }
+
+      diagnostics = {
+        enabled = false
+      }
+    })
+  ]
+}
+
 # ── Grafana Loki / Promtail ──────────────────────────────────────────────────
 
 resource "helm_release" "loki" {
@@ -258,6 +395,14 @@ resource "helm_release" "loki" {
     yamlencode({
       deploymentMode = "SingleBinary"
 
+      serviceAccount = {
+        create = true
+        name   = "loki"
+        annotations = {
+          "eks.amazonaws.com/role-arn" = var.loki_irsa_role_arn
+        }
+      }
+
       loki = {
         auth_enabled = false
         commonConfig = {
@@ -265,10 +410,14 @@ resource "helm_release" "loki" {
           replication_factor = 1
         }
         storage = {
-          type = "filesystem"
-          filesystem = {
-            chunks_directory = "/tmp/loki/chunks"
-            rules_directory  = "/tmp/loki/rules"
+          type = "s3"
+          bucketNames = {
+            chunks = var.loki_s3_bucket_name
+            ruler  = var.loki_s3_bucket_name
+            admin  = var.loki_s3_bucket_name
+          }
+          s3 = {
+            region = var.aws_region
           }
         }
         storage_config = {

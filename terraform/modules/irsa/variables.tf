@@ -77,3 +77,11 @@ variable "private_app_subnet_ids" {
 variable "node_security_group_id" {
   type = string
 }
+
+variable "kubecost_bucket_arn" {
+  type = string
+}
+
+variable "loki_bucket_arn" {
+  type = string
+}

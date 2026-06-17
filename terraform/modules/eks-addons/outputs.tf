@@ -14,6 +14,10 @@ output "kube_prometheus_stack_release_name" {
   value = helm_release.kube_prometheus_stack.name
 }
 
+output "kubecost_release_name" {
+  value = try(helm_release.kubecost[0].name, null)
+}
+
 output "loki_release_name" {
   value = helm_release.loki.name
 }
