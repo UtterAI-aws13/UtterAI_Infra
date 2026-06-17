@@ -19,4 +19,4 @@ spec:
         queueLength: "3"
         activationQueueLength: "1"
         awsRegion: ap-northeast-2
-        identityOwner: pod
+        identityOwner: operator

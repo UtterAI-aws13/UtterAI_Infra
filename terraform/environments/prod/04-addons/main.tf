@@ -38,6 +38,8 @@ module "eks_addons" {
   cluster_autoscaler_irsa_role_arn = data.terraform_remote_state.services.outputs.cluster_autoscaler_role_arn
   eso_irsa_role_arn                = data.terraform_remote_state.services.outputs.eso_role_arn
   vpc_id                           = data.terraform_remote_state.network.outputs.vpc_id
+  keda_irsa_role_arn               = data.terraform_remote_state.services.outputs.keda_role_arn
+  karpenter_irsa_role_arn          = data.terraform_remote_state.services.outputs.karpenter_role_arn
 
   alertmanager_slack_enabled             = var.alertmanager_slack_enabled
   alertmanager_slack_channel             = var.alertmanager_slack_channel

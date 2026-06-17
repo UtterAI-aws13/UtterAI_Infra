@@ -790,6 +790,13 @@ resource "helm_release" "keda" {
 
   values = [
     yamlencode({
+      serviceAccount = {
+        operator = {
+          annotations = {
+            "eks.amazonaws.com/role-arn" = var.keda_irsa_role_arn
+          }
+        }
+      }
       resources = {
         operator = {
           requests = { cpu = "50m", memory = "128Mi" }

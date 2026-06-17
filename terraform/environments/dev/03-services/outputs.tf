@@ -139,3 +139,7 @@ output "loki_role_arn" {
 output "karpenter_role_arn" {
   value = module.irsa.karpenter_role_arn
 }
+
+output "keda_role_arn" {
+  value = module.irsa.keda_role_arn
+}
