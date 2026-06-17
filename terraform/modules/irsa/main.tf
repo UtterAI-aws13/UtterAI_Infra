@@ -160,7 +160,7 @@ resource "aws_iam_role_policy" "api" {
       {
         Effect   = "Allow"
         Action   = ["sqs:SendMessage"]
-        Resource = [var.audio_preprocess_queue_arn]
+        Resource = [var.audio_preprocess_queue_arn, var.report_analysis_queue_arn]
       },
       {
         Effect   = "Allow"
