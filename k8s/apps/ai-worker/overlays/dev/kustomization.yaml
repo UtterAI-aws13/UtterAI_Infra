@@ -11,7 +11,7 @@ resources:
 images:
 - name: utterai-ai-cpu
   newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-cpu'
-  newTag: dev-e6a50f5
+  newTag: dev-57b7cc4
 - name: utterai-ai-gpu
   newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-gpu'
-  newTag: dev-e6a50f5
+  newTag: dev-57b7cc4
