@@ -168,6 +168,12 @@ variable "keda_enabled" {
   description = "Install KEDA for SQS-based pod autoscaling."
 }
 
+variable "keda_irsa_role_arn" {
+  type        = string
+  default     = ""
+  description = "IAM Role ARN for the KEDA operator Service Account."
+}
+
 variable "karpenter_enabled" {
   type        = bool
   default     = false

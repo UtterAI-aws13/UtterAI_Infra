@@ -527,6 +527,48 @@ resource "aws_iam_role_policy" "karpenter" {
   })
 }
 
+# ── KEDA IRSA ────────────────────────────────────────────────────────────────
+
+resource "aws_iam_role" "keda" {
+  name = "${local.prefix}-keda-irsa-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = var.oidc_provider_arn }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${local.oidc_aud}" = "sts.amazonaws.com"
+          "${local.oidc_sub}" = "system:serviceaccount:keda:keda-operator"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "keda" {
+  name = "${local.prefix}-keda-policy"
+  role = aws_iam_role.keda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = ["sqs:GetQueueAttributes"]
+        Resource = [
+          var.audio_preprocess_queue_arn,
+          var.gpu_inference_queue_arn,
+          var.report_analysis_queue_arn,
+          var.rag_ingest_queue_arn,
+        ]
+      },
+    ]
+  })
+}
+
 # ── Loki IRSA ─────────────────────────────────────────────────────────────────
 
 resource "aws_iam_role" "loki" {
