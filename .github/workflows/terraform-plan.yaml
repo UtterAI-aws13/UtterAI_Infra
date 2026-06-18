@@ -1,0 +1,124 @@
+name: Terraform Plan
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform-plan.yaml"
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "plan 대상 환경입니다."
+        required: true
+        type: choice
+        options:
+          - dev
+      layer:
+        description: "plan 대상 Terraform layer입니다."
+        required: true
+        type: choice
+        options:
+          - 01-network
+          - 02-eks
+          - 03-services
+          - 04-addons
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  plan:
+    name: Terraform plan
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'dev' }}
+
+    env:
+      AWS_REGION: ap-northeast-2
+      AWS_ROLE_TO_ASSUME: ${{ vars.AWS_TERRAFORM_PLAN_ROLE_ARN }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate workflow variables
+        run: |
+          if [ -z "$AWS_ROLE_TO_ASSUME" ]; then
+            echo "AWS_TERRAFORM_PLAN_ROLE_ARN GitHub Variable이 필요합니다."
+            echo "이 role은 Terraform remote state 조회와 plan에 필요한 read 권한이 있어야 합니다."
+            exit 1
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
+
+      - name: Decide target directories
+        id: targets
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            {
+              echo "dirs<<EOF"
+              echo "terraform/environments/${{ github.event.inputs.environment }}/${{ github.event.inputs.layer }}"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          {
+            echo "dirs<<EOF"
+            echo "terraform/environments/dev/01-network"
+            echo "terraform/environments/dev/02-eks"
+            echo "terraform/environments/dev/03-services"
+            echo "terraform/environments/dev/04-addons"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Terraform plan
+        env:
+          TARGET_DIRS: ${{ steps.targets.outputs.dirs }}
+        run: |
+          {
+            echo "## Terraform Plan"
+            echo ""
+            echo "대상 디렉토리:"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          while IFS= read -r dir; do
+            [ -z "$dir" ] && continue
+
+            echo "- \`$dir\`" >> "$GITHUB_STEP_SUMMARY"
+          done <<< "$TARGET_DIRS"
+
+          while IFS= read -r dir; do
+            [ -z "$dir" ] && continue
+
+            plan_file="/tmp/$(basename "$dir").plan.txt"
+
+            echo "Terraform init: $dir"
+            terraform -chdir="$dir" init -reconfigure
+
+            echo "Terraform plan: $dir"
+            terraform -chdir="$dir" plan -no-color -input=false | tee "$plan_file"
+
+            {
+              echo ""
+              echo "### $dir"
+              echo ""
+              echo '```text'
+              cat "$plan_file"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          done <<< "$TARGET_DIRS"

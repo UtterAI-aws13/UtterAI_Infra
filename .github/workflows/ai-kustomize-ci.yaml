@@ -46,3 +46,10 @@ jobs:
         run: |
           kubectl kustomize k8s/apps/ai-worker/overlays/prod > /tmp/ai-worker-prod.yaml
           grep "image:" /tmp/ai-worker-prod.yaml
+
+      - name: Check unresolved placeholders
+        run: |
+          if grep -R '\${[A-Z0-9_]\+}' k8s/apps/ai-worker /tmp/ai-worker-dev.yaml /tmp/ai-worker-prod.yaml; then
+            echo "ai-worker manifest에 envsubst placeholder가 남아 있습니다."
+            exit 1
+          fi

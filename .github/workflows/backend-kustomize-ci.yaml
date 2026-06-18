@@ -44,3 +44,10 @@ jobs:
           kubectl kustomize k8s/apps/backend/overlays/prod > /tmp/backend-prod.yaml
           grep "namespace: utterai-prod-api" /tmp/backend-prod.yaml
           grep "image:" /tmp/backend-prod.yaml
+
+      - name: Check unresolved placeholders
+        run: |
+          if grep -R '\${[A-Z0-9_]\+}' k8s/apps/backend /tmp/backend-dev.yaml /tmp/backend-prod.yaml; then
+            echo "backend manifest에 envsubst placeholder가 남아 있습니다."
+            exit 1
+          fi
