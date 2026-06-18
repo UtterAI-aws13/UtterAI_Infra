@@ -64,7 +64,7 @@ spec:
           values: ["amd64"]
         - key: karpenter.k8s.aws/instance-family
           operator: In
-          values: ["c5", "c5a", "c6i", "c6a"]
+          values: ["c6i"]
         - key: karpenter.k8s.aws/instance-size
           operator: In
           values: ["large", "xlarge"]
@@ -100,7 +100,7 @@ spec:
           values: ["amd64"]
         - key: karpenter.k8s.aws/instance-family
           operator: In
-          values: ["c5", "c5a", "c6i", "c6a", "m5", "m5a", "m6i"]
+          values: ["m6i"]
         - key: karpenter.k8s.aws/instance-size
           operator: In
           values: ["xlarge", "2xlarge"]
@@ -136,7 +136,7 @@ spec:
           values: ["amd64"]
         - key: karpenter.k8s.aws/instance-family
           operator: In
-          values: ["c5", "c5a", "c6i", "c6a", "m5", "m5a", "m6i"]
+          values: ["c5", "c6i", "m5", "m6i"]
         - key: karpenter.k8s.aws/instance-size
           operator: In
           values: ["xlarge", "2xlarge"]
