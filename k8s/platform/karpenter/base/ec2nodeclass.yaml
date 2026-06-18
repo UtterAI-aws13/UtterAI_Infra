@@ -3,7 +3,8 @@ kind: EC2NodeClass
 metadata:
   name: default
 spec:
-  amiFamily: AL2023
+  amiSelectorTerms:
+    - alias: al2023@latest
   role: "utterai-prod-eks-node-role"
   subnetSelectorTerms:
     - tags:
@@ -19,7 +20,8 @@ kind: EC2NodeClass
 metadata:
   name: gpu
 spec:
-  amiFamily: AL2023
+  amiSelectorTerms:
+    - alias: al2023@latest
   role: "utterai-prod-eks-node-role"
   subnetSelectorTerms:
     - tags:

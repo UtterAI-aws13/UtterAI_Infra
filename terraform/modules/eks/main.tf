@@ -100,8 +100,8 @@ resource "aws_eks_addon" "vpc_cni" {
     env = {
       ENABLE_PREFIX_DELEGATION = "true"
       WARM_PREFIX_TARGET       = "1"
-      ENABLE_NETWORK_POLICY    = "true"
     }
+    enableNetworkPolicy = "true"
   })
 }
 
