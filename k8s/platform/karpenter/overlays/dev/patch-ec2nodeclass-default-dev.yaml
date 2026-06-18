@@ -12,3 +12,9 @@ spec:
         karpenter.sh/discovery: "utterai-dev-eks"
   tags:
     karpenter.sh/discovery: "utterai-dev-eks"
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 50Gi
+        volumeType: gp3
+        deleteOnTermination: true
