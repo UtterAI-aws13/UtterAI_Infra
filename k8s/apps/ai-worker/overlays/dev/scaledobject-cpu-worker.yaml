@@ -6,7 +6,7 @@ metadata:
 spec:
   scaleTargetRef:
     name: utterai-cpu-worker
-  minReplicaCount: 0
+  minReplicaCount: 1
   maxReplicaCount: 3
   cooldownPeriod: 120
   triggers:

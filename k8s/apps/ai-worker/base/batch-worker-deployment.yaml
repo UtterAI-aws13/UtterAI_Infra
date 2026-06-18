@@ -16,7 +16,7 @@ spec:
     spec:
       serviceAccountName: utterai-batch-worker-sa
       nodeSelector:
-        workload: worker
+        workload: batch-worker
       terminationGracePeriodSeconds: 60
       containers:
       - name: worker

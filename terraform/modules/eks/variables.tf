@@ -38,20 +38,39 @@ variable "system_node_max_size" {
   type = number
 }
 
+variable "api_node_group_enabled" {
+  type    = bool
+  default = true
+}
+
+variable "worker_node_group_enabled" {
+  type    = bool
+  default = true
+}
+
+variable "gpu_node_group_enabled" {
+  type    = bool
+  default = true
+}
+
 variable "api_node_instance_type" {
-  type = string
+  type    = string
+  default = "t3.medium"
 }
 
 variable "api_node_desired_size" {
-  type = number
+  type    = number
+  default = 1
 }
 
 variable "api_node_min_size" {
-  type = number
+  type    = number
+  default = 1
 }
 
 variable "api_node_max_size" {
-  type = number
+  type    = number
+  default = 2
 }
 
 variable "worker_node_instance_type" {

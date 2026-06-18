@@ -16,7 +16,7 @@ spec:
     spec:
       serviceAccountName: utterai-cpu-worker-sa
       nodeSelector:
-        workload: worker
+        workload: cpu-worker
       terminationGracePeriodSeconds: 60
       containers:
       - name: worker

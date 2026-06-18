@@ -208,6 +208,8 @@ resource "aws_eks_node_group" "system" {
 # ── API Managed Node Group ────────────────────────────────────────────────────
 
 resource "aws_eks_node_group" "api" {
+  count = var.api_node_group_enabled ? 1 : 0
+
   cluster_name    = aws_eks_cluster.this.name
   node_group_name = "${local.prefix}-api"
   node_role_arn   = aws_iam_role.node.arn
@@ -253,6 +255,8 @@ resource "aws_eks_node_group" "api" {
 # ── Worker Managed Node Group (batch + cpu workers) ───────────────────────────
 
 resource "aws_eks_node_group" "worker" {
+  count = var.worker_node_group_enabled ? 1 : 0
+
   cluster_name    = aws_eks_cluster.this.name
   node_group_name = "${local.prefix}-worker"
   node_role_arn   = aws_iam_role.node.arn
@@ -294,6 +298,8 @@ resource "aws_eks_node_group" "worker" {
 
 # disk_size 파라미터는 AL2023_x86_64_NVIDIA AMI에서 적용되지 않음 — launch template 필요
 resource "aws_launch_template" "gpu" {
+  count = var.gpu_node_group_enabled ? 1 : 0
+
   name_prefix = "${local.prefix}-gpu-"
 
   block_device_mappings {
@@ -314,6 +320,8 @@ resource "aws_launch_template" "gpu" {
 }
 
 resource "aws_eks_node_group" "gpu" {
+  count = var.gpu_node_group_enabled ? 1 : 0
+
   cluster_name    = aws_eks_cluster.this.name
   node_group_name = "${local.prefix}-gpu"
   node_role_arn   = aws_iam_role.node.arn
@@ -324,8 +332,8 @@ resource "aws_eks_node_group" "gpu" {
   ami_type       = "AL2023_x86_64_NVIDIA"
 
   launch_template {
-    id      = aws_launch_template.gpu.id
-    version = aws_launch_template.gpu.latest_version
+    id      = aws_launch_template.gpu[0].id
+    version = aws_launch_template.gpu[0].latest_version
   }
 
   scaling_config {
