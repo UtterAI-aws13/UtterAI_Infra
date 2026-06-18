@@ -17,6 +17,7 @@
 7. [Karpenter NodePool 설정 상세](#7-karpenter-nodepool-설정-상세)
 8. [검증 명령어](#8-검증-명령어)
 9. [Phase 2 로드 테스트 실행](#9-phase-2-로드-테스트-실행)
+   - [Karpenter Forced Pending 비교 실험](#91-karpenter-forced-pending-비교-실험)
 
 ---
 
@@ -426,6 +427,75 @@ python tests/load/send_sqs_messages.py \
 # 별도 터미널에서 스케일 이벤트 실시간 관찰
 ./tests/observe/watch_scaling.sh | tee results/phase2_sqs.log
 ./tests/observe/measure_scale_time.sh utterai-ai-cpu utterai-cpu-worker
+```
+
+### 9.1 Karpenter Forced Pending 비교 실험
+
+CA baseline과 Karpenter를 공정하게 비교하려면 SQS 부하가 아니라 **동일한 Pending Pod 조건**을 만들어야 한다.  
+CA는 기존 Managed Node Group/ASG desired size를 늘리고, Karpenter는 Pending Pod의 `nodeSelector`와 resource request를 보고 NodePool 조건에 맞는 EC2를 직접 만든다.
+
+비교 기준:
+
+| 항목 | CA baseline | Karpenter |
+|------|-------------|-----------|
+| 테스트 매니페스트 | `tests/scenarios/ca-forced-pending.yaml` | `tests/scenarios/karpenter-forced-pending.yaml` |
+| 반응 조건 | Pending / Unschedulable Pod | Pending / Unschedulable Pod |
+| 노드 생성 방식 | worker Managed Node Group 확장 | `cpu-worker` NodePool에서 EC2 직접 생성 |
+| 주요 관찰 대상 | `TriggeredScaleUp`, 노드 수 증가 | `NodeClaim`, NodePool `NODES`, 노드 Ready |
+| 핵심 측정값 | Pending 감지 -> Running 전환 시간 | Pending 감지 -> Running 전환 시간 |
+
+실험 전 상태 확인:
+
+```bash
+kubectl get pods -n karpenter
+kubectl get nodepools
+kubectl get nodeclaims
+kubectl get nodes -L workload,karpenter.sh/capacity-type
+```
+
+관찰 터미널:
+
+```bash
+./tests/observe/watch_scaling.sh \
+  | tee docs/dev/results/karpenter_forced_pending_watch_$(date +%Y%m%d_%H%M%S).log
+```
+
+측정 터미널:
+
+```bash
+./tests/observe/measure_scale_time.sh autoscaling-test karpenter-scale-test \
+  | tee docs/dev/results/karpenter_forced_pending_measure_$(date +%Y%m%d_%H%M%S).log
+```
+
+부하 투입:
+
+```bash
+kubectl apply -f tests/scenarios/karpenter-forced-pending.yaml
+```
+
+성공 기준:
+
+```text
+1. autoscaling-test namespace의 테스트 Pod 일부가 Pending 상태가 된다.
+2. Karpenter가 NodeClaim을 생성한다.
+3. 신규 노드가 Ready 상태가 된다.
+4. Pending Pod가 Running 상태로 전환된다.
+5. 측정 로그에 Pending 감지 시간, 노드 Ready 시간, Pod Running 시간이 남는다.
+```
+
+정리:
+
+```bash
+kubectl delete -f tests/scenarios/karpenter-forced-pending.yaml
+```
+
+`NodeClaim READY`가 `Unknown` 상태로 오래 유지되면 Karpenter가 스케일 요청은 만들었지만 EC2 생성 또는 노드 등록 단계에서 막힌 것이다. 이 경우 아래 순서로 원인을 확인한다.
+
+```bash
+kubectl describe nodeclaim <nodeclaim-name>
+kubectl logs -n karpenter -l app.kubernetes.io/name=karpenter --tail=100
+kubectl describe ec2nodeclass default
+kubectl get events -A --sort-by=.lastTimestamp | tail -50
 ```
 
 **예상 결과**:
