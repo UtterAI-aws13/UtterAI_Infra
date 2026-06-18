@@ -34,8 +34,6 @@ jobs:
   plan:
     name: Terraform plan
     runs-on: ubuntu-latest
-    environment:
-      name: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.environment || 'dev' }}
 
     env:
       AWS_REGION: ap-northeast-2

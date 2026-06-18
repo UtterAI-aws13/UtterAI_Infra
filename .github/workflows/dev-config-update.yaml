@@ -41,7 +41,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
-          client-id: ${{ vars.UTTERAI_GITOPS_APP_CLIENT_ID }}
+          app-id: ${{ vars.UTTERAI_GITOPS_APP_ID }}
           private-key: ${{ secrets.UTTERAI_GITOPS_APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write
@@ -209,7 +209,7 @@ jobs:
           kubectl kustomize k8s/apps/backend/overlays/dev > /tmp/backend-dev.yaml
           kubectl kustomize k8s/apps/ai-worker/overlays/dev > /tmp/ai-worker-dev.yaml
 
-          if grep -R '\${[A-Z0-9_]\+}' k8s; then
+          if grep -R -E "\\$\\{[A-Z0-9_]+\\}" k8s; then
             echo "k8s manifest에 envsubst placeholder가 남아 있습니다."
             exit 1
           fi

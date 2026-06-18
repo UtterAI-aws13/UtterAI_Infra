@@ -165,7 +165,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
-          client-id: ${{ vars.UTTERAI_GITOPS_APP_CLIENT_ID }}
+          app-id: ${{ vars.UTTERAI_GITOPS_APP_ID }}
           private-key: ${{ secrets.UTTERAI_GITOPS_APP_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write

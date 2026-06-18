@@ -44,7 +44,7 @@ jobs:
 
       - name: Check unresolved placeholders
         run: |
-          if grep -R '\${[A-Z0-9_]\+}' k8s/platform /tmp/platform-dev.yaml; then
+          if grep -R -E "\\$\\{[A-Z0-9_]+\\}" k8s/platform /tmp/platform-dev.yaml; then
             echo "platform manifest에 envsubst placeholder가 남아 있습니다."
             exit 1
           fi
