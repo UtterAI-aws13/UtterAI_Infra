@@ -251,53 +251,155 @@ resource "aws_security_group" "efs" {
 
 **② Kubernetes: EFS CSI Driver StorageClass + PVC**
 
+StorageClass, PVC, Deployment의 volume/volumeMount가 연결되는 구조를 이해하는 것이 핵심이다.
+
+```
+EFS 파일시스템 (AWS)
+      │
+      │  NFS 프로토콜
+      ▼
+EFS CSI Driver (DaemonSet, 각 노드에서 실행)
+      │
+      │  Kubernetes 스토리지 추상화 레이어
+      ▼
+StorageClass ──────────────────────── "어떤 EFS를, 어떻게 마운트할지" 정의
+      │
+      │  PVC가 참조
+      ▼
+PersistentVolumeClaim (PVC) ───────── "20Gi 저장 공간 주세요" 요청
+      │
+      │  Deployment가 참조
+      ▼
+Pod의 volume → volumeMount ─────────── "/mnt/model-cache 경로로 붙여주세요"
+```
+
+**StorageClass — 마운트 방법 정의**
+
 ```yaml
-# efs-storageclass.yaml
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
-  name: efs-model-cache
-provisioner: efs.csi.aws.com
+  name: efs-model-cache        # PVC가 이 이름으로 참조
+provisioner: efs.csi.aws.com   # EFS CSI Driver가 처리
 parameters:
-  provisioningMode: efs-ap
-  fileSystemId: fs-xxxxxxxxx   # Terraform output으로 주입
-  directoryPerClaim: "false"
----
-# efs-pvc.yaml
+  provisioningMode: efs-ap     # EFS Access Point 방식으로 마운트
+  fileSystemId: fs-xxxxxxxxx   # Terraform이 생성한 EFS ID
+  directoryPerClaim: "false"   # 모든 PVC가 EFS 루트를 공유 (모델 캐시 공용)
+```
+
+`provisioner: efs.csi.aws.com` 는 이 StorageClass로 만든 볼륨을 EFS CSI Driver가 처리하겠다는 선언이다. EFS CSI Driver는 각 노드에 DaemonSet으로 실행되며, pod가 뜰 때 NFS 마운트를 실제로 수행한다.
+
+**PVC — 저장 공간 요청**
+
+```yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: model-cache-pvc
+  name: model-cache-pvc        # Deployment의 volumes 섹션이 이 이름으로 참조
   namespace: utterai-ai-gpu
 spec:
   accessModes:
-    - ReadWriteMany   # 여러 pod에서 동시 마운트 가능
-  storageClassName: efs-model-cache
+    - ReadWriteMany            # 여러 노드의 여러 pod가 동시에 읽고 쓸 수 있음
+                               # EBS는 ReadWriteOnce(단일 노드)라 이게 안 됨
+                               # EFS(NFS 기반)이라 가능
+  storageClassName: efs-model-cache  # 위의 StorageClass 이름과 일치해야 함
   resources:
     requests:
-      storage: 20Gi
+      storage: 20Gi            # EFS는 실제로 용량 제한 없음, 논리적 선언
+                               # 실제 과금은 사용한 만큼
 ```
+
+EFS는 용량이 무한대로 늘어나는 파일시스템이라 `storage: 20Gi`는 실제 제한이 아니라 Kubernetes가 요구하는 형식상 선언이다. 실제 과금은 파일이 차지하는 용량 기준이다.
+
+**PVC 생성 후 내부 동작 순서**
+
+```
+kubectl apply -f efs-pvc.yaml
+        │
+        ▼
+Kubernetes가 PVC 생성 요청 감지
+        │
+        ▼
+StorageClass의 provisioner(efs.csi.aws.com) 호출
+        │
+        ▼
+EFS CSI Driver가 EFS Access Point 생성 (fs-xxxxxxxxx 내부)
+        │
+        ▼
+PersistentVolume(PV) 자동 생성 (CSI Driver가 관리, 직접 작성 불필요)
+        │
+        ▼
+PVC ↔ PV 바인딩 완료
+        │
+        ▼
+kubectl get pvc → STATUS: Bound
+```
+
+PV는 실제 스토리지 자원(EFS의 특정 경로)을 나타내는 오브젝트다. StorageClass를 사용하면 PV를 직접 작성하지 않아도 EFS CSI Driver가 자동으로 생성하고 PVC와 연결한다.
 
 **③ ml-gpu-worker-deployment.yaml 변경**
 
+pod가 뜰 때 PVC를 실제 경로에 붙이는 부분이다.
+
 ```yaml
-# 추가: EFS 볼륨 마운트
 spec:
   template:
     spec:
       volumes:
+      # PVC를 "model-cache"라는 이름의 볼륨으로 선언
       - name: model-cache
         persistentVolumeClaim:
-          claimName: model-cache-pvc
+          claimName: model-cache-pvc   # 위에서 만든 PVC 이름
       containers:
       - name: ml-gpu-worker
         env:
         - name: HF_HOME
-          value: /mnt/model-cache   # 기존 /tmp/huggingface → EFS 경로로 변경
+          value: /mnt/model-cache      # HuggingFace가 모델을 저장/읽는 경로
         volumeMounts:
-        - name: model-cache
+        # "model-cache" 볼륨을 컨테이너의 /mnt/model-cache 경로에 마운트
+        - name: model-cache            # volumes의 name과 일치해야 함
           mountPath: /mnt/model-cache
 ```
+
+`volumes`와 `volumeMounts`의 관계:
+
+```
+volumes:
+  - name: model-cache          ← 볼륨에 이름 부여 (pod 내부 식별자)
+    persistentVolumeClaim:
+      claimName: model-cache-pvc  ← 어떤 PVC를 쓸지
+
+volumeMounts:
+  - name: model-cache          ← volumes의 name과 일치
+    mountPath: /mnt/model-cache ← 컨테이너 내부의 어느 경로에 붙일지
+```
+
+**pod 시작 시 전체 흐름**
+
+```
+Karpenter가 GPU 노드 프로비저닝 완료
+        │
+        ▼
+kubelet이 ml-gpu-worker pod 스케줄
+        │
+        ▼
+EFS CSI Driver(노드에 실행 중)가 PVC 확인
+        │
+        ▼
+EFS 파일시스템을 노드에 NFS 마운트
+(/var/lib/kubelet/pods/.../volumes/... 경로)
+        │
+        ▼
+컨테이너 시작 시 해당 경로를 /mnt/model-cache로 바인드 마운트
+        │
+        ▼
+ml_gpu_worker.py의 _load_models() 실행
+HF_HOME=/mnt/model-cache 이므로
+  → /mnt/model-cache/hub/ 아래에 캐시된 모델 파일 확인
+  → Init Job이 미리 올려둔 파일 발견 → 다운로드 없이 바로 로드 ✅
+```
+
+Init Job이 없거나 EFS가 비어 있으면 HuggingFace가 /mnt/model-cache에 모델을 다운로드하고 저장한다. 이후 pod가 다시 뜰 때는 이미 파일이 있으므로 다운로드를 건너뛴다. EFS는 pod가 내려가도 파일이 유지되므로 한 번만 다운로드하면 된다.
 
 **④ 최초 1회: 모델 파일 EFS에 업로드 (Init Job)**
 
