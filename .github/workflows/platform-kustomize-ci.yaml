@@ -1,0 +1,50 @@
+name: Platform Kustomize CI
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "k8s/platform/**"
+      - "deploy/argocd/**"
+      - ".github/workflows/platform-kustomize-ci.yaml"
+
+  push:
+    branches:
+      - main
+      - "feature/**"
+    paths:
+      - "k8s/platform/**"
+      - "deploy/argocd/**"
+      - ".github/workflows/platform-kustomize-ci.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  kustomize-check:
+    name: Render platform Kustomize overlays
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Render dev platform overlay
+        run: |
+          kubectl kustomize k8s/platform/dev > /tmp/platform-dev.yaml
+
+          grep "kind: ClusterSecretStore" /tmp/platform-dev.yaml
+          grep "kind: Deployment" /tmp/platform-dev.yaml
+          grep "kind: DaemonSet" /tmp/platform-dev.yaml
+          grep "kind: ServiceMonitor" /tmp/platform-dev.yaml
+
+      - name: Check unresolved placeholders
+        run: |
+          if grep -R '\${[A-Z0-9_]\+}' k8s/platform /tmp/platform-dev.yaml; then
+            echo "platform manifest에 envsubst placeholder가 남아 있습니다."
+            exit 1
+          fi
