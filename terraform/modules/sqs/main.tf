@@ -45,14 +45,14 @@ resource "aws_sqs_queue" "gpu_inference_dlq" {
 
 resource "aws_sqs_queue" "gpu_inference" {
   name                       = "${local.prefix}-gpu-inference-queue"
-  visibility_timeout_seconds = 600
+  visibility_timeout_seconds = var.gpu_visibility_timeout_seconds
   message_retention_seconds  = var.message_retention_seconds
   max_message_size           = 262144
   sqs_managed_sse_enabled    = true
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.gpu_inference_dlq.arn
-    maxReceiveCount     = 2
+    maxReceiveCount     = var.gpu_max_receive_count
   })
 
   tags = {
@@ -74,14 +74,14 @@ resource "aws_sqs_queue" "report_analysis_dlq" {
 
 resource "aws_sqs_queue" "report_analysis" {
   name                       = "${local.prefix}-report-analysis-queue"
-  visibility_timeout_seconds = 900
+  visibility_timeout_seconds = var.report_visibility_timeout_seconds
   message_retention_seconds  = var.message_retention_seconds
   max_message_size           = 262144
   sqs_managed_sse_enabled    = true
 
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.report_analysis_dlq.arn
-    maxReceiveCount     = 2
+    maxReceiveCount     = var.report_max_receive_count
   })
 
   tags = {

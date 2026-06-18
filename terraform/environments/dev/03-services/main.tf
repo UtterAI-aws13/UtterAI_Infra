@@ -70,6 +70,11 @@ module "sqs" {
 
   project_name = var.project_name
   environment  = var.environment
+
+  gpu_visibility_timeout_seconds    = 1800
+  gpu_max_receive_count             = 3
+  report_visibility_timeout_seconds = 900
+  report_max_receive_count          = 3
 }
 
 # ── Secrets Manager ──────────────────────────────────────────────────────────
