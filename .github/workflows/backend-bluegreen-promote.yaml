@@ -4,11 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       target_env:
-        description: "트래픽 전환 대상 환경입니다. dev 또는 prod만 허용합니다."
+        description: "트래픽 전환 대상 환경입니다. prod만 허용합니다."
         required: true
         type: choice
         options:
-          - dev
           - prod
       promote_color:
         description: "active Service가 바라볼 color입니다."
@@ -40,12 +39,10 @@ jobs:
           PROMOTE_COLOR="$INPUT_PROMOTE_COLOR"
           TARGET_BRANCH="main"
 
-          if [ "$TARGET_ENV" = "dev" ]; then
-            OVERLAY_PATH="k8s/apps/backend/overlays/dev"
-          elif [ "$TARGET_ENV" = "prod" ]; then
+          if [ "$TARGET_ENV" = "prod" ]; then
             OVERLAY_PATH="k8s/apps/backend/overlays/prod"
           else
-            echo "target_env는 dev 또는 prod만 허용합니다."
+            echo "target_env는 prod만 허용합니다."
             exit 1
           fi
 
@@ -65,7 +62,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
-          client-id: ${{ vars.UTTERAI_GITOPS_APP_CLIENT_ID }}
+          app-id: ${{ vars.UTTERAI_GITOPS_APP_ID }}
           private-key: ${{ secrets.UTTERAI_GITOPS_APP_PRIVATE_KEY }}
           owner: UtterAI-aws13
           repositories: UtterAI_Infra
