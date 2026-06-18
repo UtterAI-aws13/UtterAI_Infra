@@ -91,6 +91,10 @@ spec:
         group: karpenter.k8s.aws
         kind: EC2NodeClass
         name: default
+      taints:
+        - key: dedicated
+          value: worker
+          effect: NoSchedule
       requirements:
         - key: karpenter.sh/capacity-type
           operator: In
@@ -127,6 +131,10 @@ spec:
         group: karpenter.k8s.aws
         kind: EC2NodeClass
         name: default
+      taints:
+        - key: dedicated
+          value: worker
+          effect: NoSchedule
       requirements:
         - key: karpenter.sh/capacity-type
           operator: In
