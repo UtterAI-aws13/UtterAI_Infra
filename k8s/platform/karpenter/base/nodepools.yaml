@@ -113,7 +113,7 @@ spec:
     memory: "64Gi"
   disruption:
     consolidationPolicy: WhenEmptyOrUnderutilized
-    consolidateAfter: 30s
+    consolidateAfter: 5m
 ---
 # batch-worker: RAG ingest는 중단 후 재시작 허용 가능한 작업 → Spot 우선
 apiVersion: karpenter.sh/v1
