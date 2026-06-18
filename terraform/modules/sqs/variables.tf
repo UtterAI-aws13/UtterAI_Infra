@@ -20,3 +20,23 @@ variable "max_receive_count" {
   type    = number
   default = 3
 }
+
+variable "gpu_visibility_timeout_seconds" {
+  type    = number
+  default = 1800
+}
+
+variable "gpu_max_receive_count" {
+  type    = number
+  default = 3
+}
+
+variable "report_visibility_timeout_seconds" {
+  type    = number
+  default = 900
+}
+
+variable "report_max_receive_count" {
+  type    = number
+  default = 3
+}
