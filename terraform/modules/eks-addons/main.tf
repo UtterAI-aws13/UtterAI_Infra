@@ -761,12 +761,19 @@ resource "helm_release" "nvidia_device_plugin" {
           }
         }
       }
-      tolerations = [{
-        key      = "dedicated"
-        operator = "Equal"
-        value    = "ai-gpu"
-        effect   = "NoSchedule"
-      }]
+      tolerations = [
+        {
+          key      = "dedicated"
+          operator = "Equal"
+          value    = "ai-gpu"
+          effect   = "NoSchedule"
+        },
+        {
+          key      = "nvidia.com/gpu"
+          operator = "Exists"
+          effect   = "NoSchedule"
+        }
+      ]
     })
   ]
 }
