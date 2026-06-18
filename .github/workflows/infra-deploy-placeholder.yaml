@@ -1,10 +1,6 @@
 name: Terraform Deploy Placeholder
 
 on:
-  push:
-    branches:
-      - main
-
   workflow_dispatch:
 
 jobs:
