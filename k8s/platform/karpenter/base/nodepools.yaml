@@ -64,10 +64,10 @@ spec:
           values: ["amd64"]
         - key: karpenter.k8s.aws/instance-family
           operator: In
-          values: ["c6i"]
+          values: ["t3"]
         - key: karpenter.k8s.aws/instance-size
           operator: In
-          values: ["large", "xlarge"]
+          values: ["medium"]
   limits:
     cpu: "32"
     memory: "64Gi"
@@ -103,7 +103,7 @@ spec:
           values: ["m6i"]
         - key: karpenter.k8s.aws/instance-size
           operator: In
-          values: ["xlarge", "2xlarge"]
+          values: ["xlarge"]
   limits:
     cpu: "32"
     memory: "64Gi"
@@ -139,7 +139,7 @@ spec:
           values: ["c5", "c6i", "m5", "m6i"]
         - key: karpenter.k8s.aws/instance-size
           operator: In
-          values: ["xlarge", "2xlarge"]
+          values: ["xlarge"]
   limits:
     cpu: "32"
     memory: "64Gi"
@@ -181,7 +181,7 @@ spec:
           values: ["g4dn", "g5"]
         - key: karpenter.k8s.aws/instance-size
           operator: In
-          values: ["xlarge", "2xlarge"]
+          values: ["xlarge"]
   limits:
     cpu: "32"
     memory: "128Gi"
