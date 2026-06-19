@@ -25,6 +25,19 @@ data "terraform_remote_state" "services" {
   }
 }
 
+locals {
+  cloudfront_custom_domain_enabled = length(var.cloudfront_aliases) > 0
+  create_cloudfront_certificate    = local.cloudfront_custom_domain_enabled && var.cloudfront_acm_certificate_arn == ""
+  cloudfront_certificate_arn       = var.cloudfront_acm_certificate_arn != "" ? var.cloudfront_acm_certificate_arn : try(aws_acm_certificate_validation.cloudfront[0].certificate_arn, "")
+}
+
+check "cloudfront_custom_domain_inputs" {
+  assert {
+    condition     = !local.create_cloudfront_certificate || var.route53_hosted_zone_id != ""
+    error_message = "route53_hosted_zone_id is required when cloudfront_aliases is set and cloudfront_acm_certificate_arn is empty."
+  }
+}
+
 # ── EKS Add-ons ──────────────────────────────────────────────────────────────
 
 module "eks_addons" {
@@ -82,6 +95,47 @@ data "aws_lb" "api" {
   }
 }
 
+# ── CloudFront Custom Domain ─────────────────────────────────────────────────
+
+resource "aws_acm_certificate" "cloudfront" {
+  count = local.create_cloudfront_certificate ? 1 : 0
+
+  provider                  = aws.us_east_1
+  domain_name               = var.cloudfront_aliases[0]
+  subject_alternative_names = slice(var.cloudfront_aliases, 1, length(var.cloudfront_aliases))
+  validation_method         = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_route53_record" "cloudfront_certificate_validation" {
+  for_each = local.create_cloudfront_certificate ? {
+    for option in aws_acm_certificate.cloudfront[0].domain_validation_options :
+    option.domain_name => {
+      name   = option.resource_record_name
+      record = option.resource_record_value
+      type   = option.resource_record_type
+    }
+  } : {}
+
+  allow_overwrite = true
+  zone_id         = var.route53_hosted_zone_id
+  name            = each.value.name
+  type            = each.value.type
+  ttl             = 60
+  records         = [each.value.record]
+}
+
+resource "aws_acm_certificate_validation" "cloudfront" {
+  count = local.create_cloudfront_certificate ? 1 : 0
+
+  provider                = aws.us_east_1
+  certificate_arn         = aws_acm_certificate.cloudfront[0].arn
+  validation_record_fqdns = [for record in aws_route53_record.cloudfront_certificate_validation : record.fqdn]
+}
+
 # ── CloudFront ────────────────────────────────────────────────────────────────
 
 module "cloudfront" {
@@ -92,4 +146,34 @@ module "cloudfront" {
   frontend_bucket_id  = data.terraform_remote_state.services.outputs.frontend_bucket_name
   frontend_bucket_arn = data.terraform_remote_state.services.outputs.frontend_bucket_arn
   alb_dns_name        = data.aws_lb.api.dns_name
+  aliases             = local.cloudfront_custom_domain_enabled ? var.cloudfront_aliases : []
+  acm_certificate_arn = local.cloudfront_custom_domain_enabled ? local.cloudfront_certificate_arn : ""
+}
+
+resource "aws_route53_record" "cloudfront_alias_a" {
+  for_each = local.cloudfront_custom_domain_enabled && var.route53_hosted_zone_id != "" ? toset(var.cloudfront_aliases) : toset([])
+
+  zone_id = var.route53_hosted_zone_id
+  name    = each.value
+  type    = "A"
+
+  alias {
+    name                   = module.cloudfront.distribution_domain_name
+    zone_id                = module.cloudfront.distribution_hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "cloudfront_alias_aaaa" {
+  for_each = local.cloudfront_custom_domain_enabled && var.route53_hosted_zone_id != "" ? toset(var.cloudfront_aliases) : toset([])
+
+  zone_id = var.route53_hosted_zone_id
+  name    = each.value
+  type    = "AAAA"
+
+  alias {
+    name                   = module.cloudfront.distribution_domain_name
+    zone_id                = module.cloudfront.distribution_hosted_zone_id
+    evaluate_target_health = false
+  }
 }

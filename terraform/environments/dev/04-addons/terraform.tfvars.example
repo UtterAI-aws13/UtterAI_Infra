@@ -5,3 +5,10 @@ grafana_admin_credentials_enabled = true
 
 kubecost_enabled = true
 kubecost_persistent_volume_enabled = true
+
+# CloudFront custom domain. Leave empty until Route53 hosted zone is ready.
+ cloudfront_aliases  = ["app.dev.utterai.org"]
+ route53_hosted_zone_id = "Z06102331M4SC2S9CO5RJ"
+#
+# Optional: use an existing us-east-1 ACM certificate instead of creating one.
+# cloudfront_acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/..."
