@@ -8,20 +8,18 @@ resources:
 - scaledobject-cpu-worker.yaml
 - scaledobject-ml-gpu-worker.yaml
 - scaledobject-batch-worker.yaml
-
 patches:
-  - path: patch-configmap.yaml
-    target:
-      kind: ConfigMap
-      name: utterai-ai-worker-config
-  - path: patch-serviceaccount.yaml
-  - path: patch-external-secret.yaml
-  - path: patch-deployment.yaml
-
+- path: patch-configmap.yaml
+  target:
+    kind: ConfigMap
+    name: utterai-ai-worker-config
+- path: patch-serviceaccount.yaml
+- path: patch-external-secret.yaml
+- path: patch-deployment.yaml
 images:
 - name: utterai-ai-cpu
   newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-cpu'
-  newTag: dev-8d23582
+  newTag: dev-00e7c1b
 - name: utterai-ai-gpu
   newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-gpu'
-  newTag: dev-8d23582
+  newTag: dev-00e7c1b
