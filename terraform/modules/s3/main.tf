@@ -1,7 +1,7 @@
 locals {
   prefix = "${var.project_name}-${var.environment}"
 
-  buckets = {
+  base_buckets = {
     frontend   = "${local.prefix}-frontend"
     raw_audio  = "${local.prefix}-raw-audio"
     template   = "${local.prefix}-template"
@@ -9,8 +9,13 @@ locals {
     reports    = "${local.prefix}-reports"
     kubecost   = "${local.prefix}-kubecost"
     loki       = "${local.prefix}-loki"
-    tempo      = "${local.prefix}-tempo"
   }
+
+  tempo_bucket = var.tempo_bucket_enabled ? {
+    tempo = "${local.prefix}-tempo"
+  } : {}
+
+  buckets = merge(local.base_buckets, local.tempo_bucket)
 }
 
 resource "aws_s3_bucket" "buckets" {

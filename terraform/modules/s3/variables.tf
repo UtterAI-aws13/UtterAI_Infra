@@ -14,3 +14,9 @@ variable "allowed_extra_origins" {
   type    = list(string)
   default = []
 }
+
+variable "tempo_bucket_enabled" {
+  type        = bool
+  default     = true
+  description = "Whether to create the Tempo trace storage bucket."
+}

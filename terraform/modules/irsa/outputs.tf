@@ -35,7 +35,7 @@ output "loki_role_arn" {
 }
 
 output "tempo_role_arn" {
-  value = aws_iam_role.tempo.arn
+  value = try(aws_iam_role.tempo[0].arn, "")
 }
 
 output "karpenter_role_arn" {

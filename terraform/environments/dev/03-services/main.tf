@@ -61,6 +61,7 @@ module "s3" {
   environment           = var.environment
   frontend_domain       = "d129p1nkqgquw3.cloudfront.net"
   allowed_extra_origins = ["http://localhost:5173"]
+  tempo_bucket_enabled  = false
 }
 
 # ── SQS ──────────────────────────────────────────────────────────────────────

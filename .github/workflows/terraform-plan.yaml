@@ -16,6 +16,7 @@ on:
         type: choice
         options:
           - dev
+          - prod
       layer:
         description: "plan 대상 Terraform layer입니다."
         required: true
@@ -42,6 +43,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Validate workflow variables
         run: |
@@ -74,18 +77,29 @@ jobs:
             exit 0
           fi
 
+          CHANGED_DIRS="$(git diff --name-only "origin/${{ github.base_ref }}"...HEAD -- "terraform/environments/*/*/**" \
+            | awk -F/ '/^terraform\/environments\/[^/]+\/[^/]+\// { print $1 "/" $2 "/" $3 "/" $4 }' \
+            | sort -u)"
+
+          if [ -z "$CHANGED_DIRS" ]; then
+            CHANGED_DIRS="$(printf "%s\n" \
+              "terraform/environments/dev/01-network" \
+              "terraform/environments/dev/02-eks" \
+              "terraform/environments/dev/03-services" \
+              "terraform/environments/dev/04-addons")"
+          fi
+
           {
             echo "dirs<<EOF"
-            echo "terraform/environments/dev/01-network"
-            echo "terraform/environments/dev/02-eks"
-            echo "terraform/environments/dev/03-services"
-            echo "terraform/environments/dev/04-addons"
+            echo "$CHANGED_DIRS"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
       - name: Terraform plan
         env:
           TARGET_DIRS: ${{ steps.targets.outputs.dirs }}
+          PROD_CLOUDFRONT_ALIASES: ${{ vars.TF_VAR_CLOUDFRONT_ALIASES }}
+          PROD_ROUTE53_HOSTED_ZONE_ID: ${{ vars.TF_VAR_ROUTE53_HOSTED_ZONE_ID }}
         run: |
           {
             echo "## Terraform Plan"
@@ -104,6 +118,19 @@ jobs:
             [ -z "$dir" ] && continue
 
             plan_file="/tmp/$(basename "$dir").plan.txt"
+
+            unset TF_VAR_cloudfront_aliases
+            unset TF_VAR_route53_hosted_zone_id
+
+            if [ "$dir" = "terraform/environments/prod/04-addons" ]; then
+              if [ -z "$PROD_CLOUDFRONT_ALIASES" ] || [ -z "$PROD_ROUTE53_HOSTED_ZONE_ID" ]; then
+                echo "prod 04-addons plan에는 TF_VAR_CLOUDFRONT_ALIASES, TF_VAR_ROUTE53_HOSTED_ZONE_ID GitHub Variables가 필요합니다."
+                exit 1
+              fi
+
+              export TF_VAR_cloudfront_aliases="$PROD_CLOUDFRONT_ALIASES"
+              export TF_VAR_route53_hosted_zone_id="$PROD_ROUTE53_HOSTED_ZONE_ID"
+            fi
 
             echo "Terraform init: $dir"
             terraform -chdir="$dir" init -reconfigure
