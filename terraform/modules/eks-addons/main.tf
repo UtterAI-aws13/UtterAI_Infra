@@ -528,12 +528,26 @@ resource "helm_release" "loki" {
             working_directory = "/tmp/loki/data/bloomshipper"
           }
         }
+        schemaConfig = {
+          configs = [
+            {
+              from         = "2024-04-01"
+              store        = "tsdb"
+              object_store = "s3"
+              schema       = "v13"
+              index = {
+                prefix = "index_"
+                period = "24h"
+              }
+            }
+          ]
+        }
         rulerConfig = {
           wal = {
             dir = "/tmp/loki/ruler-wal"
           }
         }
-        useTestSchema = true
+        useTestSchema = false
       }
 
       singleBinary = {
