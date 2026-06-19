@@ -32,10 +32,6 @@ spec:
         operator: Exists
         effect: NoSchedule
       terminationGracePeriodSeconds: 300
-      volumes:
-      - name: model-cache
-        persistentVolumeClaim:
-          claimName: model-cache-pvc
       containers:
       - name: ml-gpu-worker
         image: utterai-ai-gpu:dev-placeholder
@@ -50,7 +46,7 @@ spec:
               name: gpu-worker-secret
               key: HF_TOKEN
         - name: HF_HOME
-          value: "/mnt/model-cache"
+          value: "/tmp/huggingface"
         - name: AWS_REGION
           value: ap-northeast-2
         - name: APP_ENV
@@ -113,9 +109,6 @@ spec:
             cpu: '4'
             memory: 14Gi
             nvidia.com/gpu: '1'
-        volumeMounts:
-        - name: model-cache
-          mountPath: /mnt/model-cache
         lifecycle:
           preStop:
             exec:
