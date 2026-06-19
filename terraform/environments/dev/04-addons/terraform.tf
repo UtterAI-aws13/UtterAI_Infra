@@ -37,19 +37,6 @@ provider "aws" {
   }
 }
 
-provider "aws" {
-  alias  = "us_east_1"
-  region = "us-east-1"
-
-  default_tags {
-    tags = {
-      Project     = var.project_name
-      Environment = var.environment
-      ManagedBy   = "terraform"
-    }
-  }
-}
-
 provider "kubernetes" {
   host                   = data.terraform_remote_state.eks.outputs.cluster_endpoint
   cluster_ca_certificate = base64decode(data.terraform_remote_state.eks.outputs.cluster_ca_certificate)

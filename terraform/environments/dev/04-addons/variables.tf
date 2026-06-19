@@ -19,24 +19,6 @@ variable "alb_dns_name" {
   description = "ALB DNS name for CloudFront API proxy. Set after ALB is created."
 }
 
-variable "cloudfront_aliases" {
-  type        = list(string)
-  default     = []
-  description = "Custom domain names for the dev CloudFront distribution, for example app.dev.utterai.org."
-}
-
-variable "cloudfront_acm_certificate_arn" {
-  type        = string
-  default     = ""
-  description = "Existing us-east-1 ACM certificate ARN for CloudFront. Leave empty to create and validate one with Route53."
-}
-
-variable "route53_hosted_zone_id" {
-  type        = string
-  default     = ""
-  description = "Public Route53 Hosted Zone ID used for ACM DNS validation and CloudFront alias records."
-}
-
 variable "alertmanager_slack_enabled" {
   type        = bool
   default     = true

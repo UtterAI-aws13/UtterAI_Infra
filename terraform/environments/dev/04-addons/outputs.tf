@@ -6,10 +6,6 @@ output "cloudfront_domain_name" {
   value = module.cloudfront.distribution_domain_name
 }
 
-output "cloudfront_custom_domains" {
-  value = var.cloudfront_aliases
-}
-
 output "alertmanager_slack_secret_manager_name" {
   value = module.eks_addons.alertmanager_slack_secret_manager_name
 }
