@@ -3,10 +3,8 @@
 # App pods send OTLP HTTP traffic to:
 #   http://otel-collector.utterai-observability.svc.cluster.local:4318
 #
-# This minimal collector accepts traces/metrics/logs and exposes its own
-# Prometheus metrics. Trace/log export currently uses the debug exporter so the
-# application stops failing span export before a trace backend such as Tempo or
-# X-Ray is added.
+# This collector accepts traces/metrics/logs, exports traces to Tempo, and
+# exposes a Prometheus scrape endpoint for OTLP metrics.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -36,6 +34,10 @@ data:
     exporters:
       debug:
         verbosity: basic
+      otlp/tempo:
+        endpoint: tempo.monitoring.svc.cluster.local:4317
+        tls:
+          insecure: true
       prometheus:
         endpoint: 0.0.0.0:8889
 
@@ -45,7 +47,7 @@ data:
         traces:
           receivers: [otlp]
           processors: [memory_limiter, batch]
-          exporters: [debug]
+          exporters: [otlp/tempo]
         metrics:
           receivers: [otlp]
           processors: [memory_limiter, batch]
