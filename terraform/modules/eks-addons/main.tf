@@ -420,6 +420,14 @@ resource "helm_release" "loki" {
             region = var.aws_region
           }
         }
+        limits_config = {
+          retention_period = var.loki_retention_period
+        }
+        compactor = {
+          retention_enabled    = true
+          delete_request_store = "s3"
+          working_directory    = "/tmp/loki/compactor"
+        }
         storage_config = {
           bloom_shipper = {
             working_directory = "/tmp/loki/data/bloomshipper"

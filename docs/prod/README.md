@@ -876,9 +876,9 @@ CMK(prod-aurora-kms-key) 키 정책 원칙:
 
 ---
 
-## 12. CloudWatch / Prometheus / 모니터링 구성
+## 12. CloudWatch / Prometheus / Loki / 모니터링 구성
 
-Prod 모니터링은 CloudWatch와 Prometheus의 역할을 분리한다.
+Prod 모니터링은 CloudWatch, Prometheus, Loki의 역할을 분리한다.
 
 | 수집 대상 | 저장 위치 | 시각화 |
 |---|---|---|
@@ -886,14 +886,17 @@ Prod 모니터링은 CloudWatch와 Prometheus의 역할을 분리한다.
 | Kubernetes 지표(Node, Pod, kube-state-metrics, cAdvisor) | Prometheus TSDB | Grafana Prometheus datasource |
 | 애플리케이션 OTLP metrics | OpenTelemetry Collector → Prometheus scrape | Grafana Prometheus datasource |
 | 애플리케이션 trace | OpenTelemetry Collector → Tempo | Grafana Tempo datasource |
-| 애플리케이션 로그 | CloudWatch Logs | CloudWatch Logs Insights, Grafana CloudWatch datasource |
+| 애플리케이션 / Kubernetes 로그 | Promtail → Loki → S3 (`utterai-prod-loki`) | Grafana Loki datasource |
+| AWS 서비스 / 감사 로그 | CloudWatch Logs | CloudWatch Logs Insights, Grafana CloudWatch datasource |
 
-### 12.1 로그 그룹
+### 12.1 로그 저장소
 
-| 로그 그룹 | 보존 기간 | 암호화 |
+애플리케이션 Pod stdout/stderr 로그는 CloudWatch Logs에 중복 적재하지 않고 Loki에 저장한다.
+Loki는 IRSA로 `utterai-prod-loki` S3 버킷에 접근하며, retention은 14일(`336h`)로 제한한다.
+
+| 저장소 | 보존 기간 | 암호화 |
 |---|---|---|
-| `/aws/eks/utterai-prod/backend` | 30일 | AWS Managed Key (`aws/logs`) |
-| `/aws/eks/utterai-prod/ai-service` | 30일 | AWS Managed Key (`aws/logs`) |
+| `utterai-prod-loki` | 14일 | S3 SSE-S3 |
 | `/aws/rds/cluster/utterai-prod-aurora` | 30일 | AWS Managed Key (`aws/logs`) |
 | `/aws/elasticache/utterai-prod-redis` | 14일 | AWS Managed Key (`aws/logs`) |
 

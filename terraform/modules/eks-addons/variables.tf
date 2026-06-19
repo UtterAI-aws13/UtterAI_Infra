@@ -156,6 +156,12 @@ variable "loki_irsa_role_arn" {
   description = "IAM Role ARN for Loki Service Account."
 }
 
+variable "loki_retention_period" {
+  type        = string
+  default     = "168h"
+  description = "Loki log retention period. Use Go duration format such as 168h or 336h."
+}
+
 variable "cluster_autoscaler_enabled" {
   type        = bool
   default     = true

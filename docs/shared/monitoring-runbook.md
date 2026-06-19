@@ -509,6 +509,8 @@ Loki는 S3를 storage backend로 사용한다.
   loki.storage.bucketNames.chunks = utterai-{env}-loki
   loki.storage.bucketNames.ruler  = utterai-{env}-loki
   loki.storage.bucketNames.admin  = utterai-{env}-loki
+  loki.limits_config.retention_period = dev 168h / prod 336h
+  loki.compactor.retention_enabled = true
   singleBinary.persistence.enabled = false  # S3로 대체
 ```
 
@@ -516,8 +518,9 @@ Loki는 S3를 storage backend로 사용한다.
 |---|---|
 | Backend | S3 (`utterai-dev-loki` / `utterai-prod-loki`) |
 | 인증 | IRSA (Pod ServiceAccount에 IAM Role 매핑) |
+| 보존 기간 | dev 7일, prod 14일 |
 | 로컬 PVC | 비활성 (S3에 직접 저장) |
-| 장점 | Pod 재시작 시에도 로그 보존, 무제한 용량 |
+| 장점 | CloudWatch Logs 중복 적재 없이 Grafana에서 로그 조회 가능 |
 
 S3 데이터 확인:
 
