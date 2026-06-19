@@ -195,4 +195,4 @@ spec:
     memory: "128Gi"
   disruption:
     consolidationPolicy: WhenEmpty
-    consolidateAfter: 5m
+    consolidateAfter: 10m
