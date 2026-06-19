@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: model-cache-pv
-spec:
-  csi:
-    volumeHandle: fs-07c0d3d13a2663887
