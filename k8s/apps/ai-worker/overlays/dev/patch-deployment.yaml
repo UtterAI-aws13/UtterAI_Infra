@@ -1,0 +1,63 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: utterai-cpu-worker
+spec:
+  template:
+    spec:
+      containers:
+        - name: worker
+          env:
+            - name: APP_ENV
+              value: dev
+            - name: SQS_AUDIO_PREPROCESS_QUEUE_URL
+              value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-audio-preprocess-queue
+            - name: SQS_GPU_INFERENCE_QUEUE_URL
+              value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-gpu-inference-queue
+            - name: SQS_REPORT_ANALYSIS_QUEUE_URL
+              value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-report-analysis-queue
+            - name: S3_BUCKET_REPORT
+              value: utterai-dev-reports
+            - name: S3_BUCKET_AUDIO
+              value: utterai-dev-raw-audio
+            - name: LOG_LEVEL
+              value: DEBUG
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: utterai-ml-gpu-worker
+spec:
+  template:
+    spec:
+      containers:
+        - name: ml-gpu-worker
+          env:
+            - name: APP_ENV
+              value: dev
+            - name: SQS_GPU_INFERENCE_QUEUE_URL
+              value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-gpu-inference-queue
+            - name: SQS_REPORT_ANALYSIS_QUEUE_URL
+              value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-report-analysis-queue
+            - name: S3_BUCKET_AUDIO
+              value: utterai-dev-raw-audio
+            - name: S3_BUCKET_REPORT
+              value: utterai-dev-reports
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: utterai-batch-worker
+spec:
+  template:
+    spec:
+      containers:
+        - name: worker
+          env:
+            - name: APP_ENV
+              value: dev
+            - name: SQS_RAG_INGEST_QUEUE_URL
+              value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-rag-ingest-queue
+            - name: S3_BUCKET_RAG
+              value: utterai-dev-rag-ingest

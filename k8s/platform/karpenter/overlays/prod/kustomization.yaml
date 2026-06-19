@@ -9,3 +9,7 @@ patches:
     target:
       kind: EC2NodeClass
       name: default
+  - path: patch-ec2nodeclass-gpu-prod.yaml
+    target:
+      kind: EC2NodeClass
+      name: gpu
