@@ -621,9 +621,9 @@ resource "aws_iam_role_policy" "efs_csi_driver" {
         }
       },
       {
-        Effect    = "Allow"
-        Action    = ["elasticfilesystem:DeleteAccessPoint"]
-        Resource  = ["*"]
+        Effect   = "Allow"
+        Action   = ["elasticfilesystem:DeleteAccessPoint"]
+        Resource = ["*"]
         Condition = {
           StringEquals = {
             "aws:ResourceTag/efs.csi.aws.com/cluster" = "true"

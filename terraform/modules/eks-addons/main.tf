@@ -872,14 +872,14 @@ resource "kubernetes_manifest" "grafana_admin_credentials" {
 # ── EFS CSI Driver ───────────────────────────────────────────────────────────
 
 resource "helm_release" "aws_efs_csi_driver" {
-  name             = "aws-efs-csi-driver"
-  repository       = "https://kubernetes-sigs.github.io/aws-efs-csi-driver/"
-  chart            = "aws-efs-csi-driver"
-  version          = "3.0.7"
-  namespace        = "kube-system"
-  cleanup_on_fail  = true
-  wait             = true
-  wait_for_jobs    = true
+  name            = "aws-efs-csi-driver"
+  repository      = "https://kubernetes-sigs.github.io/aws-efs-csi-driver/"
+  chart           = "aws-efs-csi-driver"
+  version         = "3.0.7"
+  namespace       = "kube-system"
+  cleanup_on_fail = true
+  wait            = true
+  wait_for_jobs   = true
 
   depends_on = [helm_release.aws_load_balancer_controller]
 
