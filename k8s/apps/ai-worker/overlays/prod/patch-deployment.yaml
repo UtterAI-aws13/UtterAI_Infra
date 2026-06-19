@@ -1,33 +1,6 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: utterai-ai-api
-  namespace: utterai-ai-api
-spec:
-  replicas: 2
-  template:
-    spec:
-      securityContext:
-        runAsNonRoot: true
-      containers:
-        - name: ai-api
-          env:
-            - name: APP_ENV
-              value: prod
-            - name: SQS_AUDIO_PREPROCESS_QUEUE_URL
-              value: TODO_PROD_AUDIO_PREPROCESS_QUEUE_URL
-            - name: SQS_RAG_INGEST_QUEUE_URL
-              value: TODO_PROD_RAG_INGEST_QUEUE_URL
-            - name: OTEL_RESOURCE_ATTRIBUTES
-              value: deployment.environment=prod,team=utterai
-          securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
   name: utterai-cpu-worker
   namespace: utterai-ai-cpu
 spec:
