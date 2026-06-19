@@ -1,16 +1,4 @@
 ---
-# AI API namespace 기본 차단
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: default-deny-all
-  namespace: utterai-ai-api
-spec:
-  podSelector: {}
-  policyTypes:
-    - Ingress
-    - Egress
----
 # CPU worker namespace 기본 차단
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -47,36 +35,16 @@ spec:
     - Ingress
     - Egress
 ---
-# backend -> ai-api Pod 8080 ingress 허용
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-ingress-from-backend
-  namespace: utterai-ai-api
-spec:
-  podSelector:
-    matchLabels:
-      app: utterai-ai-api
-  policyTypes:
-    - Ingress
-  ingress:
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              app.kubernetes.io/component: backend
-      ports:
-        - port: 8080
----
-# Prometheus -> ai-api scrape 허용
+# Prometheus scrape (monitoring → cpu-worker 8080)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-ingress-prometheus
-  namespace: utterai-ai-api
+  namespace: utterai-ai-cpu
 spec:
   podSelector:
     matchLabels:
-      app: utterai-ai-api
+      app: utterai-cpu-worker
   policyTypes:
     - Ingress
   ingress:
@@ -87,24 +55,27 @@ spec:
       ports:
         - port: 8080
 ---
-# AI API DNS egress 허용
+# Prometheus scrape (monitoring → gpu-worker)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-egress-dns
-  namespace: utterai-ai-api
+  name: allow-ingress-prometheus
+  namespace: utterai-ai-gpu
 spec:
-  podSelector: {}
+  podSelector:
+    matchLabels:
+      app: utterai-ml-gpu-worker
   policyTypes:
-    - Egress
-  egress:
-    - ports:
-        - port: 53
-          protocol: UDP
-        - port: 53
-          protocol: TCP
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 8080
 ---
-# CPU worker DNS egress 허용
+# CPU worker DNS egress
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -121,7 +92,7 @@ spec:
         - port: 53
           protocol: TCP
 ---
-# GPU worker DNS egress 허용
+# GPU worker DNS egress
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -138,7 +109,7 @@ spec:
         - port: 53
           protocol: TCP
 ---
-# Batch worker DNS egress 허용
+# Batch worker DNS egress
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -155,21 +126,7 @@ spec:
         - port: 53
           protocol: TCP
 ---
-# AI API AWS service HTTPS egress 허용
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-egress-aws
-  namespace: utterai-ai-api
-spec:
-  podSelector: {}
-  policyTypes:
-    - Egress
-  egress:
-    - ports:
-        - port: 443
----
-# CPU worker AWS service HTTPS egress 허용
+# CPU worker AWS service (SQS, S3, Bedrock, Secrets Manager VPC Endpoint) + RDS + Redis
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -181,9 +138,11 @@ spec:
     - Egress
   egress:
     - ports:
-        - port: 443
+        - port: 443   # SQS, S3, Bedrock, Secrets Manager (VPC Endpoint)
+        - port: 5432  # RDS PostgreSQL
+        - port: 6379  # ElastiCache Redis
 ---
-# GPU worker AWS service HTTPS egress 허용
+# GPU worker AWS service + RDS + Redis
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -196,8 +155,10 @@ spec:
   egress:
     - ports:
         - port: 443
+        - port: 5432
+        - port: 6379
 ---
-# Batch worker AWS service HTTPS egress 허용
+# Batch worker AWS service (SQS, S3) + RDS
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -210,3 +171,61 @@ spec:
   egress:
     - ports:
         - port: 443
+        - port: 5432  # RDS PostgreSQL
+---
+# CPU worker → OTEL collector (utterai-observability:4318)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-otel
+  namespace: utterai-ai-cpu
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: utterai-observability
+      ports:
+        - port: 4318
+          protocol: TCP
+---
+# GPU worker → OTEL collector
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-otel
+  namespace: utterai-ai-gpu
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: utterai-observability
+      ports:
+        - port: 4318
+          protocol: TCP
+---
+# Batch worker → OTEL collector
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-otel
+  namespace: utterai-batch
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: utterai-observability
+      ports:
+        - port: 4318
+          protocol: TCP

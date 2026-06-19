@@ -9,17 +9,19 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: worker
           env:
             - name: APP_ENV
               value: prod
             - name: SQS_AUDIO_PREPROCESS_QUEUE_URL
-              value: TODO_PROD_AUDIO_PREPROCESS_QUEUE_URL
+              value: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-prod-audio-preprocess-queue"
             - name: SQS_GPU_INFERENCE_QUEUE_URL
-              value: TODO_PROD_GPU_INFERENCE_QUEUE_URL
+              value: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-prod-gpu-inference-queue"
             - name: SQS_REPORT_ANALYSIS_QUEUE_URL
-              value: TODO_PROD_REPORT_ANALYSIS_QUEUE_URL
+              value: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-prod-report-analysis-queue"
             - name: S3_BUCKET_REPORT
               value: utterai-prod-reports
             - name: S3_BUCKET_AUDIO
@@ -42,15 +44,17 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: ml-gpu-worker
           env:
             - name: APP_ENV
               value: prod
             - name: SQS_GPU_INFERENCE_QUEUE_URL
-              value: TODO_PROD_GPU_INFERENCE_QUEUE_URL
+              value: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-prod-gpu-inference-queue"
             - name: SQS_REPORT_ANALYSIS_QUEUE_URL
-              value: TODO_PROD_REPORT_ANALYSIS_QUEUE_URL
+              value: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-prod-report-analysis-queue"
             - name: S3_BUCKET_AUDIO
               value: utterai-prod-raw-audio
             - name: S3_BUCKET_REPORT
@@ -73,15 +77,17 @@ spec:
     spec:
       securityContext:
         runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: worker
           env:
             - name: APP_ENV
               value: prod
             - name: SQS_RAG_INGEST_QUEUE_URL
-              value: TODO_PROD_RAG_INGEST_QUEUE_URL
+              value: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-prod-rag-ingest-queue"
             - name: S3_BUCKET_RAG
-              value: utterai-prod-documents
+              value: utterai-prod-rag-ingest
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: deployment.environment=prod,team=utterai
           securityContext:
