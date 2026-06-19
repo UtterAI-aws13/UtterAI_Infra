@@ -6,10 +6,6 @@ output "cluster_autoscaler_role_arn" {
   value = aws_iam_role.cluster_autoscaler.arn
 }
 
-output "ai_api_role_arn" {
-  value = aws_iam_role.ai_api.arn
-}
-
 output "api_role_arn" {
   value = aws_iam_role.api.arn
 }
