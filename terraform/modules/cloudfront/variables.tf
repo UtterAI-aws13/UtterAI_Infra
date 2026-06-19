@@ -19,3 +19,15 @@ variable "alb_dns_name" {
   default     = ""
   description = "ALB DNS name for API proxy behavior (/api/*). Leave empty to skip."
 }
+
+variable "aliases" {
+  type        = list(string)
+  default     = []
+  description = "Alternate domain names for the CloudFront distribution, such as app.utterai.org."
+}
+
+variable "acm_certificate_arn" {
+  type        = string
+  default     = ""
+  description = "ACM certificate ARN in us-east-1 for CloudFront alternate domain names."
+}

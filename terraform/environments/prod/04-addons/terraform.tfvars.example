@@ -1,0 +1,14 @@
+alertmanager_slack_enabled = true
+alertmanager_slack_channel = "#aws-alerts"
+
+grafana_admin_credentials_enabled = true
+
+kubecost_enabled                   = true
+kubecost_persistent_volume_enabled = true
+
+# CloudFront custom domain for the prod frontend.
+cloudfront_aliases     = ["app.utterai.org"]
+route53_hosted_zone_id = "ZXXXXXXXXXXXXX"
+
+# Optional: use an existing us-east-1 ACM certificate instead of creating one.
+# cloudfront_acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/..."

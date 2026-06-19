@@ -13,6 +13,24 @@ variable "environment" {
   default = "prod"
 }
 
+variable "cloudfront_aliases" {
+  type        = list(string)
+  default     = []
+  description = "Custom domain names for the prod CloudFront distribution, for example app.utterai.org."
+}
+
+variable "cloudfront_acm_certificate_arn" {
+  type        = string
+  default     = ""
+  description = "Existing us-east-1 ACM certificate ARN for CloudFront. Leave empty to create and validate one with Route53."
+}
+
+variable "route53_hosted_zone_id" {
+  type        = string
+  default     = ""
+  description = "Public Route53 Hosted Zone ID used for ACM DNS validation and CloudFront alias records."
+}
+
 variable "alertmanager_slack_enabled" {
   type        = bool
   default     = true
