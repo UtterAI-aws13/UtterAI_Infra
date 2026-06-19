@@ -39,6 +39,8 @@ Pod stdout/stderr logs
   -> Loki (S3 backend: utterai-{env}-loki)
   -> Grafana Explore
 
+Application logs stay in Loki by default to avoid duplicating ingestion and storage cost in CloudWatch Logs.
+
 AWS Managed Services
   -> CloudWatch
 
@@ -589,6 +591,17 @@ kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3001:80
 ```text
 http://localhost:3001
 ```
+
+### Prometheus port-forward가 실패하는 경우
+
+`connection refused`가 나면 Prometheus Pod가 `9090`을 열기 전에 죽고 있는지 먼저 확인한다.
+
+```bash
+kubectl get pods -n monitoring | grep prometheus
+kubectl describe pod -n monitoring prometheus-utterai-monitoring-prometheus-0
+```
+
+`Last State: OOMKilled` 또는 `Exit Code: 137`이면 Prometheus가 TSDB/WAL 로딩 중 메모리 limit을 넘은 상태다. 이때는 `terraform/modules/eks-addons`의 Prometheus retention과 resource limit을 조정한 뒤 `04-addons`를 다시 적용한다.
 
 ### Grafana 로그인이 안 되는 경우
 

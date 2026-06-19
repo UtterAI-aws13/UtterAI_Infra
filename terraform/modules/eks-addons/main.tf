@@ -154,7 +154,7 @@ resource "helm_release" "kube_prometheus_stack" {
 
       prometheus = {
         prometheusSpec = {
-          retention      = "7d"
+          retention      = "3d"
           scrapeInterval = "60s"
 
           serviceMonitorSelectorNilUsesHelmValues = false
@@ -166,12 +166,12 @@ resource "helm_release" "kube_prometheus_stack" {
 
           resources = {
             requests = {
-              cpu    = "100m"
-              memory = "512Mi"
+              cpu    = "200m"
+              memory = "1Gi"
             }
             limits = {
-              cpu    = "500m"
-              memory = "1Gi"
+              cpu    = "1"
+              memory = "3Gi"
             }
           }
         }
@@ -521,7 +521,24 @@ resource "helm_release" "promtail" {
         {
           key      = "dedicated"
           operator = "Equal"
+          value    = "api"
+          effect   = "NoSchedule"
+        },
+        {
+          key      = "dedicated"
+          operator = "Equal"
+          value    = "worker"
+          effect   = "NoSchedule"
+        },
+        {
+          key      = "dedicated"
+          operator = "Equal"
           value    = "ai-gpu"
+          effect   = "NoSchedule"
+        },
+        {
+          key      = "nvidia.com/gpu"
+          operator = "Exists"
           effect   = "NoSchedule"
         }
       ]
