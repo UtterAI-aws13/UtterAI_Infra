@@ -23,7 +23,7 @@ variable "alb_dns_name" {
 variable "aliases" {
   type        = list(string)
   default     = []
-  description = "Alternate domain names for the CloudFront distribution, such as app.dev.utterai.org."
+  description = "Alternate domain names for the CloudFront distribution, such as app.utterai.org."
 }
 
 variable "acm_certificate_arn" {
