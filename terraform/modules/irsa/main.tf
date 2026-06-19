@@ -82,43 +82,6 @@ resource "aws_iam_role_policy" "cluster_autoscaler" {
   })
 }
 
-# ── AI API IRSA ───────────────────────────────────────────────────────────────
-
-resource "aws_iam_role" "ai_api" {
-  name = "${local.prefix}-ai-api-irsa-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Federated = var.oidc_provider_arn }
-      Action    = "sts:AssumeRoleWithWebIdentity"
-      Condition = {
-        StringEquals = {
-          "${local.oidc_aud}" = "sts.amazonaws.com"
-          "${local.oidc_sub}" = "system:serviceaccount:utterai-ai-api:utterai-ai-api-sa"
-        }
-      }
-    }]
-  })
-}
-
-resource "aws_iam_role_policy" "ai_api" {
-  name = "${local.prefix}-ai-api-policy"
-  role = aws_iam_role.ai_api.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = ["sqs:SendMessage", "sqs:GetQueueAttributes", "sqs:GetQueueUrl"]
-        Resource = [var.audio_preprocess_queue_arn]
-      },
-    ]
-  })
-}
-
 # ── API IRSA ──────────────────────────────────────────────────────────────────
 
 resource "aws_iam_role" "api" {

@@ -92,10 +92,6 @@ output "backend_api_role_arn" {
   value = module.irsa.api_role_arn
 }
 
-output "ai_api_role_arn" {
-  value = module.irsa.ai_api_role_arn
-}
-
 output "ai_cpu_worker_role_arn" {
   value = module.irsa.ai_cpu_role_arn
 }
