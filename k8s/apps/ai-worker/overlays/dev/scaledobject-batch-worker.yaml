@@ -17,6 +17,6 @@ spec:
       metadata:
         queueURL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-rag-ingest-queue"
         queueLength: "3"
-        activationQueueLength: "1"
+        activationQueueLength: "0"
         awsRegion: ap-northeast-2
         identityOwner: operator
