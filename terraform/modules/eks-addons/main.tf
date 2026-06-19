@@ -1,6 +1,4 @@
 locals {
-  alertmanager_receiver_name = var.alertmanager_slack_enabled ? "slack" : "null"
-
   tempo_service_account_annotations = var.tempo_s3_bucket_name != "" && var.tempo_irsa_role_arn != "" ? {
     "eks.amazonaws.com/role-arn" = var.tempo_irsa_role_arn
   } : {}
@@ -31,7 +29,7 @@ locals {
       resolve_timeout = "5m"
     }
     route = {
-      receiver        = local.alertmanager_receiver_name
+      receiver        = "null"
       group_by        = ["namespace", "alertname"]
       group_wait      = "30s"
       group_interval  = "5m"
@@ -45,55 +43,22 @@ locals {
         }
       ]
     }
-    receivers = concat(
-      [
-        merge(
-          {
-            name = local.alertmanager_receiver_name
-          },
-          var.alertmanager_slack_enabled ? {
-            slack_configs = [
-              {
-                api_url_file  = "/etc/alertmanager/secrets/${var.alertmanager_slack_webhook_secret_name}/${var.alertmanager_slack_webhook_secret_key}"
-                channel       = var.alertmanager_slack_channel
-                send_resolved = true
-                title         = "[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}"
-                text          = "{{ range .Alerts }}*Severity:* {{ .Labels.severity }}\n*Namespace:* {{ .Labels.namespace }}\n*Summary:* {{ .Annotations.summary }}\n*Description:* {{ .Annotations.description }}\n{{ end }}"
-              }
-            ]
-          } : {}
-        )
-      ],
-      var.alertmanager_slack_enabled ? [{ name = "null" }] : []
-    )
+    receivers = [{ name = "null" }]
   }
 
-  alertmanager_spec = merge(
-    {
-      replicas = 1
-      resources = {
-        requests = {
-          cpu    = "50m"
-          memory = "128Mi"
-        }
-        limits = {
-          cpu    = "200m"
-          memory = "256Mi"
-        }
+  alertmanager_spec = {
+    replicas = 1
+    resources = {
+      requests = {
+        cpu    = "50m"
+        memory = "128Mi"
       }
-    },
-    var.alertmanager_slack_enabled ? {
-      secrets = [var.alertmanager_slack_webhook_secret_name]
-    } : {}
-  )
-}
-
-# ── Alertmanager Slack Secret Sync ───────────────────────────────────────────
-
-resource "aws_secretsmanager_secret" "alertmanager_slack_webhook" {
-  name                    = var.alertmanager_slack_secret_manager_name
-  description             = "Slack incoming webhook URL for Alertmanager notifications."
-  recovery_window_in_days = 0
+      limits = {
+        cpu    = "200m"
+        memory = "256Mi"
+      }
+    }
+  }
 }
 
 resource "aws_secretsmanager_secret" "grafana_admin_credentials" {
@@ -803,40 +768,6 @@ resource "helm_release" "external_secrets" {
     name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
     value = var.eso_irsa_role_arn
   }
-}
-
-resource "kubernetes_manifest" "alertmanager_slack_webhook" {
-  manifest = {
-    apiVersion = "external-secrets.io/v1beta1"
-    kind       = "ExternalSecret"
-    metadata = {
-      name      = "alertmanager-slack-webhook"
-      namespace = "monitoring"
-    }
-    spec = {
-      refreshInterval = "1h"
-      secretStoreRef = {
-        name = var.external_secrets_cluster_store_name
-        kind = "ClusterSecretStore"
-      }
-      target = {
-        name           = var.alertmanager_slack_webhook_secret_name
-        creationPolicy = "Owner"
-      }
-      data = [
-        {
-          secretKey = var.alertmanager_slack_webhook_secret_key
-          remoteRef = {
-            key = aws_secretsmanager_secret.alertmanager_slack_webhook.name
-          }
-        }
-      ]
-    }
-  }
-
-  depends_on = [
-    helm_release.external_secrets,
-  ]
 }
 
 resource "kubernetes_manifest" "grafana_admin_credentials" {
