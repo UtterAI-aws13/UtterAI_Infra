@@ -73,3 +73,18 @@ variable "gpu_node_min_size" {
   type    = number
   default = 0
 }
+
+variable "api_node_group_enabled" {
+  type    = bool
+  default = true
+}
+
+variable "worker_node_group_enabled" {
+  type    = bool
+  default = true
+}
+
+variable "gpu_node_group_enabled" {
+  type    = bool
+  default = true
+}

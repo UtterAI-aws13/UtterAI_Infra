@@ -33,4 +33,8 @@ module "eks" {
 
   gpu_node_desired_size = var.gpu_node_desired_size
   gpu_node_min_size     = var.gpu_node_min_size
+
+  api_node_group_enabled    = var.api_node_group_enabled
+  worker_node_group_enabled = var.worker_node_group_enabled
+  gpu_node_group_enabled    = var.gpu_node_group_enabled
 }
