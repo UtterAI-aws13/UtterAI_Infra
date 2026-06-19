@@ -45,3 +45,7 @@ output "karpenter_role_arn" {
 output "keda_role_arn" {
   value = aws_iam_role.keda.arn
 }
+
+output "efs_csi_driver_role_arn" {
+  value = aws_iam_role.efs_csi_driver.arn
+}

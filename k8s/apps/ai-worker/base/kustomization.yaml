@@ -12,6 +12,7 @@ resources:
   - gpu-worker-external-secret.yaml
   - ai-worker-external-secret.yaml
   - rag-ingest-external-secret.yaml
+  - efs-pvc.yaml
   - ai-api-deployment.yaml
   - cpu-worker-deployment.yaml
   - ml-gpu-worker-deployment.yaml

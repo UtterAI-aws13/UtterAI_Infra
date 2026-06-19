@@ -185,3 +185,8 @@ variable "karpenter_irsa_role_arn" {
   default     = ""
   description = "IAM Role ARN for the Karpenter controller Service Account."
 }
+
+variable "efs_csi_driver_irsa_role_arn" {
+  type        = string
+  description = "IAM Role ARN for the EFS CSI Driver controller Service Account."
+}
