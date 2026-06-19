@@ -9,6 +9,7 @@ locals {
     reports    = "${local.prefix}-reports"
     kubecost   = "${local.prefix}-kubecost"
     loki       = "${local.prefix}-loki"
+    tempo      = "${local.prefix}-tempo"
   }
 }
 

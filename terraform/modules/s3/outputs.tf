@@ -54,3 +54,10 @@ output "loki_bucket_arn" {
   value = aws_s3_bucket.buckets["loki"].arn
 }
 
+output "tempo_bucket_name" {
+  value = aws_s3_bucket.buckets["tempo"].id
+}
+
+output "tempo_bucket_arn" {
+  value = aws_s3_bucket.buckets["tempo"].arn
+}

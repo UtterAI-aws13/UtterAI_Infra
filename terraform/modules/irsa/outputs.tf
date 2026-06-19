@@ -38,6 +38,10 @@ output "loki_role_arn" {
   value = aws_iam_role.loki.arn
 }
 
+output "tempo_role_arn" {
+  value = aws_iam_role.tempo.arn
+}
+
 output "karpenter_role_arn" {
   value = aws_iam_role.karpenter.arn
 }

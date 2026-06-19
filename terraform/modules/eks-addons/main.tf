@@ -154,7 +154,7 @@ resource "helm_release" "kube_prometheus_stack" {
 
       prometheus = {
         prometheusSpec = {
-          retention      = "7d"
+          retention      = "3d"
           scrapeInterval = "60s"
 
           serviceMonitorSelectorNilUsesHelmValues = false
@@ -166,12 +166,12 @@ resource "helm_release" "kube_prometheus_stack" {
 
           resources = {
             requests = {
-              cpu    = "100m"
-              memory = "512Mi"
+              cpu    = "200m"
+              memory = "1Gi"
             }
             limits = {
-              cpu    = "500m"
-              memory = "1Gi"
+              cpu    = "1"
+              memory = "3Gi"
             }
           }
         }
@@ -186,10 +186,19 @@ resource "helm_release" "kube_prometheus_stack" {
           defaultDashboardsTimezone = "Asia/Seoul"
           additionalDataSources = [
             {
+              uid       = "loki"
               name      = "Loki"
               type      = "loki"
               access    = "proxy"
               url       = "http://loki-gateway.monitoring.svc.cluster.local"
+              isDefault = false
+            },
+            {
+              uid       = "tempo"
+              name      = "Tempo"
+              type      = "tempo"
+              access    = "proxy"
+              url       = "http://tempo.monitoring.svc.cluster.local:3100"
               isDefault = false
             }
           ]
@@ -376,6 +385,92 @@ resource "helm_release" "kubecost" {
   ]
 }
 
+# ── Grafana Tempo ────────────────────────────────────────────────────────────
+
+resource "helm_release" "tempo" {
+  name             = "tempo"
+  repository       = "https://grafana.github.io/helm-charts"
+  chart            = "tempo"
+  version          = var.tempo_chart_version
+  namespace        = "monitoring"
+  create_namespace = true
+  cleanup_on_fail  = true
+  wait             = true
+  wait_for_jobs    = true
+
+  depends_on = [helm_release.kube_prometheus_stack]
+
+  values = [
+    yamlencode({
+      fullnameOverride = "tempo"
+
+      serviceAccount = {
+        create = true
+        name   = "tempo"
+        annotations = {
+          "eks.amazonaws.com/role-arn" = var.tempo_irsa_role_arn
+        }
+      }
+
+      tempo = {
+        reportingEnabled = false
+        retention        = var.tempo_retention_period
+        resources = {
+          requests = {
+            cpu    = "100m"
+            memory = "256Mi"
+          }
+          limits = {
+            cpu    = "500m"
+            memory = "1Gi"
+          }
+        }
+        storage = {
+          trace = {
+            backend = "s3"
+            s3 = {
+              bucket   = var.tempo_s3_bucket_name
+              endpoint = "s3.${var.aws_region}.amazonaws.com"
+            }
+            wal = {
+              path = "/var/tempo/wal"
+            }
+          }
+        }
+        receivers = {
+          otlp = {
+            protocols = {
+              grpc = {
+                endpoint = "0.0.0.0:4317"
+              }
+              http = {
+                endpoint = "0.0.0.0:4318"
+              }
+            }
+          }
+        }
+      }
+
+      persistence = {
+        enabled = false
+      }
+
+      tempoQuery = {
+        enabled = false
+      }
+
+      service = {
+        type = "ClusterIP"
+      }
+
+      serviceMonitor = {
+        enabled  = true
+        interval = "60s"
+      }
+    })
+  ]
+}
+
 # ── Grafana Loki / Promtail ──────────────────────────────────────────────────
 
 resource "helm_release" "loki" {
@@ -420,17 +515,39 @@ resource "helm_release" "loki" {
             region = var.aws_region
           }
         }
+        limits_config = {
+          retention_period = var.loki_retention_period
+        }
+        compactor = {
+          retention_enabled    = true
+          delete_request_store = "s3"
+          working_directory    = "/tmp/loki/compactor"
+        }
         storage_config = {
           bloom_shipper = {
             working_directory = "/tmp/loki/data/bloomshipper"
           }
+        }
+        schemaConfig = {
+          configs = [
+            {
+              from         = "2024-04-01"
+              store        = "tsdb"
+              object_store = "s3"
+              schema       = "v13"
+              index = {
+                prefix = "index_"
+                period = "24h"
+              }
+            }
+          ]
         }
         rulerConfig = {
           wal = {
             dir = "/tmp/loki/ruler-wal"
           }
         }
-        useTestSchema = true
+        useTestSchema = false
       }
 
       singleBinary = {
@@ -521,7 +638,24 @@ resource "helm_release" "promtail" {
         {
           key      = "dedicated"
           operator = "Equal"
+          value    = "api"
+          effect   = "NoSchedule"
+        },
+        {
+          key      = "dedicated"
+          operator = "Equal"
+          value    = "worker"
+          effect   = "NoSchedule"
+        },
+        {
+          key      = "dedicated"
+          operator = "Equal"
           value    = "ai-gpu"
+          effect   = "NoSchedule"
+        },
+        {
+          key      = "nvidia.com/gpu"
+          operator = "Exists"
           effect   = "NoSchedule"
         }
       ]

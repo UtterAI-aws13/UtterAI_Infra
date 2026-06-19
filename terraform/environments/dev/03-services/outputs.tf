@@ -136,6 +136,14 @@ output "loki_role_arn" {
   value = module.irsa.loki_role_arn
 }
 
+output "tempo_bucket_name" {
+  value = module.s3.tempo_bucket_name
+}
+
+output "tempo_role_arn" {
+  value = module.irsa.tempo_role_arn
+}
+
 output "karpenter_role_arn" {
   value = module.irsa.karpenter_role_arn
 }

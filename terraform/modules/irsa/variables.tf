@@ -85,3 +85,7 @@ variable "kubecost_bucket_arn" {
 variable "loki_bucket_arn" {
   type = string
 }
+
+variable "tempo_bucket_arn" {
+  type = string
+}

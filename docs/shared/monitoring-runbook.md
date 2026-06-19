@@ -39,6 +39,8 @@ Pod stdout/stderr logs
   -> Loki (S3 backend: utterai-{env}-loki)
   -> Grafana Explore
 
+Application logs stay in Loki by default to avoid duplicating ingestion and storage cost in CloudWatch Logs.
+
 AWS Managed Services
   -> CloudWatch
 
@@ -507,6 +509,8 @@ Loki는 S3를 storage backend로 사용한다.
   loki.storage.bucketNames.chunks = utterai-{env}-loki
   loki.storage.bucketNames.ruler  = utterai-{env}-loki
   loki.storage.bucketNames.admin  = utterai-{env}-loki
+  loki.limits_config.retention_period = dev 168h / prod 336h
+  loki.compactor.retention_enabled = true
   singleBinary.persistence.enabled = false  # S3로 대체
 ```
 
@@ -514,8 +518,9 @@ Loki는 S3를 storage backend로 사용한다.
 |---|---|
 | Backend | S3 (`utterai-dev-loki` / `utterai-prod-loki`) |
 | 인증 | IRSA (Pod ServiceAccount에 IAM Role 매핑) |
+| 보존 기간 | dev 7일, prod 14일 |
 | 로컬 PVC | 비활성 (S3에 직접 저장) |
-| 장점 | Pod 재시작 시에도 로그 보존, 무제한 용량 |
+| 장점 | CloudWatch Logs 중복 적재 없이 Grafana에서 로그 조회 가능 |
 
 S3 데이터 확인:
 
@@ -527,6 +532,41 @@ IRSA 설정 확인:
 
 ```bash
 kubectl get sa -n monitoring loki -o jsonpath='{.metadata.annotations}'
+```
+
+## Tempo 저장 방식 (S3 Backend)
+
+Tempo는 trace backend로 사용하며 S3를 storage backend로 사용한다.
+
+```text
+저장 흐름:
+  Application -> OTel Collector -> Tempo -> S3 (utterai-{env}-tempo)
+  IAM: IRSA (utterai-{env}-tempo-irsa-role) -> S3 put/get/list/delete 권한
+
+설정:
+  tempo.storage.trace.backend = "s3"
+  tempo.storage.trace.s3.bucket = utterai-{env}-tempo
+  tempo.retention = dev 24h / prod 72h
+```
+
+| 항목 | 설명 |
+|---|---|
+| Backend | S3 (`utterai-dev-tempo` / `utterai-prod-tempo`) |
+| 인증 | IRSA (Pod ServiceAccount에 IAM Role 매핑) |
+| 보존 기간 | dev 1일, prod 3일 |
+| 로컬 PVC | 비활성 (S3 backend, WAL은 Pod lifecycle 기준) |
+| 조회 | Grafana Tempo datasource |
+
+S3 데이터 확인:
+
+```bash
+aws s3 ls s3://utterai-dev-tempo/ --recursive | head -10
+```
+
+IRSA 설정 확인:
+
+```bash
+kubectl get sa -n monitoring tempo -o jsonpath='{.metadata.annotations}'
 ```
 
 ## 자주 보는 kubectl 명령
@@ -589,6 +629,17 @@ kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3001:80
 ```text
 http://localhost:3001
 ```
+
+### Prometheus port-forward가 실패하는 경우
+
+`connection refused`가 나면 Prometheus Pod가 `9090`을 열기 전에 죽고 있는지 먼저 확인한다.
+
+```bash
+kubectl get pods -n monitoring | grep prometheus
+kubectl describe pod -n monitoring prometheus-utterai-monitoring-prometheus-0
+```
+
+`Last State: OOMKilled` 또는 `Exit Code: 137`이면 Prometheus가 TSDB/WAL 로딩 중 메모리 limit을 넘은 상태다. 이때는 `terraform/modules/eks-addons`의 Prometheus retention과 resource limit을 조정한 뒤 `04-addons`를 다시 적용한다.
 
 ### Grafana 로그인이 안 되는 경우
 

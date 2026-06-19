@@ -679,3 +679,49 @@ resource "aws_iam_role_policy" "loki" {
     ]
   })
 }
+
+# ── Tempo IRSA ────────────────────────────────────────────────────────────────
+
+resource "aws_iam_role" "tempo" {
+  name = "${local.prefix}-tempo-irsa-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = var.oidc_provider_arn }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${local.oidc_aud}" = "sts.amazonaws.com"
+          "${local.oidc_sub}" = "system:serviceaccount:monitoring:tempo"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "tempo" {
+  name = "${local.prefix}-tempo-policy"
+  role = aws_iam_role.tempo.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket",
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:GetObjectVersion"
+        ]
+        Resource = [
+          var.tempo_bucket_arn,
+          "${var.tempo_bucket_arn}/*"
+        ]
+      }
+    ]
+  })
+}
