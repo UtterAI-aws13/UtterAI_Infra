@@ -14,4 +14,4 @@ images:
   newTag: dev-73f6126
 - name: utterai-ai-gpu
   newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-gpu'
-  newTag: dev-73f6126
+  newTag: dev-59855c3
