@@ -7,6 +7,25 @@ resources:
 - "../../base"
 - deployment.yaml
 - hpa.yaml
+
+patches:
+  - path: patch-configmap.yaml
+    target:
+      kind: ConfigMap
+      name: utterai-api-config
+  - path: patch-serviceaccount.yaml
+    target:
+      kind: ServiceAccount
+      name: utterai-api-sa
+  - path: patch-external-secret.yaml
+    target:
+      kind: ExternalSecret
+      name: backend-api-external-secret
+  - path: patch-ingress.yaml
+    target:
+      kind: Ingress
+      name: utterai-api-ingress
+
 images:
 - name: utterai-backend
   newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend'

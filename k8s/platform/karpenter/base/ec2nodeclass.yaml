@@ -5,15 +5,15 @@ metadata:
 spec:
   amiSelectorTerms:
     - alias: al2023@latest
-  role: "utterai-prod-eks-node-role"
+  role: "PLACEHOLDER"
   subnetSelectorTerms:
     - tags:
-        karpenter.sh/discovery: "utterai-prod"
+        karpenter.sh/discovery: "PLACEHOLDER"
   securityGroupSelectorTerms:
     - tags:
-        karpenter.sh/discovery: "utterai-prod"
+        karpenter.sh/discovery: "PLACEHOLDER"
   tags:
-    karpenter.sh/discovery: "utterai-prod"
+    karpenter.sh/discovery: "PLACEHOLDER"
 ---
 apiVersion: karpenter.k8s.aws/v1
 kind: EC2NodeClass
@@ -22,13 +22,13 @@ metadata:
 spec:
   amiSelectorTerms:
     - alias: al2023@latest
-  role: "utterai-prod-eks-node-role"
+  role: "PLACEHOLDER"
   subnetSelectorTerms:
     - tags:
-        karpenter.sh/discovery: "utterai-prod"
+        karpenter.sh/discovery: "PLACEHOLDER"
   securityGroupSelectorTerms:
     - tags:
-        karpenter.sh/discovery: "utterai-prod"
+        karpenter.sh/discovery: "PLACEHOLDER"
   blockDeviceMappings:
     - deviceName: /dev/xvda
       ebs:
@@ -36,4 +36,4 @@ spec:
         volumeType: gp3
         deleteOnTermination: true
   tags:
-    karpenter.sh/discovery: "utterai-prod"
+    karpenter.sh/discovery: "PLACEHOLDER"

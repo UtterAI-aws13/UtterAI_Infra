@@ -149,18 +149,28 @@ resource "helm_release" "aws_load_balancer_controller" {
 
 # ── EKS Observability ────────────────────────────────────────────────────────
 
+resource "kubernetes_namespace" "monitoring" {
+  metadata {
+    name = "monitoring"
+  }
+}
+
 resource "helm_release" "kube_prometheus_stack" {
   name             = "kube-prometheus-stack"
   repository       = "https://prometheus-community.github.io/helm-charts"
   chart            = "kube-prometheus-stack"
   version          = "66.2.1"
   namespace        = "monitoring"
-  create_namespace = true
+  create_namespace = false
   cleanup_on_fail  = true
   wait             = true
   wait_for_jobs    = true
+  timeout          = 600
 
-  depends_on = [kubernetes_manifest.grafana_admin_credentials]
+  depends_on = [
+    kubernetes_manifest.grafana_admin_credentials,
+    kubernetes_namespace.monitoring,
+  ]
 
   values = [
     yamlencode({
@@ -418,7 +428,7 @@ resource "helm_release" "tempo" {
   chart            = "tempo"
   version          = var.tempo_chart_version
   namespace        = "monitoring"
-  create_namespace = true
+  create_namespace = false
   cleanup_on_fail  = true
   wait             = true
   wait_for_jobs    = true
@@ -493,7 +503,7 @@ resource "helm_release" "loki" {
   chart            = "loki"
   version          = "7.0.0"
   namespace        = "monitoring"
-  create_namespace = true
+  create_namespace = false
   cleanup_on_fail  = true
   wait             = true
   wait_for_jobs    = true
@@ -613,7 +623,7 @@ resource "helm_release" "promtail" {
   chart            = "promtail"
   version          = "6.17.1"
   namespace        = "monitoring"
-  create_namespace = true
+  create_namespace = false
   cleanup_on_fail  = true
   wait             = true
 
@@ -836,6 +846,7 @@ resource "kubernetes_manifest" "alertmanager_slack_webhook" {
 
   depends_on = [
     helm_release.external_secrets,
+    kubernetes_namespace.monitoring,
   ]
 }
 
@@ -880,6 +891,7 @@ resource "kubernetes_manifest" "grafana_admin_credentials" {
 
   depends_on = [
     helm_release.external_secrets,
+    kubernetes_namespace.monitoring,
   ]
 }
 

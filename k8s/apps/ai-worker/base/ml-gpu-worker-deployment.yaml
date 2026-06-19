@@ -54,15 +54,15 @@ spec:
         - name: AWS_REGION
           value: ap-northeast-2
         - name: APP_ENV
-          value: dev
+          value: PLACEHOLDER
         - name: SQS_GPU_INFERENCE_QUEUE_URL
-          value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-gpu-inference-queue
+          value: PLACEHOLDER
         - name: SQS_REPORT_ANALYSIS_QUEUE_URL
-          value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-report-analysis-queue
+          value: PLACEHOLDER
         - name: S3_BUCKET_AUDIO
-          value: utterai-dev-raw-audio
+          value: PLACEHOLDER
         - name: S3_BUCKET_REPORT
-          value: utterai-dev-reports
+          value: PLACEHOLDER
         - name: BE_DB_HOST
           valueFrom:
             secretKeyRef:

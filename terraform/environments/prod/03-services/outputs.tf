@@ -80,12 +80,6 @@ output "gpu_worker_secret_arn" {
   value = module.secrets.gpu_worker_secret_arn
 }
 
-# ── ECR ──────────────────────────────────────────────────────────────────────
-
-output "ecr_repository_urls" {
-  value = module.ecr.repository_urls
-}
-
 # ── IRSA ─────────────────────────────────────────────────────────────────────
 
 output "backend_api_role_arn" {
@@ -146,4 +140,15 @@ output "karpenter_role_arn" {
 
 output "keda_role_arn" {
   value = module.irsa.keda_role_arn
+}
+
+# ── EFS ──────────────────────────────────────────────────────────────────────
+
+output "efs_file_system_id" {
+  value       = module.efs.file_system_id
+  description = "StorageClass fileSystemId 파라미터에 사용"
+}
+
+output "efs_csi_driver_role_arn" {
+  value = module.irsa.efs_csi_driver_role_arn
 }

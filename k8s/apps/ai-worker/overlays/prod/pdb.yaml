@@ -1,0 +1,10 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: utterai-cpu-worker-pdb
+  namespace: utterai-ai-cpu
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: utterai-cpu-worker

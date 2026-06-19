@@ -15,8 +15,9 @@ spec:
         name: keda-aws-pod-identity
         kind: ClusterTriggerAuthentication
       metadata:
-        queueURL: "TODO_PROD_AUDIO_PREPROCESS_QUEUE_URL"
+        queueURL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-prod-audio-preprocess-queue"
         queueLength: "5"
+        activationQueueLength: "0"
         awsRegion: ap-northeast-2
         identityOwner: operator
     - type: aws-sqs-queue
@@ -24,7 +25,8 @@ spec:
         name: keda-aws-pod-identity
         kind: ClusterTriggerAuthentication
       metadata:
-        queueURL: "TODO_PROD_REPORT_ANALYSIS_QUEUE_URL"
+        queueURL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-prod-report-analysis-queue"
         queueLength: "5"
+        activationQueueLength: "0"
         awsRegion: ap-northeast-2
         identityOwner: operator

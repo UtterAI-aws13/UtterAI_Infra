@@ -4,25 +4,25 @@ metadata:
   name: utterai-ai-worker-config
   namespace: utterai-ai-api
 data:
-  APP_ENV: "dev"
-  LOG_LEVEL: "DEBUG"
+  APP_ENV: "PLACEHOLDER"
+  LOG_LEVEL: "PLACEHOLDER"
   AWS_REGION: "ap-northeast-2"
   BEDROCK_REGION: "ap-northeast-2"
   BEDROCK_REPORT_MODEL_ID: "global.anthropic.claude-haiku-4-5-20251001-v1:0"
-  S3_BUCKET_AUDIO: "utterai-dev-raw-audio"
-  S3_BUCKET_REPORT: "utterai-dev-reports"
-  S3_BUCKET_RAG: "utterai-dev-rag-ingest"
-  S3_BUCKET_TEMPLATE: "utterai-dev-template"
-  SQS_AUDIO_PREPROCESS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-audio-preprocess-queue"
-  SQS_GPU_INFERENCE_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-gpu-inference-queue"
-  SQS_REPORT_ANALYSIS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-report-analysis-queue"
-  SQS_RAG_INGEST_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-rag-ingest-queue"
+  S3_BUCKET_AUDIO: "PLACEHOLDER"
+  S3_BUCKET_REPORT: "PLACEHOLDER"
+  S3_BUCKET_RAG: "PLACEHOLDER"
+  S3_BUCKET_TEMPLATE: "PLACEHOLDER"
+  SQS_AUDIO_PREPROCESS_QUEUE_URL: "PLACEHOLDER"
+  SQS_GPU_INFERENCE_QUEUE_URL: "PLACEHOLDER"
+  SQS_REPORT_ANALYSIS_QUEUE_URL: "PLACEHOLDER"
+  SQS_RAG_INGEST_QUEUE_URL: "PLACEHOLDER"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.utterai-observability.svc.cluster.local:4318"
   OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
   OTEL_METRICS_EXPORTER: "otlp"
   OTEL_TRACES_EXPORTER: "otlp"
   OTEL_LOGS_EXPORTER: "none"
-  OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=dev,team=utterai"
+  OTEL_RESOURCE_ATTRIBUTES: "PLACEHOLDER"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -30,14 +30,14 @@ metadata:
   name: utterai-ai-worker-config
   namespace: utterai-ai-cpu
 data:
-  APP_ENV: "dev"
-  LOG_LEVEL: "DEBUG"
+  APP_ENV: "PLACEHOLDER"
+  LOG_LEVEL: "PLACEHOLDER"
   AWS_REGION: "ap-northeast-2"
   BEDROCK_REGION: "ap-northeast-2"
   BEDROCK_REPORT_MODEL_ID: "global.anthropic.claude-haiku-4-5-20251001-v1:0"
   S3_BUCKET_AUDIO: "utterai-dev-raw-audio"
   S3_BUCKET_REPORT: "utterai-dev-reports"
-  S3_BUCKET_RAG: "utterai-dev-documents"
+  S3_BUCKET_RAG: "PLACEHOLDER"
   S3_BUCKET_TEMPLATE: "utterai-dev-template"
   SQS_AUDIO_PREPROCESS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-audio-preprocess-queue"
   SQS_GPU_INFERENCE_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-gpu-inference-queue"
@@ -48,7 +48,7 @@ data:
   OTEL_METRICS_EXPORTER: "otlp"
   OTEL_TRACES_EXPORTER: "otlp"
   OTEL_LOGS_EXPORTER: "none"
-  OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=dev,team=utterai"
+  OTEL_RESOURCE_ATTRIBUTES: "PLACEHOLDER"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -56,14 +56,14 @@ metadata:
   name: utterai-ai-worker-config
   namespace: utterai-ai-gpu
 data:
-  APP_ENV: "dev"
-  LOG_LEVEL: "DEBUG"
+  APP_ENV: "PLACEHOLDER"
+  LOG_LEVEL: "PLACEHOLDER"
   AWS_REGION: "ap-northeast-2"
   BEDROCK_REGION: "ap-northeast-2"
   BEDROCK_REPORT_MODEL_ID: "global.anthropic.claude-haiku-4-5-20251001-v1:0"
   S3_BUCKET_AUDIO: "utterai-dev-raw-audio"
   S3_BUCKET_REPORT: "utterai-dev-reports"
-  S3_BUCKET_RAG: "utterai-dev-documents"
+  S3_BUCKET_RAG: "PLACEHOLDER"
   S3_BUCKET_TEMPLATE: "utterai-dev-template"
   SQS_AUDIO_PREPROCESS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-audio-preprocess-queue"
   SQS_GPU_INFERENCE_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-gpu-inference-queue"
@@ -74,7 +74,7 @@ data:
   OTEL_METRICS_EXPORTER: "otlp"
   OTEL_TRACES_EXPORTER: "otlp"
   OTEL_LOGS_EXPORTER: "none"
-  OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=dev,team=utterai"
+  OTEL_RESOURCE_ATTRIBUTES: "PLACEHOLDER"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -82,14 +82,14 @@ metadata:
   name: utterai-ai-worker-config
   namespace: utterai-batch
 data:
-  APP_ENV: "dev"
-  LOG_LEVEL: "DEBUG"
+  APP_ENV: "PLACEHOLDER"
+  LOG_LEVEL: "PLACEHOLDER"
   AWS_REGION: "ap-northeast-2"
   BEDROCK_REGION: "ap-northeast-2"
   BEDROCK_REPORT_MODEL_ID: "global.anthropic.claude-haiku-4-5-20251001-v1:0"
   S3_BUCKET_AUDIO: "utterai-dev-raw-audio"
   S3_BUCKET_REPORT: "utterai-dev-reports"
-  S3_BUCKET_RAG: "utterai-dev-documents"
+  S3_BUCKET_RAG: "PLACEHOLDER"
   S3_BUCKET_TEMPLATE: "utterai-dev-template"
   SQS_AUDIO_PREPROCESS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-audio-preprocess-queue"
   SQS_GPU_INFERENCE_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-gpu-inference-queue"
@@ -100,4 +100,4 @@ data:
   OTEL_METRICS_EXPORTER: "otlp"
   OTEL_TRACES_EXPORTER: "otlp"
   OTEL_LOGS_EXPORTER: "none"
-  OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=dev,team=utterai"
+  OTEL_RESOURCE_ATTRIBUTES: "PLACEHOLDER"

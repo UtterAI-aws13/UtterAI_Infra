@@ -34,11 +34,11 @@ spec:
         - name: AWS_REGION
           value: ap-northeast-2
         - name: APP_ENV
-          value: dev
+          value: PLACEHOLDER
         - name: SQS_RAG_INGEST_QUEUE_URL
-          value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-rag-ingest-queue
+          value: PLACEHOLDER
         - name: S3_BUCKET_RAG
-          value: utterai-dev-rag-ingest
+          value: PLACEHOLDER
         - name: DB_USER
           valueFrom:
             secretKeyRef:
