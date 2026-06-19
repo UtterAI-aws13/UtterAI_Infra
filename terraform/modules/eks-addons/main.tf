@@ -186,10 +186,19 @@ resource "helm_release" "kube_prometheus_stack" {
           defaultDashboardsTimezone = "Asia/Seoul"
           additionalDataSources = [
             {
+              uid       = "loki"
               name      = "Loki"
               type      = "loki"
               access    = "proxy"
               url       = "http://loki-gateway.monitoring.svc.cluster.local"
+              isDefault = false
+            },
+            {
+              uid       = "tempo"
+              name      = "Tempo"
+              type      = "tempo"
+              access    = "proxy"
+              url       = "http://tempo.monitoring.svc.cluster.local:3100"
               isDefault = false
             }
           ]
@@ -371,6 +380,92 @@ resource "helm_release" "kubecost" {
 
       diagnostics = {
         enabled = false
+      }
+    })
+  ]
+}
+
+# ── Grafana Tempo ────────────────────────────────────────────────────────────
+
+resource "helm_release" "tempo" {
+  name             = "tempo"
+  repository       = "https://grafana.github.io/helm-charts"
+  chart            = "tempo"
+  version          = var.tempo_chart_version
+  namespace        = "monitoring"
+  create_namespace = true
+  cleanup_on_fail  = true
+  wait             = true
+  wait_for_jobs    = true
+
+  depends_on = [helm_release.kube_prometheus_stack]
+
+  values = [
+    yamlencode({
+      fullnameOverride = "tempo"
+
+      serviceAccount = {
+        create = true
+        name   = "tempo"
+        annotations = {
+          "eks.amazonaws.com/role-arn" = var.tempo_irsa_role_arn
+        }
+      }
+
+      tempo = {
+        reportingEnabled = false
+        retention        = var.tempo_retention_period
+        resources = {
+          requests = {
+            cpu    = "100m"
+            memory = "256Mi"
+          }
+          limits = {
+            cpu    = "500m"
+            memory = "1Gi"
+          }
+        }
+        storage = {
+          trace = {
+            backend = "s3"
+            s3 = {
+              bucket   = var.tempo_s3_bucket_name
+              endpoint = "s3.${var.aws_region}.amazonaws.com"
+            }
+            wal = {
+              path = "/var/tempo/wal"
+            }
+          }
+        }
+        receivers = {
+          otlp = {
+            protocols = {
+              grpc = {
+                endpoint = "0.0.0.0:4317"
+              }
+              http = {
+                endpoint = "0.0.0.0:4318"
+              }
+            }
+          }
+        }
+      }
+
+      persistence = {
+        enabled = false
+      }
+
+      tempoQuery = {
+        enabled = false
+      }
+
+      service = {
+        type = "ClusterIP"
+      }
+
+      serviceMonitor = {
+        enabled  = true
+        interval = "60s"
       }
     })
   ]

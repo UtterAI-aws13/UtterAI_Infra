@@ -65,6 +65,9 @@ module "eks_addons" {
   loki_s3_bucket_name     = data.terraform_remote_state.services.outputs.loki_bucket_name
   loki_irsa_role_arn      = data.terraform_remote_state.services.outputs.loki_role_arn
   loki_retention_period   = "168h"
+  tempo_s3_bucket_name    = data.terraform_remote_state.services.outputs.tempo_bucket_name
+  tempo_irsa_role_arn     = data.terraform_remote_state.services.outputs.tempo_role_arn
+  tempo_retention_period  = "24h"
 }
 
 # ── ALB DNS 자동 조회 ─────────────────────────────────────────────────────────

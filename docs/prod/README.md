@@ -878,14 +878,14 @@ CMK(prod-aurora-kms-key) 키 정책 원칙:
 
 ## 12. CloudWatch / Prometheus / Loki / 모니터링 구성
 
-Prod 모니터링은 CloudWatch, Prometheus, Loki의 역할을 분리한다.
+Prod 모니터링은 CloudWatch, Prometheus, Loki, Tempo의 역할을 분리한다.
 
 | 수집 대상 | 저장 위치 | 시각화 |
 |---|---|---|
 | AWS 관리 지표(ALB, Aurora, Redis, SQS, CloudFront) | CloudWatch Metrics | CloudWatch Dashboard, Grafana CloudWatch datasource |
 | Kubernetes 지표(Node, Pod, kube-state-metrics, cAdvisor) | Prometheus TSDB | Grafana Prometheus datasource |
 | 애플리케이션 OTLP metrics | OpenTelemetry Collector → Prometheus scrape | Grafana Prometheus datasource |
-| 애플리케이션 trace | OpenTelemetry Collector → Tempo | Grafana Tempo datasource |
+| 애플리케이션 trace | OpenTelemetry Collector → Tempo → S3 (`utterai-prod-tempo`) | Grafana Tempo datasource |
 | 애플리케이션 / Kubernetes 로그 | Promtail → Loki → S3 (`utterai-prod-loki`) | Grafana Loki datasource |
 | AWS 서비스 / 감사 로그 | CloudWatch Logs | CloudWatch Logs Insights, Grafana CloudWatch datasource |
 
@@ -893,10 +893,12 @@ Prod 모니터링은 CloudWatch, Prometheus, Loki의 역할을 분리한다.
 
 애플리케이션 Pod stdout/stderr 로그는 CloudWatch Logs에 중복 적재하지 않고 Loki에 저장한다.
 Loki는 IRSA로 `utterai-prod-loki` S3 버킷에 접근하며, retention은 14일(`336h`)로 제한한다.
+분산 추적 데이터는 Tempo가 `utterai-prod-tempo` S3 버킷에 저장하며, retention은 3일(`72h`)로 제한한다.
 
 | 저장소 | 보존 기간 | 암호화 |
 |---|---|---|
 | `utterai-prod-loki` | 14일 | S3 SSE-S3 |
+| `utterai-prod-tempo` | 3일 | S3 SSE-S3 |
 | `/aws/rds/cluster/utterai-prod-aurora` | 30일 | AWS Managed Key (`aws/logs`) |
 | `/aws/elasticache/utterai-prod-redis` | 14일 | AWS Managed Key (`aws/logs`) |
 
@@ -932,7 +934,7 @@ CloudWatch 대시보드 `utterai-prod-overview`:
 
 ```text
 Collector: OpenTelemetry Collector (EKS 내 Deployment, utterai-observability namespace)
-Backend: Grafana Tempo (Shared Tooling Account에 위치)
+Trace backend: Tempo (monitoring namespace, S3 backend: utterai-prod-tempo)
 Sampling: 운영 중 10%, 에러 100%
 ```
 
@@ -957,6 +959,7 @@ Scrape 대상:
 Grafana 데이터 소스:
   - CloudWatch (메트릭 / 로그)
   - Prometheus (Kubernetes / 애플리케이션 metrics)
+  - Loki (애플리케이션 / Kubernetes logs)
   - Tempo (OpenTelemetry trace)
   - Aurora Performance Insights (DB 쿼리 분석)
 

@@ -162,6 +162,30 @@ variable "loki_retention_period" {
   description = "Loki log retention period. Use Go duration format such as 168h or 336h."
 }
 
+variable "tempo_chart_version" {
+  type        = string
+  default     = "1.19.0"
+  description = "Grafana Tempo Helm chart version."
+}
+
+variable "tempo_s3_bucket_name" {
+  type        = string
+  default     = ""
+  description = "S3 bucket name for Tempo trace storage."
+}
+
+variable "tempo_irsa_role_arn" {
+  type        = string
+  default     = ""
+  description = "IAM Role ARN for Tempo Service Account."
+}
+
+variable "tempo_retention_period" {
+  type        = string
+  default     = "24h"
+  description = "Tempo trace retention period. Use Go duration format such as 24h or 72h."
+}
+
 variable "cluster_autoscaler_enabled" {
   type        = bool
   default     = true
