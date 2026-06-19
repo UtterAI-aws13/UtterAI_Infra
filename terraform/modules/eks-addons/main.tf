@@ -1,6 +1,31 @@
 locals {
   alertmanager_receiver_name = var.alertmanager_slack_enabled ? "slack" : "null"
 
+  tempo_service_account_annotations = var.tempo_s3_bucket_name != "" && var.tempo_irsa_role_arn != "" ? {
+    "eks.amazonaws.com/role-arn" = var.tempo_irsa_role_arn
+  } : {}
+
+  tempo_trace_storage = jsondecode(
+    var.tempo_s3_bucket_name != "" ? jsonencode({
+      backend = "s3"
+      s3 = {
+        bucket   = var.tempo_s3_bucket_name
+        endpoint = "s3.${var.aws_region}.amazonaws.com"
+      }
+      wal = {
+        path = "/var/tempo/wal"
+      }
+      }) : jsonencode({
+      backend = "local"
+      local = {
+        path = "/var/tempo/traces"
+      }
+      wal = {
+        path = "/var/tempo/wal"
+      }
+    })
+  )
+
   alertmanager_config = {
     global = {
       resolve_timeout = "5m"
@@ -405,11 +430,9 @@ resource "helm_release" "tempo" {
       fullnameOverride = "tempo"
 
       serviceAccount = {
-        create = true
-        name   = "tempo"
-        annotations = {
-          "eks.amazonaws.com/role-arn" = var.tempo_irsa_role_arn
-        }
+        create      = true
+        name        = "tempo"
+        annotations = local.tempo_service_account_annotations
       }
 
       tempo = {
@@ -426,16 +449,7 @@ resource "helm_release" "tempo" {
           }
         }
         storage = {
-          trace = {
-            backend = "s3"
-            s3 = {
-              bucket   = var.tempo_s3_bucket_name
-              endpoint = "s3.${var.aws_region}.amazonaws.com"
-            }
-            wal = {
-              path = "/var/tempo/wal"
-            }
-          }
+          trace = local.tempo_trace_storage
         }
         receivers = {
           otlp = {

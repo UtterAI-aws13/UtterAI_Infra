@@ -8,7 +8,7 @@ kubecost_persistent_volume_enabled = true
 
 # CloudFront custom domain for the prod frontend.
 cloudfront_aliases     = ["app.utterai.org"]
-route53_hosted_zone_id = "ZXXXXXXXXXXXXX"
+route53_hosted_zone_id = "Z06102331M4SC2S9CO5RJ"
 
 # Optional: use an existing us-east-1 ACM certificate instead of creating one.
 # cloudfront_acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/..."
