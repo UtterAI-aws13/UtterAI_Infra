@@ -3,6 +3,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: utterai-cpu-worker
+  namespace: utterai-ai-cpu
 spec:
   template:
     spec:
@@ -28,6 +29,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: utterai-ml-gpu-worker
+  namespace: utterai-ai-gpu
 spec:
   template:
     spec:
@@ -49,6 +51,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: utterai-batch-worker
+  namespace: utterai-batch
 spec:
   template:
     spec:
