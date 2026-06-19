@@ -59,7 +59,6 @@ module "eks_addons" {
   karpenter_enabled          = true
   karpenter_irsa_role_arn    = data.terraform_remote_state.services.outputs.karpenter_role_arn
 
-  efs_csi_driver_irsa_role_arn = data.terraform_remote_state.services.outputs.efs_csi_driver_role_arn
 
   alertmanager_slack_enabled             = var.alertmanager_slack_enabled
   alertmanager_slack_channel             = var.alertmanager_slack_channel

@@ -148,13 +148,3 @@ output "keda_role_arn" {
   value = module.irsa.keda_role_arn
 }
 
-# ── EFS ──────────────────────────────────────────────────────────────────────
-
-output "efs_file_system_id" {
-  value       = module.efs.file_system_id
-  description = "StorageClass fileSystemId 파라미터에 사용"
-}
-
-output "efs_csi_driver_role_arn" {
-  value = module.irsa.efs_csi_driver_role_arn
-}
