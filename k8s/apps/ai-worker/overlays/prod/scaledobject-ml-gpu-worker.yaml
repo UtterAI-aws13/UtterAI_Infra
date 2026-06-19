@@ -22,6 +22,6 @@ spec:
       metadata:
         queueURL: "TODO_PROD_GPU_INFERENCE_QUEUE_URL"
         queueLength: "1"
-        activationQueueLength: "1"
+        activationQueueLength: "0"
         awsRegion: ap-northeast-2
         identityOwner: operator

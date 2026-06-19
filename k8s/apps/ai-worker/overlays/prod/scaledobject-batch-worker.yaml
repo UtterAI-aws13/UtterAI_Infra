@@ -17,6 +17,6 @@ spec:
       metadata:
         queueURL: "TODO_PROD_RAG_INGEST_QUEUE_URL"
         queueLength: "3"
-        activationQueueLength: "1"
+        activationQueueLength: "0"
         awsRegion: ap-northeast-2
         identityOwner: operator
