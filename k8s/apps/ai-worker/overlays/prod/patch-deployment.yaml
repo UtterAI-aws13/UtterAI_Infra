@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: utterai-ai-api
+  namespace: utterai-ai-api
 spec:
   replicas: 2
   template:
@@ -10,6 +11,15 @@ spec:
         runAsNonRoot: true
       containers:
         - name: ai-api
+          env:
+            - name: APP_ENV
+              value: prod
+            - name: SQS_AUDIO_PREPROCESS_QUEUE_URL
+              value: TODO_PROD_AUDIO_PREPROCESS_QUEUE_URL
+            - name: SQS_RAG_INGEST_QUEUE_URL
+              value: TODO_PROD_RAG_INGEST_QUEUE_URL
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: deployment.environment=prod,team=utterai
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -18,7 +28,8 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: utterai-ai-cpu-worker
+  name: utterai-cpu-worker
+  namespace: utterai-ai-cpu
 spec:
   replicas: 1
   template:
@@ -26,7 +37,22 @@ spec:
       securityContext:
         runAsNonRoot: true
       containers:
-        - name: cpu-worker
+        - name: worker
+          env:
+            - name: APP_ENV
+              value: prod
+            - name: SQS_AUDIO_PREPROCESS_QUEUE_URL
+              value: TODO_PROD_AUDIO_PREPROCESS_QUEUE_URL
+            - name: SQS_GPU_INFERENCE_QUEUE_URL
+              value: TODO_PROD_GPU_INFERENCE_QUEUE_URL
+            - name: SQS_REPORT_ANALYSIS_QUEUE_URL
+              value: TODO_PROD_REPORT_ANALYSIS_QUEUE_URL
+            - name: S3_BUCKET_REPORT
+              value: utterai-prod-reports
+            - name: S3_BUCKET_AUDIO
+              value: utterai-prod-raw-audio
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: deployment.environment=prod,team=utterai
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -35,6 +61,57 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: utterai-ai-ml-gpu-worker
+  name: utterai-ml-gpu-worker
+  namespace: utterai-ai-gpu
 spec:
   replicas: 1
+  template:
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: ml-gpu-worker
+          env:
+            - name: APP_ENV
+              value: prod
+            - name: SQS_GPU_INFERENCE_QUEUE_URL
+              value: TODO_PROD_GPU_INFERENCE_QUEUE_URL
+            - name: SQS_REPORT_ANALYSIS_QUEUE_URL
+              value: TODO_PROD_REPORT_ANALYSIS_QUEUE_URL
+            - name: S3_BUCKET_AUDIO
+              value: utterai-prod-raw-audio
+            - name: S3_BUCKET_REPORT
+              value: utterai-prod-reports
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: deployment.environment=prod,team=utterai
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: utterai-batch-worker
+  namespace: utterai-batch
+spec:
+  replicas: 1
+  template:
+    spec:
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: worker
+          env:
+            - name: APP_ENV
+              value: prod
+            - name: SQS_RAG_INGEST_QUEUE_URL
+              value: TODO_PROD_RAG_INGEST_QUEUE_URL
+            - name: S3_BUCKET_RAG
+              value: utterai-prod-documents
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: deployment.environment=prod,team=utterai
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]

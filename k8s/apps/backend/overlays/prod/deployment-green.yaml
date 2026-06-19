@@ -39,7 +39,7 @@ spec:
               color: green
       initContainers:
         - name: db-migrate
-          image: utterai-backend-green:dev-placeholder
+          image: utterai-backend-green:prod-placeholder
           command: ["alembic", "upgrade", "head"]
           envFrom:
             - configMapRef:
@@ -52,7 +52,7 @@ spec:
                   key: DB_PASSWORD
       containers:
         - name: api
-          image: utterai-backend-green:dev-placeholder
+          image: utterai-backend-green:prod-placeholder
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

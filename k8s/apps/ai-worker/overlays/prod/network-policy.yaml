@@ -1,83 +1,212 @@
 ---
-# 기본 차단: 모든 ingress/egress 거부 후 아래 정책으로 명시적 허용
+# AI API namespace 기본 차단
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: default-deny-all
-  namespace: utterai-prod-ai-worker
+  namespace: utterai-ai-api
 spec:
   podSelector: {}
   policyTypes:
-  - Ingress
-  - Egress
+    - Ingress
+    - Egress
 ---
-# backend (utterai-prod-api) → ai-api Pod (8080)
+# CPU worker namespace 기본 차단
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: utterai-ai-cpu
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# GPU worker namespace 기본 차단
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: utterai-ai-gpu
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# Batch worker namespace 기본 차단
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: utterai-batch
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# backend -> ai-api Pod 8080 ingress 허용
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-ingress-from-backend
-  namespace: utterai-prod-ai-worker
+  namespace: utterai-ai-api
 spec:
   podSelector:
     matchLabels:
       app: utterai-ai-api
   policyTypes:
-  - Ingress
+    - Ingress
   ingress:
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          app.kubernetes.io/component: backend
-    ports:
-    - port: 8080
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              app.kubernetes.io/component: backend
+      ports:
+        - port: 8080
 ---
-# Prometheus scrape (monitoring namespace → 8080)
+# Prometheus -> ai-api scrape 허용
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-ingress-prometheus
-  namespace: utterai-prod-ai-worker
+  namespace: utterai-ai-api
 spec:
   podSelector:
     matchLabels:
       app: utterai-ai-api
   policyTypes:
-  - Ingress
+    - Ingress
   ingress:
-  - from:
-    - namespaceSelector:
-        matchLabels:
-          kubernetes.io/metadata.name: monitoring
-    ports:
-    - port: 8080
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: 8080
 ---
-# DNS 조회 허용
+# AI API DNS egress 허용
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-egress-dns
-  namespace: utterai-prod-ai-worker
+  namespace: utterai-ai-api
 spec:
   podSelector: {}
   policyTypes:
-  - Egress
+    - Egress
   egress:
-  - ports:
-    - port: 53
-      protocol: UDP
-    - port: 53
-      protocol: TCP
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
 ---
-# AWS 서비스 (SQS, S3, Bedrock, Secrets Manager — 모두 VPC Endpoint HTTPS)
+# CPU worker DNS egress 허용
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-dns
+  namespace: utterai-ai-cpu
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+# GPU worker DNS egress 허용
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-dns
+  namespace: utterai-ai-gpu
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+# Batch worker DNS egress 허용
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-dns
+  namespace: utterai-batch
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+# AI API AWS service HTTPS egress 허용
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-egress-aws
-  namespace: utterai-prod-ai-worker
+  namespace: utterai-ai-api
 spec:
   podSelector: {}
   policyTypes:
-  - Egress
+    - Egress
   egress:
-  - ports:
-    - port: 443
+    - ports:
+        - port: 443
+---
+# CPU worker AWS service HTTPS egress 허용
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-aws
+  namespace: utterai-ai-cpu
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - port: 443
+---
+# GPU worker AWS service HTTPS egress 허용
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-aws
+  namespace: utterai-ai-gpu
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - port: 443
+---
+# Batch worker AWS service HTTPS egress 허용
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-aws
+  namespace: utterai-batch
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - ports:
+        - port: 443

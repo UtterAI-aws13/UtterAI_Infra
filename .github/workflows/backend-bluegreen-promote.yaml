@@ -149,6 +149,39 @@ jobs:
             end
 
             puts "active Service selector color: #{actual_color}"
+
+            deployment_name = "utterai-api-#{expected_color}"
+            deployment = YAML.load_stream(File.read("/tmp/backend-promote-rendered.yaml")).find do |doc|
+              doc.is_a?(Hash) &&
+                doc["kind"] == "Deployment" &&
+                doc.dig("metadata", "name") == deployment_name
+            end
+
+            unless deployment
+              warn "#{deployment_name} 렌더링 결과를 찾을 수 없습니다."
+              exit 1
+            end
+
+            containers = deployment.dig("spec", "template", "spec", "containers") || []
+            init_containers = deployment.dig("spec", "template", "spec", "initContainers") || []
+            images = (containers + init_containers).map { |container| container["image"] }.compact
+
+            if images.empty?
+              warn "#{deployment_name}에서 image를 찾을 수 없습니다."
+              exit 1
+            end
+
+            invalid_images = images.reject do |image|
+              image.include?(":prod-") && !image.include?("placeholder")
+            end
+
+            unless invalid_images.empty?
+              warn "promote 대상 #{deployment_name}에 prod image tag가 아닌 image가 있습니다: #{invalid_images.join(", ")}"
+              exit 1
+            end
+
+            puts "promote target images:"
+            images.each { |image| puts "- #{image}" }
           '
 
       - name: Create promote pull request
@@ -191,9 +224,4 @@ jobs:
 
           echo "Created PR: $PR_URL"
 
-          if [ "$TARGET_ENV" = "dev" ]; then
-            echo "dev promote PR은 필수 CI 통과 후 자동 merge되도록 설정합니다."
-            gh pr merge "$PR_URL" --auto --squash --delete-branch
-          else
-            echo "prod promote PR은 사람이 검토하고 merge해야 합니다."
-          fi
+          echo "prod promote PR은 사람이 검토하고 merge해야 합니다."

@@ -16,6 +16,9 @@ patches:
     target:
       kind: ConfigMap
       name: utterai-ai-worker-config
+  - path: patch-deployment.yaml
+  - path: patch-external-secret.yaml
+  - path: patch-serviceaccount.yaml
 
 # TODO: prod 배포 승인 이후 CD에서 prod-{short_sha} 또는 prod-v{semver}로 갱신합니다.
 images:
