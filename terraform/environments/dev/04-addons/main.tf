@@ -68,6 +68,8 @@ module "eks_addons" {
   tempo_s3_bucket_name    = data.terraform_remote_state.services.outputs.tempo_bucket_name
   tempo_irsa_role_arn     = data.terraform_remote_state.services.outputs.tempo_role_arn
   tempo_retention_period  = "24h"
+
+  efs_csi_driver_irsa_role_arn = data.terraform_remote_state.services.outputs.efs_csi_driver_role_arn
 }
 
 # ── ALB DNS 자동 조회 ─────────────────────────────────────────────────────────

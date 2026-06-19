@@ -569,6 +569,71 @@ resource "aws_iam_role_policy" "keda" {
   })
 }
 
+# ── EFS CSI Driver IRSA ──────────────────────────────────────────────────────
+
+resource "aws_iam_role" "efs_csi_driver" {
+  name = "${local.prefix}-efs-csi-driver-irsa-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = var.oidc_provider_arn }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${local.oidc_aud}" = "sts.amazonaws.com"
+          "${local.oidc_sub}" = "system:serviceaccount:kube-system:efs-csi-controller-sa"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "efs_csi_driver" {
+  name = "${local.prefix}-efs-csi-driver-policy"
+  role = aws_iam_role.efs_csi_driver.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "elasticfilesystem:DescribeAccessPoints",
+          "elasticfilesystem:DescribeFileSystems",
+          "elasticfilesystem:DescribeMountTargets",
+          "ec2:DescribeAvailabilityZones",
+        ]
+        Resource = ["*"]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "elasticfilesystem:CreateAccessPoint",
+          "elasticfilesystem:TagResource",
+        ]
+        Resource = ["*"]
+        Condition = {
+          StringLike = {
+            "aws:RequestTag/efs.csi.aws.com/cluster" = "true"
+          }
+        }
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["elasticfilesystem:DeleteAccessPoint"]
+        Resource = ["*"]
+        Condition = {
+          StringEquals = {
+            "aws:ResourceTag/efs.csi.aws.com/cluster" = "true"
+          }
+        }
+      },
+    ]
+  })
+}
+
 # ── Loki IRSA ─────────────────────────────────────────────────────────────────
 
 resource "aws_iam_role" "loki" {
