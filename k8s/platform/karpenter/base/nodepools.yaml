@@ -109,7 +109,8 @@ spec:
     consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: 30s
 ---
-# cpu-worker: 작업 빈도가 높아 Spot 중단 시 재처리 비용이 크므로 ON-DEMAND 고정
+# cpu-worker: SQS 기반 작업 → Spot 중단 시 visibility timeout으로 자동 재처리
+# 인스턴스 패밀리 4종으로 확장해 spot pool 확보
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
@@ -132,13 +133,13 @@ spec:
       requirements:
         - key: karpenter.sh/capacity-type
           operator: In
-          values: ["on-demand"]
+          values: ["spot", "on-demand"]
         - key: kubernetes.io/arch
           operator: In
           values: ["amd64"]
         - key: karpenter.k8s.aws/instance-family
           operator: In
-          values: ["m6i"]
+          values: ["m5", "m5a", "m6i", "m6a"]
         - key: karpenter.k8s.aws/instance-size
           operator: In
           values: ["xlarge"]
@@ -150,6 +151,7 @@ spec:
     consolidateAfter: 5m
 ---
 # batch-worker: RAG ingest는 중단 후 재시작 허용 가능한 작업 → Spot 우선
+# 실제 요청(1CPU/2Gi)에 xlarge 과잉 → large 추가, c6a 추가로 spot pool 확장
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
@@ -178,10 +180,10 @@ spec:
           values: ["amd64"]
         - key: karpenter.k8s.aws/instance-family
           operator: In
-          values: ["c5", "c6i", "m5", "m6i"]
+          values: ["c5", "c6i", "c6a", "m5", "m6i"]
         - key: karpenter.k8s.aws/instance-size
           operator: In
-          values: ["xlarge"]
+          values: ["large", "xlarge"]
   limits:
     cpu: "32"
     memory: "64Gi"
@@ -189,6 +191,8 @@ spec:
     consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: 30s
 ---
+# gpu: SQS 기반 추론 작업 → Spot 중단 시 재처리 가능
+# g4dn이 ap-northeast-2 spot 가용성 더 안정적, 2xlarge 추가로 pool 확보
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
@@ -214,7 +218,7 @@ spec:
       requirements:
         - key: karpenter.sh/capacity-type
           operator: In
-          values: ["on-demand"]
+          values: ["spot", "on-demand"]
         - key: kubernetes.io/arch
           operator: In
           values: ["amd64"]
@@ -223,7 +227,7 @@ spec:
           values: ["g4dn", "g5"]
         - key: karpenter.k8s.aws/instance-size
           operator: In
-          values: ["xlarge"]
+          values: ["xlarge", "2xlarge"]
   limits:
     cpu: "32"
     memory: "128Gi"

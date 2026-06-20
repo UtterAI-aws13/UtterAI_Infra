@@ -17,3 +17,11 @@ output "private_data_subnet_ids" {
 output "nat_gateway_id" {
   value = module.vpc.nat_gateway_id
 }
+
+output "pod_subnet_ids" {
+  value = module.vpc.pod_subnet_ids
+}
+
+output "pod_subnet_az_map" {
+  value = module.vpc.pod_subnet_az_map
+}

@@ -70,6 +70,39 @@ resource "aws_subnet" "private_data" {
   }
 }
 
+# ── Pod Subnets (Secondary CIDR) ─────────────────────────────────────────────
+# VPC에 100.64.0.0/16 secondary CIDR을 붙이고 파드 전용 서브넷을 AZ별로 생성.
+# 노드 IP(10.10.x.x)와 파드 IP(100.64.x.x)를 분리해 primary 서브넷 단편화를 방지.
+
+resource "aws_vpc_ipv4_cidr_block_association" "pod" {
+  count      = var.pod_cidr != null ? 1 : 0
+  vpc_id     = aws_vpc.this.id
+  cidr_block = var.pod_cidr
+}
+
+resource "aws_subnet" "pod" {
+  count = length(var.pod_subnet_cidrs)
+
+  vpc_id            = aws_vpc.this.id
+  cidr_block        = var.pod_subnet_cidrs[count.index]
+  availability_zone = var.azs[count.index]
+
+  depends_on = [aws_vpc_ipv4_cidr_block_association.pod]
+
+  tags = {
+    Name                                        = "${local.prefix}-pod-${var.azs[count.index]}"
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
+    "karpenter.sh/discovery"                    = var.cluster_name
+  }
+}
+
+resource "aws_route_table_association" "pod" {
+  count = length(var.pod_subnet_cidrs)
+
+  subnet_id      = aws_subnet.pod[count.index].id
+  route_table_id = aws_route_table.private_app.id
+}
+
 # ── NAT Gateway (dev: AZ 2a에 1개만) ─────────────────────────────────────────
 
 resource "aws_eip" "nat" {

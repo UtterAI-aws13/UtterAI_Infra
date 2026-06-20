@@ -16,7 +16,7 @@ resource "aws_sqs_queue" "audio_preprocess_dlq" {
 
 resource "aws_sqs_queue" "audio_preprocess" {
   name                       = "${local.prefix}-audio-preprocess-queue"
-  visibility_timeout_seconds = var.visibility_timeout_seconds
+  visibility_timeout_seconds = var.audio_preprocess_visibility_timeout_seconds
   message_retention_seconds  = var.message_retention_seconds
   max_message_size           = 262144
   sqs_managed_sse_enabled    = true
