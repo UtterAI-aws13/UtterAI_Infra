@@ -25,6 +25,28 @@ data "terraform_remote_state" "services" {
   }
 }
 
+# ── ENIConfig (Custom Networking) ────────────────────────────────────────────
+# CUSTOM_NETWORK_CFG=true 활성화 후 파드 ENI가 생성될 서브넷과 SG를 AZ별로 지정.
+# pod_subnet_az_map = { "ap-northeast-2a" = subnet-xxx, "ap-northeast-2c" = subnet-yyy }
+
+resource "kubernetes_manifest" "eniconfig" {
+  for_each = data.terraform_remote_state.network.outputs.pod_subnet_az_map
+
+  manifest = {
+    apiVersion = "crd.k8s.amazonaws.com/v1alpha1"
+    kind       = "ENIConfig"
+    metadata = {
+      name = each.key
+    }
+    spec = {
+      subnet = each.value
+      securityGroups = [
+        data.terraform_remote_state.eks.outputs.node_security_group_id,
+      ]
+    }
+  }
+}
+
 # ── EKS Add-ons ──────────────────────────────────────────────────────────────
 
 module "eks_addons" {

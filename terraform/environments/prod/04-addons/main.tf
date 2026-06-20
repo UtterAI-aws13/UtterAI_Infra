@@ -39,6 +39,26 @@ check "cloudfront_custom_domain_inputs" {
   }
 }
 
+# ── ENIConfig (Custom Networking) ────────────────────────────────────────────
+
+resource "kubernetes_manifest" "eniconfig" {
+  for_each = data.terraform_remote_state.network.outputs.pod_subnet_az_map
+
+  manifest = {
+    apiVersion = "crd.k8s.amazonaws.com/v1alpha1"
+    kind       = "ENIConfig"
+    metadata = {
+      name = each.key
+    }
+    spec = {
+      subnet = each.value
+      securityGroups = [
+        data.terraform_remote_state.eks.outputs.node_security_group_id,
+      ]
+    }
+  }
+}
+
 # ── EKS Add-ons ──────────────────────────────────────────────────────────────
 
 module "eks_addons" {

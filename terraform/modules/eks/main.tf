@@ -96,10 +96,14 @@ resource "aws_eks_addon" "vpc_cni" {
   addon_name    = "vpc-cni"
   addon_version = "v1.18.1-eksbuild.1"
 
+  resolve_conflicts_on_update = "OVERWRITE"
+
   configuration_values = jsonencode({
     env = {
-      ENABLE_PREFIX_DELEGATION = "true"
-      WARM_PREFIX_TARGET       = "1"
+      ENABLE_PREFIX_DELEGATION           = "true"
+      WARM_PREFIX_TARGET                 = "1"
+      AWS_VPC_K8S_CNI_CUSTOM_NETWORK_CFG = "true"
+      ENI_CONFIG_LABEL_DEF               = "topology.kubernetes.io/zone"
     }
     enableNetworkPolicy = "true"
   })

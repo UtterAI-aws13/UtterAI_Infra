@@ -11,6 +11,11 @@ variable "visibility_timeout_seconds" {
   default = 300
 }
 
+variable "audio_preprocess_visibility_timeout_seconds" {
+  type    = number
+  default = 900
+}
+
 variable "message_retention_seconds" {
   type    = number
   default = 345600 # 4일
