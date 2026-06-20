@@ -152,6 +152,14 @@ resource "aws_security_group" "node" {
     security_groups = [aws_eks_cluster.this.vpc_config[0].cluster_security_group_id]
   }
 
+  ingress {
+    description     = "All traffic from EKS cluster SG (managed node group pods via Custom Networking)"
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    security_groups = [aws_eks_cluster.this.vpc_config[0].cluster_security_group_id]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -163,6 +171,16 @@ resource "aws_security_group" "node" {
     Name                     = "${local.prefix}-eks-node-sg"
     "karpenter.sh/discovery" = var.cluster_name
   }
+}
+
+# Custom Networking에서 pod secondary ENI(node SG)가 managed node group primary ENI(cluster SG)와
+# 통신할 수 있도록 cluster SG에 node SG 허용 규칙 추가.
+# aws_security_group_rule을 사용해 EKS가 소유한 cluster SG에 규칙만 추가.
+resource "aws_vpc_security_group_ingress_rule" "cluster_from_node_sg" {
+  security_group_id            = aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
+  referenced_security_group_id = aws_security_group.node.id
+  ip_protocol                  = "-1"
+  description                  = "All traffic from node SG (Custom Networking pod secondary ENIs)"
 }
 
 # ── System Managed Node Group ─────────────────────────────────────────────────
