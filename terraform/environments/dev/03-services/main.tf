@@ -128,19 +128,6 @@ resource "aws_cloudwatch_event_target" "karpenter_spot_interruption" {
   arn  = aws_sqs_queue.karpenter_interruption.arn
 }
 
-# ── EFS ──────────────────────────────────────────────────────────────────────
-
-module "efs" {
-  source = "../../../modules/efs"
-
-  project_name = var.project_name
-  environment  = var.environment
-
-  vpc_id                 = data.terraform_remote_state.network.outputs.vpc_id
-  private_app_subnet_ids = data.terraform_remote_state.network.outputs.private_app_subnet_ids
-  node_security_group_id = data.terraform_remote_state.eks.outputs.node_security_group_id
-}
-
 # ── ECR ──────────────────────────────────────────────────────────────────────
 
 module "ecr" {

@@ -80,12 +80,6 @@ output "gpu_worker_secret_arn" {
   value = module.secrets.gpu_worker_secret_arn
 }
 
-# ── ECR ──────────────────────────────────────────────────────────────────────
-
-output "ecr_repository_urls" {
-  value = module.ecr.repository_urls
-}
-
 # ── IRSA ─────────────────────────────────────────────────────────────────────
 
 output "backend_api_role_arn" {
@@ -147,3 +141,4 @@ output "karpenter_role_arn" {
 output "keda_role_arn" {
   value = module.irsa.keda_role_arn
 }
+

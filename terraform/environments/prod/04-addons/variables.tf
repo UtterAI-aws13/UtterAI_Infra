@@ -72,3 +72,9 @@ variable "kubecost_persistent_volume_enabled" {
   default     = true
   description = "Enable Kubecost PVC storage in prod so cost data survives pod restarts."
 }
+
+variable "alb_dns_name" {
+  type        = string
+  default     = ""
+  description = "ALB DNS name for CloudFront origin. If empty, looked up automatically via data source (requires ALB to exist)."
+}

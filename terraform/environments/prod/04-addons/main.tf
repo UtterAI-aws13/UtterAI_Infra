@@ -29,6 +29,7 @@ locals {
   cloudfront_custom_domain_enabled = length(var.cloudfront_aliases) > 0
   create_cloudfront_certificate    = local.cloudfront_custom_domain_enabled && var.cloudfront_acm_certificate_arn == ""
   cloudfront_certificate_arn       = var.cloudfront_acm_certificate_arn != "" ? var.cloudfront_acm_certificate_arn : try(aws_acm_certificate_validation.cloudfront[0].certificate_arn, "")
+  alb_dns_name                     = var.alb_dns_name != "" ? var.alb_dns_name : data.aws_lb.api[0].dns_name
 }
 
 check "cloudfront_custom_domain_inputs" {
@@ -51,8 +52,13 @@ module "eks_addons" {
   cluster_autoscaler_irsa_role_arn = data.terraform_remote_state.services.outputs.cluster_autoscaler_role_arn
   eso_irsa_role_arn                = data.terraform_remote_state.services.outputs.eso_role_arn
   vpc_id                           = data.terraform_remote_state.network.outputs.vpc_id
-  keda_irsa_role_arn               = data.terraform_remote_state.services.outputs.keda_role_arn
-  karpenter_irsa_role_arn          = data.terraform_remote_state.services.outputs.karpenter_role_arn
+
+  cluster_autoscaler_enabled = false
+  keda_enabled               = true
+  keda_irsa_role_arn         = data.terraform_remote_state.services.outputs.keda_role_arn
+  karpenter_enabled          = true
+  karpenter_irsa_role_arn    = data.terraform_remote_state.services.outputs.karpenter_role_arn
+
 
   grafana_admin_credentials_enabled    = var.grafana_admin_credentials_enabled
   grafana_admin_secret_manager_name    = var.grafana_admin_secret_manager_name
@@ -76,6 +82,8 @@ module "eks_addons" {
 # ── ALB DNS 자동 조회 ─────────────────────────────────────────────────────────
 
 data "aws_lb" "api" {
+  count = var.alb_dns_name == "" ? 1 : 0
+
   tags = {
     "elbv2.k8s.aws/cluster" = data.terraform_remote_state.eks.outputs.cluster_name
     "ingress.k8s.aws/stack" = "utterai-prod"
@@ -132,7 +140,7 @@ module "cloudfront" {
   environment         = var.environment
   frontend_bucket_id  = data.terraform_remote_state.services.outputs.frontend_bucket_name
   frontend_bucket_arn = data.terraform_remote_state.services.outputs.frontend_bucket_arn
-  alb_dns_name        = data.aws_lb.api.dns_name
+  alb_dns_name        = local.alb_dns_name
   aliases             = local.cloudfront_custom_domain_enabled ? var.cloudfront_aliases : []
   acm_certificate_arn = local.cloudfront_custom_domain_enabled ? local.cloudfront_certificate_arn : ""
 }
