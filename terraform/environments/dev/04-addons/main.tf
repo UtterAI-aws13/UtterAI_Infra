@@ -67,12 +67,6 @@ module "eks_addons" {
   karpenter_enabled          = true
   karpenter_irsa_role_arn    = data.terraform_remote_state.services.outputs.karpenter_role_arn
 
-  alertmanager_slack_enabled             = var.alertmanager_slack_enabled
-  alertmanager_slack_channel             = var.alertmanager_slack_channel
-  alertmanager_slack_webhook_secret_name = var.alertmanager_slack_webhook_secret_name
-  alertmanager_slack_webhook_secret_key  = var.alertmanager_slack_webhook_secret_key
-  alertmanager_slack_secret_manager_name = var.alertmanager_slack_secret_manager_name
-
   grafana_admin_credentials_enabled    = var.grafana_admin_credentials_enabled
   grafana_admin_secret_manager_name    = var.grafana_admin_secret_manager_name
   grafana_admin_kubernetes_secret_name = var.grafana_admin_kubernetes_secret_name
