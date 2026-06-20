@@ -92,7 +92,6 @@ resource "aws_subnet" "pod" {
   tags = {
     Name                                        = "${local.prefix}-pod-${var.azs[count.index]}"
     "kubernetes.io/cluster/${var.cluster_name}" = "shared"
-    "karpenter.sh/discovery"                    = var.cluster_name
   }
 }
 
