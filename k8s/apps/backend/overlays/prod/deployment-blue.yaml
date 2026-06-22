@@ -37,6 +37,14 @@ spec:
             matchLabels:
               app: utterai-api
               color: blue
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: utterai-api
+                  color: blue
+              topologyKey: kubernetes.io/hostname
       initContainers:
         - name: db-migrate
           image: utterai-backend-blue:prod-placeholder
