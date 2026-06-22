@@ -16,10 +16,10 @@ resources:
 images:
 - name: utterai-backend-blue
   newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend'
-  newTag: prod-placeholder
+  newTag: prod-d77269c
 - name: utterai-backend-green
   newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend'
-  newTag: prod-placeholder
+  newTag: prod-d77269c
 patches:
 - path: patch-active-service.yaml
 - path: patch-configmap.yaml
