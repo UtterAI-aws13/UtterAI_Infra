@@ -27,4 +27,4 @@ patches:
 images:
 - name: utterai-backend
   newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend'
-  newTag: dev-6ed3c40
+  newTag: dev-657cab7
