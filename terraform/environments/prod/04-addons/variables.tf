@@ -69,8 +69,8 @@ variable "kubecost_enabled" {
 
 variable "kubecost_persistent_volume_enabled" {
   type        = bool
-  default     = true
-  description = "Enable Kubecost PVC storage in prod so cost data survives pod restarts."
+  default     = false
+  description = "Enable Kubecost PVC storage in prod. Keep false when Kubecost history is stored in S3."
 }
 
 variable "alb_dns_name" {
