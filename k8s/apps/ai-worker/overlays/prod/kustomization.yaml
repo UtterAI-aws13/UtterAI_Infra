@@ -1,29 +1,27 @@
+---
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-
 resources:
-  - namespace.yaml
-  - ../../base
-  - keda-trigger-auth.yaml
-  - scaledobject-cpu-worker.yaml
-  - scaledobject-ml-gpu-worker.yaml
-  - scaledobject-batch-worker.yaml
-  - network-policy.yaml
-  - pdb.yaml
-
+- namespace.yaml
+- "../../base"
+- keda-trigger-auth.yaml
+- scaledobject-cpu-worker.yaml
+- scaledobject-ml-gpu-worker.yaml
+- scaledobject-batch-worker.yaml
+- network-policy.yaml
+- pdb.yaml
 patches:
-  - path: patch-configmap.yaml
-    target:
-      kind: ConfigMap
-      name: utterai-ai-worker-config
-  - path: patch-deployment.yaml
-  - path: patch-external-secret.yaml
-  - path: patch-serviceaccount.yaml
-# TODO: prod 배포 승인 이후 CD에서 prod-{short_sha} 또는 prod-v{semver}로 갱신합니다.
+- path: patch-configmap.yaml
+  target:
+    kind: ConfigMap
+    name: utterai-ai-worker-config
+- path: patch-deployment.yaml
+- path: patch-external-secret.yaml
+- path: patch-serviceaccount.yaml
 images:
-  - name: utterai-ai-cpu
-    newName: 000000000000.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-cpu
-    newTag: prod-placeholder
-  - name: utterai-ai-gpu
-    newName: 000000000000.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-gpu
-    newTag: prod-placeholder
+- name: utterai-ai-cpu
+  newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-cpu'
+  newTag: prod-placeholder
+- name: utterai-ai-gpu
+  newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-gpu'
+  newTag: prod-placeholder

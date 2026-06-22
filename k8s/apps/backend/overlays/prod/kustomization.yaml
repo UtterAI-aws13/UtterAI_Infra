@@ -1,34 +1,30 @@
+---
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-
 namespace: utterai-prod-api
-
 resources:
-  - namespace.yaml
-  - ../../base
-  - deployment-blue.yaml
-  - deployment-green.yaml
-  - hpa-blue.yaml
-  - hpa-green.yaml
-  - service-blue.yaml
-  - service-green.yaml
-  - network-policy.yaml
-  - pdb.yaml
-
-# TODO: prod 배포 승인 이후 CD에서 prod-{short_sha} 또는 prod-v{semver}로 갱신합니다.
+- namespace.yaml
+- "../../base"
+- deployment-blue.yaml
+- deployment-green.yaml
+- hpa-blue.yaml
+- hpa-green.yaml
+- service-blue.yaml
+- service-green.yaml
+- network-policy.yaml
+- pdb.yaml
 images:
-  - name: utterai-backend-blue
-    newName: 000000000000.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend
-    newTag: prod-placeholder
-  - name: utterai-backend-green
-    newName: 000000000000.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend
-    newTag: prod-placeholder
-
+- name: utterai-backend-blue
+  newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend'
+  newTag: prod-placeholder
+- name: utterai-backend-green
+  newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend'
+  newTag: prod-placeholder
 patches:
-  - path: patch-active-service.yaml
-  - path: patch-configmap.yaml
-  - path: patch-deployment.yaml
-  - path: patch-external-secret.yaml
-  - path: patch-hpa.yaml
-  - path: patch-ingress.yaml
-  - path: patch-serviceaccount.yaml
+- path: patch-active-service.yaml
+- path: patch-configmap.yaml
+- path: patch-deployment.yaml
+- path: patch-external-secret.yaml
+- path: patch-hpa.yaml
+- path: patch-ingress.yaml
+- path: patch-serviceaccount.yaml
