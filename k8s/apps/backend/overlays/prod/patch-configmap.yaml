@@ -7,9 +7,9 @@ data:
   APP_NAME: "utterai-backend"
   API_PREFIX: "/api/v1"
   LOG_LEVEL: "INFO"
-  FRONTEND_ORIGIN: "https://utterai.com"
-  CORS_ALLOW_ORIGINS: "https://utterai.com"
-  CORS_ORIGINS: '["https://utterai.com"]'
+  FRONTEND_ORIGIN: "https://app.utterai.org"
+  CORS_ALLOW_ORIGINS: "https://app.utterai.org,https://utterai.com"
+  CORS_ORIGINS: '["https://app.utterai.org","https://utterai.com"]'
   DB_HOST: "utterai-prod-rds.c76womumyurf.ap-northeast-2.rds.amazonaws.com"
   DB_USER: "utterai_app"
   DB_PORT: "5432"
