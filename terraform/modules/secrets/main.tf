@@ -18,6 +18,16 @@ resource "aws_secretsmanager_secret" "ai_worker" {
   recovery_window_in_days = 0
 }
 
+# ── RAG Ingest Secret ─────────────────────────────────────────────────────────
+# Keys: DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME
+
+resource "aws_secretsmanager_secret" "rag_ingest" {
+  count = var.rag_ingest_secret_enabled ? 1 : 0
+
+  name                    = "${local.prefix}/rag-ingest-secret"
+  recovery_window_in_days = 0
+}
+
 # ── GPU Worker Secret ─────────────────────────────────────────────────────────
 # Keys: HF_TOKEN
 

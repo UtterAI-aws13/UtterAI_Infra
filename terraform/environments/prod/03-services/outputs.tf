@@ -76,6 +76,10 @@ output "ai_worker_secret_arn" {
   value = module.secrets.ai_worker_secret_arn
 }
 
+output "rag_ingest_secret_arn" {
+  value = module.secrets.rag_ingest_secret_arn
+}
+
 output "gpu_worker_secret_arn" {
   value = module.secrets.gpu_worker_secret_arn
 }

@@ -82,8 +82,9 @@ module "sqs" {
 module "secrets" {
   source = "../../../modules/secrets"
 
-  project_name = var.project_name
-  environment  = var.environment
+  project_name              = var.project_name
+  environment               = var.environment
+  rag_ingest_secret_enabled = true
 }
 
 # ── Karpenter Interruption Queue ─────────────────────────────────────────────
