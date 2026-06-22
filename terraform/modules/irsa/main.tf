@@ -118,6 +118,7 @@ resource "aws_iam_role_policy" "api" {
           "${var.reports_bucket_arn}/*",
           "${var.template_bucket_arn}/*",
           "${var.rag_ingest_bucket_arn}/*",
+          "${var.transcripts_bucket_arn}/*",
         ]
       },
       {
@@ -250,7 +251,7 @@ resource "aws_iam_role_policy" "ai_ml_gpu" {
       {
         Effect   = "Allow"
         Action   = ["s3:PutObject"]
-        Resource = ["${var.reports_bucket_arn}/*"]
+        Resource = ["${var.transcripts_bucket_arn}/*"]
       },
       {
         Effect   = "Allow"

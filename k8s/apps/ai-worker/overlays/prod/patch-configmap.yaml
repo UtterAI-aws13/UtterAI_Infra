@@ -12,6 +12,7 @@ data:
   S3_BUCKET_REPORT: "utterai-prod-reports"
   S3_BUCKET_RAG: "utterai-prod-rag-ingest"
   S3_BUCKET_TEMPLATE: "utterai-prod-template"
+  S3_BUCKET_TRANSCRIPT: "utterai-prod-transcripts"
   SQS_AUDIO_PREPROCESS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-prod-audio-preprocess-queue"
   SQS_GPU_INFERENCE_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-prod-gpu-inference-queue"
   SQS_REPORT_ANALYSIS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-prod-report-analysis-queue"

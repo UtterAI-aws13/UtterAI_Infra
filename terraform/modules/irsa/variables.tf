@@ -42,6 +42,10 @@ variable "reports_bucket_arn" {
   type = string
 }
 
+variable "transcripts_bucket_arn" {
+  type = string
+}
+
 variable "frontend_bucket_arn" {
   type = string
 }
