@@ -10,7 +10,7 @@
 2. [도메인 구성](#2-도메인-구성)
 3. [네트워크 구성](#3-네트워크-구성)
 4. [EKS 클러스터 구성](#4-eks-클러스터-구성)
-5. [Aurora PostgreSQL 구성](#5-aurora-postgresql-구성)
+5. [PostgreSQL 구성 및 Aurora 전환 계획](#5-postgresql-구성-및-aurora-전환-계획)
 6. [ElastiCache Redis 구성](#6-elasticache-redis-구성)
 7. [S3 버킷 구성](#7-s3-버킷-구성)
 8. [SQS 구성](#8-sqs-구성)
@@ -498,36 +498,63 @@ metadata:
 
 ---
 
-## 5. Aurora PostgreSQL 구성
+## 5. PostgreSQL 구성 및 Aurora 전환 계획
 
-### 5.1 기본 설정
+### 5.1 현재 적용 상태
+
+현재 prod는 Aurora가 아니라 단일 RDS PostgreSQL 인스턴스로 운영 중이다. Terraform state 기준 리소스는 `module.rds.aws_db_instance.this`이며, AWS 실물은 `utterai-prod-rds`이다.
 
 | 항목 | 값 |
 |---|---|
+| 인스턴스 식별자 | `utterai-prod-rds` |
+| 엔진 | PostgreSQL 16 |
+| 인스턴스 타입 | `db.r6g.large` |
+| Terraform 리소스 | `aws_db_instance` |
+| 배포 | Single-AZ (`MultiAZ=false`) |
+| 백업 보존 기간 | 7일 |
+| 자동 마이너 버전 업그레이드 | 활성화 |
+| 암호화 | `storage_encrypted=true` |
+| 비밀번호 관리 | `manage_master_user_password=true` |
+
+### 5.2 Aurora 전환 계획
+
+원래 prod DB는 Multi-AZ 고가용성과 빠른 장애 조치를 위해 Aurora PostgreSQL로 전환하는 것이 목표다. 현재 `terraform/modules/aurora` 모듈은 존재하지만 prod `03-services`에는 아직 연결되어 있지 않다.
+
+전환 목표 구성:
+
+| 항목 | 목표 값 |
+|---|---|
 | 클러스터 식별자 | `utterai-prod-aurora` |
 | 엔진 | Aurora PostgreSQL 16 |
-| Writer 인스턴스 타입 | `db.r6g.large` |
-| Reader 인스턴스 타입 | `db.r6g.large` |
-| 인스턴스 수 | Writer 1 + Reader 1 |
+| 인스턴스 수 | Writer 1 + Reader 1 이상 |
 | 배포 | Multi-AZ |
-| 백업 보존 기간 | 7일 |
-| 자동 마이너 버전 업그레이드 | 비활성화 |
-| 암호화 | KMS (prod-aurora-kms-key) |
-| Performance Insights | 활성화 |
-| Enhanced Monitoring | 활성화 (60초 간격) |
+| 접속 endpoint | Writer endpoint / Reader endpoint 분리 |
+| 장애 조치 | Aurora failover |
 
-### 5.2 접속 정보
+전환 작업 항목:
+
+- `modules/rds` 호출을 `modules/aurora` 호출로 교체
+- Aurora reader 인스턴스를 추가해 writer/reader를 서로 다른 AZ에 배치
+- 기존 `utterai-prod-rds` 데이터 이관 방식 결정: snapshot restore, logical dump/restore, 또는 DMS
+- backend/worker `DB_HOST`를 Aurora writer endpoint로 변경
+- RDS managed secret ARN 변경에 따른 ExternalSecret 참조 재검토
+- 전환 전 최종 스냅샷, 롤백 절차, 운영 중단 시간 또는 read-only window 확정
+
+단기 안정화가 우선이면 Aurora 전환 전에 현재 RDS에 `multi_az = true`를 적용하는 방안도 검토할 수 있다.
+
+### 5.3 접속 정보
 
 ```text
-Writer Endpoint: utterai-prod-aurora.cluster-xxxx.ap-northeast-2.rds.amazonaws.com
-Reader Endpoint: utterai-prod-aurora.cluster-ro-xxxx.ap-northeast-2.rds.amazonaws.com
+Current Endpoint: utterai-prod-rds.c76womumyurf.ap-northeast-2.rds.amazonaws.com
+Future Writer Endpoint: utterai-prod-aurora.cluster-xxxx.ap-northeast-2.rds.amazonaws.com
+Future Reader Endpoint: utterai-prod-aurora.cluster-ro-xxxx.ap-northeast-2.rds.amazonaws.com
 Port: 5432
 DB Name: utterai
 User: utterai_app
 Password: Secrets Manager에서 관리
 ```
 
-### 5.3 Connection 관리
+### 5.4 Connection 관리
 
 ```text
 SQLAlchemy Pool 설정:
@@ -536,11 +563,12 @@ SQLAlchemy Pool 설정:
 - 최대 Connection = Pod 수 × 30
 - Pod 10개일 경우 최대 300 Connection
 
-Aurora max_connections = db.r6g.large 기준 약 1500
+현재 RDS max_connections는 인스턴스 클래스 기준으로 산정
+Aurora 전환 후 max_connections = db.r6g.large 기준 약 1500
 Connection이 80%를 넘으면 RDS Proxy 도입 검토
 ```
 
-### 5.4 DB 마이그레이션 정책
+### 5.5 DB 마이그레이션 정책
 
 ```text
 - 운영 시간 외(새벽 2~4시) 마이그레이션 실행
