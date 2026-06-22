@@ -13,3 +13,7 @@ output "rag_ingest_secret_arn" {
 output "gpu_worker_secret_arn" {
   value = aws_secretsmanager_secret.gpu_worker.arn
 }
+
+output "collect_papers_secret_arn" {
+  value = aws_secretsmanager_secret.collect_papers.arn
+}

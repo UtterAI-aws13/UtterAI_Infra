@@ -126,6 +126,106 @@ resource "aws_cloudwatch_event_target" "karpenter_spot_interruption" {
   arn  = aws_sqs_queue.karpenter_interruption.arn
 }
 
+# ── Lambda: 논문 수집 (월 1회 자동 실행) ─────────────────────────────────────
+
+data "archive_file" "collect_papers" {
+  type        = "zip"
+  source_file = "${path.module}/../../../../../UtterAI_AI/app/lambda/collect_papers_handler.py"
+  output_path = "${path.module}/collect_papers_handler.zip"
+}
+
+resource "aws_iam_role" "collect_papers_lambda" {
+  name = "utterai-${var.environment}-collect-papers-lambda-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "collect_papers_basic" {
+  role       = aws_iam_role.collect_papers_lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "collect_papers_permissions" {
+  role = aws_iam_role.collect_papers_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "SecretsManager"
+        Effect   = "Allow"
+        Action   = "secretsmanager:GetSecretValue"
+        Resource = module.secrets.collect_papers_secret_arn
+      },
+      {
+        Sid      = "S3RagBucket"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject", "s3:PutObject"]
+        Resource = "${module.s3.rag_ingest_bucket_arn}/*"
+      },
+      {
+        Sid      = "SqsIngest"
+        Effect   = "Allow"
+        Action   = "sqs:SendMessage"
+        Resource = module.sqs.rag_ingest_queue_arn
+      },
+      {
+        Sid      = "Bedrock"
+        Effect   = "Allow"
+        Action   = "bedrock:InvokeModel"
+        Resource = "arn:aws:bedrock:${var.aws_region}::foundation-model/*"
+      },
+    ]
+  })
+}
+
+resource "aws_lambda_function" "collect_papers" {
+  function_name    = "utterai-${var.environment}-collect-papers"
+  role             = aws_iam_role.collect_papers_lambda.arn
+  filename         = data.archive_file.collect_papers.output_path
+  source_code_hash = data.archive_file.collect_papers.output_base64sha256
+  handler          = "collect_papers_handler.handler"
+  runtime          = "python3.12"
+  timeout          = 900
+
+  environment {
+    variables = {
+      SECRET_ID                = "utterai-${var.environment}/collect-papers-secret"
+      S3_BUCKET_RAG            = "utterai-${var.environment}-rag-ingest"
+      SQS_RAG_INGEST_QUEUE_URL = module.sqs.rag_ingest_queue_url
+      AWS_REGION_NAME          = var.aws_region
+      BEDROCK_REGION           = var.aws_region
+      PAPERS_LIMIT             = "20"
+    }
+  }
+}
+
+resource "aws_cloudwatch_event_rule" "collect_papers_monthly" {
+  name                = "utterai-${var.environment}-collect-papers-monthly"
+  description         = "월 1회 논문 수집 Lambda 트리거 (매월 1일 오전 9시 KST = UTC 00:00)"
+  schedule_expression = "cron(0 0 1 * ? *)"
+}
+
+resource "aws_cloudwatch_event_target" "collect_papers" {
+  rule = aws_cloudwatch_event_rule.collect_papers_monthly.name
+  arn  = aws_lambda_function.collect_papers.arn
+}
+
+resource "aws_lambda_permission" "collect_papers_eventbridge" {
+  statement_id  = "AllowEventBridgeInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.collect_papers.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.collect_papers_monthly.arn
+}
+
 # ── IRSA ─────────────────────────────────────────────────────────────────────
 
 module "irsa" {
