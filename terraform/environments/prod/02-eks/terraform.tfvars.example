@@ -1,0 +1,25 @@
+cluster_name       = "utterai-prod-eks"
+kubernetes_version = "1.31"
+
+system_node_instance_type = "t3.medium"
+system_node_desired_size  = 2
+system_node_min_size      = 2
+system_node_max_size      = 4
+
+api_node_instance_type = "t3.large"
+api_node_desired_size  = 2
+api_node_min_size      = 2
+api_node_max_size      = 6
+
+worker_node_instance_type = "m5.2xlarge"
+worker_node_disk_size     = 100
+
+gpu_node_desired_size = 1
+gpu_node_min_size     = 1
+
+# Keep workload managed node groups disabled after the Karpenter migration.
+# Without these values, the variable defaults are true and 02-eks can recreate
+# the old api/worker/gpu EKS managed node groups on a later apply.
+api_node_group_enabled    = false
+worker_node_group_enabled = false
+gpu_node_group_enabled    = false
