@@ -245,9 +245,9 @@ module "irsa" {
   reports_bucket_arn     = module.s3.reports_bucket_arn
   transcripts_bucket_arn = module.s3.transcripts_bucket_arn
   frontend_bucket_arn    = module.s3.frontend_bucket_arn
-  kubecost_bucket_arn   = module.s3.kubecost_bucket_arn
-  loki_bucket_arn       = module.s3.loki_bucket_arn
-  tempo_bucket_arn      = module.s3.tempo_bucket_arn
+  kubecost_bucket_arn    = module.s3.kubecost_bucket_arn
+  loki_bucket_arn        = module.s3.loki_bucket_arn
+  tempo_bucket_arn       = module.s3.tempo_bucket_arn
 
   audio_preprocess_queue_arn = module.sqs.audio_preprocess_queue_arn
   gpu_inference_queue_arn    = module.sqs.gpu_inference_queue_arn
