@@ -30,6 +30,7 @@ locals {
   create_cloudfront_certificate    = local.cloudfront_custom_domain_enabled && var.cloudfront_acm_certificate_arn == ""
   cloudfront_certificate_arn       = var.cloudfront_acm_certificate_arn != "" ? var.cloudfront_acm_certificate_arn : try(aws_acm_certificate_validation.cloudfront[0].certificate_arn, "")
   alb_dns_name                     = var.alb_dns_name != "" ? var.alb_dns_name : data.aws_lb.api[0].dns_name
+  pod_subnet_az_map                = try(data.terraform_remote_state.network.outputs.pod_subnet_az_map, {})
 }
 
 check "cloudfront_custom_domain_inputs" {
@@ -42,7 +43,7 @@ check "cloudfront_custom_domain_inputs" {
 # ── ENIConfig (Custom Networking) ────────────────────────────────────────────
 
 resource "kubernetes_manifest" "eniconfig" {
-  for_each = data.terraform_remote_state.network.outputs.pod_subnet_az_map
+  for_each = local.pod_subnet_az_map
 
   manifest = {
     apiVersion = "crd.k8s.amazonaws.com/v1alpha1"
