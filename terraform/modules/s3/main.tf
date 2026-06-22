@@ -2,13 +2,14 @@ locals {
   prefix = "${var.project_name}-${var.environment}"
 
   base_buckets = {
-    frontend   = "${local.prefix}-frontend"
-    raw_audio  = "${local.prefix}-raw-audio"
-    template   = "${local.prefix}-template"
-    rag_ingest = "${local.prefix}-rag-ingest"
-    reports    = "${local.prefix}-reports"
-    kubecost   = "${local.prefix}-kubecost"
-    loki       = "${local.prefix}-loki"
+    frontend    = "${local.prefix}-frontend"
+    raw_audio   = "${local.prefix}-raw-audio"
+    template    = "${local.prefix}-template"
+    rag_ingest  = "${local.prefix}-rag-ingest"
+    reports     = "${local.prefix}-reports"
+    transcripts = "${local.prefix}-transcripts"
+    kubecost    = "${local.prefix}-kubecost"
+    loki        = "${local.prefix}-loki"
   }
 
   tempo_bucket = var.tempo_bucket_enabled ? {
