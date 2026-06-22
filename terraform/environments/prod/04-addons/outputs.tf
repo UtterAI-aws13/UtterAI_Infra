@@ -63,3 +63,8 @@ output "grafana_admin_secret_manager_arn" {
 output "kubecost_release_name" {
   value = module.eks_addons.kubecost_release_name
 }
+
+output "alb_acm_certificate_arn" {
+  description = "ap-northeast-2 ACM 인증서 ARN — patch-ingress.yaml의 certificate-arn에 사용"
+  value       = aws_acm_certificate_validation.alb.certificate_arn
+}

@@ -35,3 +35,11 @@ resource "aws_secretsmanager_secret" "gpu_worker" {
   name                    = "${local.prefix}/gpu-worker-secret"
   recovery_window_in_days = 0
 }
+
+# ── Collect Papers Lambda Secret ──────────────────────────────────────────────
+# Keys: PUBMED_EMAIL, PUBMED_API_KEY, SEMANTIC_SCHOLAR_API_KEY
+
+resource "aws_secretsmanager_secret" "collect_papers" {
+  name                    = "${local.prefix}/collect-papers-secret"
+  recovery_window_in_days = 0
+}

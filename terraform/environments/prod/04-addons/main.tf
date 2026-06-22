@@ -117,8 +117,8 @@ resource "aws_acm_certificate" "cloudfront" {
   count = local.create_cloudfront_certificate ? 1 : 0
 
   provider                  = aws.us_east_1
-  domain_name               = var.cloudfront_aliases[0]
-  subject_alternative_names = slice(var.cloudfront_aliases, 1, length(var.cloudfront_aliases))
+  domain_name               = "*.utterai.org"
+  subject_alternative_names = ["utterai.org"]
   validation_method         = "DNS"
 
   lifecycle {
@@ -192,4 +192,39 @@ resource "aws_route53_record" "cloudfront_alias_aaaa" {
     zone_id                = module.cloudfront.distribution_hosted_zone_id
     evaluate_target_health = false
   }
+}
+
+# ── ALB ACM 인증서 (ap-northeast-2) ──────────────────────────────────────────
+
+resource "aws_acm_certificate" "alb" {
+  domain_name               = "api.utterai.org"
+  subject_alternative_names = ["*.utterai.org"]
+  validation_method         = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_route53_record" "alb_certificate_validation" {
+  for_each = {
+    for option in aws_acm_certificate.alb.domain_validation_options :
+    option.domain_name => {
+      name   = option.resource_record_name
+      record = option.resource_record_value
+      type   = option.resource_record_type
+    }
+  }
+
+  allow_overwrite = true
+  zone_id         = var.route53_hosted_zone_id
+  name            = each.value.name
+  type            = each.value.type
+  ttl             = 60
+  records         = [each.value.record]
+}
+
+resource "aws_acm_certificate_validation" "alb" {
+  certificate_arn         = aws_acm_certificate.alb.arn
+  validation_record_fqdns = [for record in aws_route53_record.alb_certificate_validation : record.fqdn]
 }

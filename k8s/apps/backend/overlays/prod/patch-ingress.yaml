@@ -4,11 +4,13 @@ metadata:
   name: utterai-api-ingress
   annotations:
     alb.ingress.kubernetes.io/group.name: utterai-prod
-    # TODO: prod ACM 인증서 ARN으로 교체합니다.
-    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-2:000000000000:certificate/TODO_PROD
+    # ALB ACM 인증서 ARN — Terraform 04-addons outputs.tf의 alb_acm_certificate_arn 참고
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-2:032886669461:certificate/ee72a793-6b79-4560-8f5e-7faf88aad699
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80,"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
 spec:
   rules:
-    - host: api.utterai.com
+    - host: api.utterai.org
       http:
         paths:
           - path: /

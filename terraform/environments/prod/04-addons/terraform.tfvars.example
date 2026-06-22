@@ -1,7 +1,9 @@
 grafana_admin_credentials_enabled = true
 
 kubecost_enabled                   = true
-kubecost_persistent_volume_enabled = true
+# Kubecost cost history is backed by the configured S3 object store.
+# Keep the chart PVC disabled unless an EBS StorageClass is intentionally used.
+kubecost_persistent_volume_enabled = false
 
 # CloudFront custom domain for the prod frontend.
 cloudfront_aliases     = ["app.utterai.org"]
