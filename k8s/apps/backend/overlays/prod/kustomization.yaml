@@ -19,7 +19,7 @@ images:
   newTag: prod-d77269c
 - name: utterai-backend-green
   newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend'
-  newTag: prod-d77269c
+  newTag: prod-93d95d1
 patches:
 - path: patch-active-service.yaml
 - path: patch-configmap.yaml
