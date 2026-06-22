@@ -117,8 +117,8 @@ resource "aws_acm_certificate" "cloudfront" {
   count = local.create_cloudfront_certificate ? 1 : 0
 
   provider                  = aws.us_east_1
-  domain_name               = var.cloudfront_aliases[0]
-  subject_alternative_names = slice(var.cloudfront_aliases, 1, length(var.cloudfront_aliases))
+  domain_name               = "*.utterai.org"
+  subject_alternative_names = ["utterai.org"]
   validation_method         = "DNS"
 
   lifecycle {

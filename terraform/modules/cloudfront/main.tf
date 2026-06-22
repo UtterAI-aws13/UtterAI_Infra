@@ -2,6 +2,31 @@ locals {
   prefix = "${var.project_name}-${var.environment}"
 }
 
+# www → app 리다이렉트 (viewer-request)
+resource "aws_cloudfront_function" "www_redirect" {
+  name    = "${local.prefix}-www-redirect"
+  runtime = "cloudfront-js-2.0"
+  publish = true
+  code    = <<-EOF
+    function handler(event) {
+      var request = event.request;
+      var host    = request.headers.host ? request.headers.host.value : '';
+
+      if (host === 'www.utterai.org') {
+        return {
+          statusCode: 301,
+          statusDescription: 'Moved Permanently',
+          headers: {
+            location: { value: 'https://app.utterai.org' + request.uri }
+          }
+        };
+      }
+
+      return request;
+    }
+  EOF
+}
+
 # CloudFront → ALB 구간은 HTTP only이므로 FastAPI의 307 redirect가 http:// 절대 URL로 생성됨.
 # viewer response에서 절대 URL을 상대 경로로 바꿔 브라우저가 CloudFront HTTPS URL로 따라가도록 함.
 resource "aws_cloudfront_function" "redirect_rewrite" {
@@ -56,7 +81,7 @@ resource "aws_cloudfront_distribution" "frontend" {
       custom_origin_config {
         http_port              = 80
         https_port             = 443
-        origin_protocol_policy = "http-only"
+        origin_protocol_policy = "https-only"
         origin_ssl_protocols   = ["TLSv1.2"]
       }
     }
@@ -79,6 +104,11 @@ resource "aws_cloudfront_distribution" "frontend" {
     min_ttl     = 0
     default_ttl = 3600
     max_ttl     = 86400
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.www_redirect.arn
+    }
   }
 
   # /api/* 요청을 ALB로 프록시 — alb_dns_name이 설정된 경우에만 생성
