@@ -5,7 +5,8 @@
 > Dev 보안 문서(`security-overview`, `security-gaps`, `security-hardening`)를 기반으로
 > Dev에서 허용한 것 중 Prod에서 강화해야 할 항목을 정리한다.
 >
-> **2026-06-16 적용 완료**: NetworkPolicy (AWS VPC CNI native), PodDisruptionBudget
+> **2026-06-16 적용 완료**: NetworkPolicy (AWS VPC CNI native), PodDisruptionBudget  
+> **2026-06-22 적용 확인**: ALB ACM 인증서, ArgoCD admin bcrypt 비밀번호, PSA 레이블, SecurityContext 기본값 (allowPrivilegeEscalation/capabilities.drop)
 
 ---
 
@@ -44,20 +45,20 @@
 | **SQS 암호화** | Managed SSE | CMK |
 | **Secrets Manager KMS** | AWS 기본 키 | CMK (`prod-secrets-kms-key`) |
 | **Secrets Manager 교체** | 없음 | DB 비밀번호 90일 자동 교체 |
-| **ALB HTTPS** | dev overlay에서 설정 예정 | HTTP→HTTPS 리다이렉트 + ACM ARN 주입 |
-| **ALB WAF 연결** | 없음 | `wafv2-acl-arn` annotation |
-| **Pod SecurityContext** | Prod overlay에 부분 적용 (`runAsNonRoot`, `allowPrivilegeEscalation: false`, `capabilities.drop` 있음) | `readOnlyRootFilesystem`, `seccompProfile` 추가 필요 / ml-gpu-worker는 securityContext 전체 누락 (§3-B) |
-| **readOnlyRootFilesystem** | 없음 | Prod overlay에 추가 예정 |
-| **seccompProfile** | 없음 | PSS restricted 강제로 자동 요건화 |
-| **PSA 레이블** | 없음 (`k8s-legacy/namespaces/`) | `k8s` prod overlay에 적용 완료 (`utterai-prod-api`: restricted, `utterai-prod-ai-worker`: baseline) |
-| **Kyverno** | 없음 | 설치 + ClusterPolicy 4종 |
-| **NetworkPolicy** | 없음 | ✅ AWS VPC CNI native NetworkPolicy 활성화 (`ENABLE_NETWORK_POLICY=true`) + 네임스페이스별 deny-all + 명시적 허용 정책 적용 완료 (2026-06-16) |
-| **ClusterSecretStore** | 클러스터 전체 공유 | 네임스페이스별 SecretStore 분리 |
-| **이미지 태그** | mutable tag 허용 | git SHA 고정 + Kyverno latest 차단 |
-| **ECR Immutability** | MUTABLE | IMMUTABLE |
-| **PodDisruptionBudget** | 없음 | ✅ backend blue/green `minAvailable: 1`, ai-api `minAvailable: 1` 적용 완료 (2026-06-16) |
-| **podAntiAffinity** | 없음 | backend api 다른 노드 분산 |
-| **ArgoCD 인증** | Helm 기본 admin (초기값) | bcrypt 비밀번호 주입 또는 Cognito SSO |
+| **ALB HTTPS** | dev overlay에서 설정 예정 | ✅ HTTP→HTTPS 리다이렉트 + ACM ARN 주입 완료 (2026-06-22 확인) |
+| **ALB WAF 연결** | 없음 | `wafv2-acl-arn` annotation — **미적용** |
+| **Pod SecurityContext** | Prod overlay에 부분 적용 | ✅ `allowPrivilegeEscalation: false`, `capabilities.drop: ALL` 전 워크로드 적용 / `runAsNonRoot`, `readOnlyRootFilesystem`, `seccompProfile` **미적용** (§3-B) |
+| **readOnlyRootFilesystem** | 없음 | **미적용** — Prod overlay에 추가 필요 |
+| **seccompProfile** | 없음 | **미적용** — `enforce: restricted` 네임스페이스에서 신규 배포 시 rejection 위험 |
+| **PSA 레이블** | 없음 | ✅ 적용 완료 — `utterai-prod-api`: enforce restricted / `utterai-ai-*`: enforce baseline (2026-06-22 확인) |
+| **Kyverno** | 없음 | 미설치 — ClusterPolicy 4종 설치 예정 |
+| **NetworkPolicy** | 없음 | ✅ AWS VPC CNI native NetworkPolicy 활성화 + 네임스페이스별 deny-all + 명시적 허용 정책 적용 완료 (2026-06-16) |
+| **ClusterSecretStore** | 클러스터 전체 공유 | **미적용** — 여전히 ClusterSecretStore 단일 사용 중. 네임스페이스별 SecretStore 분리 필요 |
+| **이미지 태그** | mutable tag 허용 | **미적용** — git SHA 고정 + Kyverno latest 차단 예정 |
+| **ECR Immutability** | MUTABLE | **미적용** — 3개 레포 모두 MUTABLE 상태 |
+| **PodDisruptionBudget** | 없음 | ✅ backend blue/green `minAvailable: 1`, cpu-worker `minAvailable: 1` 적용 완료 (2026-06-16) |
+| **podAntiAffinity** | 없음 | **미적용** — backend api 다른 노드 분산 예정 |
+| **ArgoCD 인증** | Helm 기본 admin (초기값) | ✅ bcrypt 비밀번호 주입 완료 (2026-06-22 확인) |
 | **배포 방식** | envsubst + 수동 스크립트 | Kustomize + ArgoCD GitOps |
 | **Cognito MFA** | 없음 | TOTP 지원 + 고급 보안 |
 | **CloudWatch 알람** | 없음 | 10종 알람 + Discord 연결 |
@@ -362,33 +363,37 @@ labels:
 
 ## 4. 우선순위별 TODO 목록
 
-### 적용 완료 (2026-06-16)
+### 적용 완료
 
-| 항목 | 파일 |
-|------|------|
-| NetworkPolicy — AWS VPC CNI native (`ENABLE_NETWORK_POLICY=true`), 네임스페이스별 deny-all + 허용 정책 | `terraform/modules/eks/main.tf`, `k8s/apps/*/overlays/prod/network-policy.yaml` |
-| PodDisruptionBudget — backend blue/green `minAvailable: 1`, ai-api `minAvailable: 1` | `k8s/apps/*/overlays/prod/pdb.yaml` |
+| 항목 | 확인일 | 파일 |
+|------|--------|------|
+| NetworkPolicy — 네임스페이스별 deny-all + 명시적 허용 정책 | 2026-06-16 | `terraform/modules/eks/main.tf`, `k8s/apps/*/overlays/prod/network-policy.yaml` |
+| PodDisruptionBudget — backend blue/green + cpu-worker `minAvailable: 1` | 2026-06-16 | `k8s/apps/*/overlays/prod/pdb.yaml` |
+| ALB ACM 인증서 ARN 주입 | 2026-06-22 | `k8s/apps/backend/overlays/prod/patch-ingress.yaml` |
+| ArgoCD admin bcrypt 비밀번호 주입 | 2026-06-22 | `terraform/modules/eks-addons/main.tf` |
+| PSA 레이블 — `utterai-prod-api`: restricted / `utterai-ai-*`: baseline | 2026-06-22 | `k8s/apps/*/overlays/prod/namespace.yaml` |
+| SecurityContext 기본값 — `allowPrivilegeEscalation: false`, `capabilities.drop: ALL` 전 워크로드 | 2026-06-22 | `k8s/apps/*/overlays/prod/patch-deployment.yaml` |
 
-### Prod 배포 불가 — 반드시 완료 후 배포
+### K8s 미적용 — 우선순위 순
+
+| # | 항목 | 비고 |
+|---|------|------|
+| 1 | `seccompProfile: RuntimeDefault` 추가 | `enforce: restricted` 네임스페이스에서 신규 배포 시 rejection 위험 |
+| 2 | `runAsNonRoot: true` container-level 명시 | 현재 pod-level 미확인, 명시적 선언 필요 |
+| 3 | WAF 연결 (ALB + CloudFront) | WAF WebACL 미생성 상태 |
+| 4 | `readOnlyRootFilesystem: true` + `/tmp` emptyDir | cpu/gpu-worker는 HF_HOME `/tmp` 마운트 병행 필요 |
+| 5 | ECR imageTagMutability IMMUTABLE | 3개 레포 모두 MUTABLE |
+| 6 | Per-Namespace SecretStore 분리 | 현재 ClusterSecretStore 단일 사용 중 |
+| 7 | podAntiAffinity — backend api 다중 노드 분산 | — |
+
+### Terraform 미적용 — 우선순위 순 (K8s 외)
 
 | # | 항목 | 파일 |
 |---|------|------|
-| 1 | ALB ACM 인증서 ARN 주입 | `k8s/apps/backend/overlays/prod/patch-ingress.yaml` |
-| 2 | EKS etcd KMS 봉투 암호화 | `terraform/environments/prod/02-eks/main.tf` (신규) |
-| 3 | Per-Namespace SecretStore 생성 | `k8s/apps/*/overlays/prod/` (신규) |
-| 4 | ArgoCD admin 비밀번호 관리 | `terraform/modules/eks-addons/main.tf` |
-| 5 | WAF 연결 (ALB + CloudFront) | `terraform/modules/waf/` (신규 모듈) |
-| 6 | ml-gpu-worker securityContext 추가 | `k8s/apps/ai-worker/overlays/prod/patch-deployment.yaml` |
-
-### 조기 적용 권장
-
-| # | 항목 | 파일 |
-|---|------|------|
-| 7 | VPC Flow Logs 활성화 | `terraform/environments/prod/01-network/` (신규) |
-| 8 | readOnlyRootFilesystem + seccompProfile 추가 | `k8s/apps/*/overlays/prod/patch-deployment.yaml` |
-| 9 | ECR imageTagMutability IMMUTABLE 설정 | `terraform/modules/ecr/main.tf` |
-| 10 | Redis tfstate 토큰 노출 해소 (Terraform 1.10+) | `terraform/modules/redis/main.tf` |
-| 11 | Redis Prod: num_cache_nodes=2, multi-AZ, Prod CMK | `terraform/environments/prod/03-services/main.tf` (신규) |
+| 1 | EKS etcd KMS 봉투 암호화 | `terraform/environments/prod/02-eks/main.tf` (신규) |
+| 2 | VPC Flow Logs 활성화 | `terraform/environments/prod/01-network/` (신규) |
+| 3 | Redis tfstate 토큰 노출 해소 (Terraform 1.10+) | `terraform/modules/redis/main.tf` |
+| 4 | Redis Prod: num_cache_nodes=2, multi-AZ, Prod CMK | `terraform/environments/prod/03-services/main.tf` |
 
 ---
 
