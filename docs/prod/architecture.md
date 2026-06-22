@@ -271,6 +271,9 @@ State Lock: S3 Native Locking (Terraform 1.10+)
 
 ### 5.1 RDS PostgreSQL
 
+> 현재 prod는 Aurora가 아니라 단일 RDS PostgreSQL 인스턴스(`aws_db_instance`)로 운영 중이다.
+> Multi-AZ/Aurora 전환은 아직 적용되지 않았으며, 별도 마이그레이션 작업으로 진행해야 한다.
+
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │  RDS Instance: utterai-prod-rds                                      │
@@ -303,6 +306,21 @@ State Lock: S3 Native Locking (Terraform 1.10+)
 │  접근 허용: node-sg · cluster-sg (포트 5432)                         │
 └──────────────────────────────────────────────────────────────────────┘
 ```
+
+#### Aurora 전환 계획
+
+Prod DB는 원래 Multi-AZ 고가용성과 장애 조치 시간을 줄이기 위해 Aurora PostgreSQL로 전환하는 것이 목표였다. 현재 repo에는 `terraform/modules/aurora` 모듈이 존재하지만, prod `03-services`에서는 아직 `modules/rds`를 사용하고 있다.
+
+전환 시 필요한 작업:
+
+- `terraform/environments/prod/03-services`의 DB 모듈을 `modules/rds`에서 `modules/aurora`로 교체
+- Aurora writer 1개와 reader 1개 이상을 서로 다른 AZ에 배치
+- `utterai-prod-rds`의 데이터 이관 방식을 결정: snapshot restore, logical dump/restore, 또는 DMS
+- backend/worker `DB_HOST`를 Aurora writer endpoint로 변경
+- RDS managed secret ARN 변경에 따른 ExternalSecret 참조 재검토
+- 전환 전 최종 스냅샷, 롤백 절차, 애플리케이션 중단 시간 또는 read-only window 확정
+
+단기 안정화가 우선이면 Aurora 전환 전 현재 RDS에 `multi_az = true`를 적용하는 방안도 검토할 수 있다. 이 경우 구조 변경은 작지만 Aurora reader endpoint, Global DB, read scaling 이점은 제공하지 않는다.
 
 ### 5.2 ElastiCache Redis
 
