@@ -1,836 +1,718 @@
 # UtterAI Prod 아키텍처
 
-> AWS ap-northeast-2 (Seoul Primary) · EKS 1.31 · Terraform 4-Layer State
+> AWS ap-northeast-2 (Seoul) · EKS 1.31 · Terraform 4-Layer State
 
 ---
 
 ## 목차
 
 1. [전체 아키텍처 개요](#1-전체-아키텍처-개요)
-2. [AWS 계정 구조](#2-aws-계정-구조)
+2. [Terraform 레이어 구조](#2-terraform-레이어-구조)
 3. [네트워크 아키텍처](#3-네트워크-아키텍처)
-4. [트래픽 흐름](#4-트래픽-흐름)
-5. [EKS 클러스터 아키텍처](#5-eks-클러스터-아키텍처)
-6. [AI 분석 파이프라인](#6-ai-분석-파이프라인)
-7. [자동 스케일링 구조](#7-자동-스케일링-구조)
-8. [데이터 레이어](#8-데이터-레이어)
-9. [보안 아키텍처](#9-보안-아키텍처)
-10. [CI/CD 파이프라인](#10-cicd-파이프라인)
-11. [DR 아키텍처](#11-dr-아키텍처)
-12. [모니터링 아키텍처](#12-모니터링-아키텍처)
+4. [EKS 클러스터](#4-eks-클러스터)
+5. [데이터 레이어](#5-데이터-레이어)
+6. [메시지 큐 (SQS)](#6-메시지-큐-sqs)
+7. [스토리지 (S3)](#7-스토리지-s3)
+8. [Helm Addon 스택](#8-helm-addon-스택)
+9. [CloudFront · ALB · 트래픽 흐름](#9-cloudfront--alb--트래픽-흐름)
+10. [보안 (IAM / IRSA / Secrets)](#10-보안-iam--irsa--secrets)
+11. [모니터링 스택](#11-모니터링-스택)
 
 ---
 
 ## 1. 전체 아키텍처 개요
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         INTERNET                                        │
-└──────────────┬──────────────────────────────┬───────────────────────────┘
-               │  utterai.com                 │  api.utterai.com
-               ▼                              ▼
-         ┌───────────┐                  ┌───────────┐
-         │  Route 53 │                  │  Route 53 │
-         │  (Alias)  │                  │  (Alias)  │
-         └─────┬─────┘                  └─────┬─────┘
-               │                              │
-               ▼                              ▼
-     ┌─────────────────┐         ┌────────────────────────┐
-     │   CloudFront    │         │  WAF WebACL (ALB 부착) │
-     │  (OAC, HTTPS)   │         │  OWASP / Rate-Limit    │
-     └────────┬────────┘         └────────────┬───────────┘
-              │                               │
-              ▼                               ▼
-   ┌──────────────────┐         ┌─────────────────────────┐
-   │  S3 Static       │         │  ALB Ingress            │
-   │  Frontend        │         │  (internet-facing)      │
-   │  (utterai-prod-  │         │  Public Subnet 3개      │
-   │   frontend)      │         └────────────┬────────────┘
-   └──────────────────┘                      │
-                                             │
-┌────────────────────────────────────────────▼────────────────────────┐
-│                    EKS Cluster (utterai-prod-eks)                       │
-│                                                                         │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────────┐  │
-│  │  utterai-api     │  │  utterai-ai-api  │  │  utterai-ai-cpu      │  │
-│  │  Backend API     │  │  Internal AI API │  │  CPU Worker          │  │
-│  │  (HPA: 3~10)     │  │  (SQS producer)  │  │  (KEDA + Karpenter)  │  │
-│  └────────┬─────────┘  └────────┬─────────┘  └──────────┬───────────┘  │
-│           │                     │                        │              │
-│  ┌────────▼─────────────────────▼──────────┐  ┌─────────▼───────────┐  │
-│  │  utterai-ai-gpu                         │  │  utterai-batch      │  │
-│  │  GPU Worker (KEDA + Karpenter)          │  │  Batch Worker       │  │
-│  └─────────────────────────────────────────┘  └─────────────────────┘  │
-│                                                                         │
-│  ┌─────────────────────────────────────────────────────────────────┐    │
-│  │  utterai-observability  (OTel Collector DaemonSet)              │    │
-│  └─────────────────────────────────────────────────────────────────┘    │
-└───────────┬───────────────┬────────────────┬───────────────┬────────────┘
-            │               │                │               │
-    ┌───────▼──────┐ ┌──────▼──────┐ ┌──────▼──────┐ ┌─────▼──────────┐
-    │   Aurora     │ │    Redis    │ │     S3      │ │  SQS Queues    │
-    │ PostgreSQL   │ │  (Cluster)  │ │  (6 Bucket) │ │  (4 Queues)    │
-    │ (Multi-AZ)   │ │  (Multi-AZ) │ │             │ │                │
-    └──────────────┘ └─────────────┘ └─────────────┘ └────────────────┘
+                           INTERNET
+                               │
+              ┌────────────────┴────────────────┐
+              │                                 │
+              ▼                                 ▼
+     app.utterai.org                    API 요청
+     Route 53 → CloudFront         Route 53 → ALB
+              │                                 │
+              ▼                                 ▼
+     S3 utterai-prod-frontend        EKS utterai-prod-eks
+     (정적 프론트엔드)                   (API / Worker Pods)
+                                               │
+                        ┌──────────────────────┼────────────────┐
+                        │                      │                │
+                        ▼                      ▼                ▼
+                utterai-prod-rds   utterai-prod-redis   SQS Queues (4개)
+                (PostgreSQL 16.9)   (Redis 7.1, 2-node)
+                        │                                       │
+                        └───────────── S3 Buckets (8개) ────────┘
 ```
 
 ---
 
-## 2. AWS 계정 구조
+## 2. Terraform 레이어 구조
 
 ```
-┌──────────────────────┐   ┌──────────────────────┐   ┌──────────────────────┐
-│    Dev Account       │   │  Shared Tooling       │   │    Prod Account      │
-│                      │   │  Account              │   │                      │
-│  utterai-dev-vpc     │   │  GitHub Actions       │   │  utterai-prod-vpc    │
-│  utterai-dev-eks     │   │  Amazon ECR           │   │  utterai-prod-eks    │
-│  Aurora (dev)        │   │  Argo CD              │   │  Aurora (prod)       │
-│  Redis (dev)         │   │  Terraform State      │   │  Redis (prod)        │
-│  SQS (dev)           │   │  CloudWatch Sink      │   │  SQS (prod)          │
-│  Cognito (dev)       │   │  Grafana              │   │  Cognito (prod)      │
-└──────────────────────┘   └──────────┬───────────┘   └──────────┬───────────┘
-                                      │  Cross-Account              │
-                                      │  AssumeRole                 │
-                                      └────────────────────────────►│
-                                                                     │
-                                                       Tokyo DR (ap-northeast-1)
-                                                       ┌─────────────▼──────────┐
-                                                       │  Standby EKS           │
-                                                       │  Aurora Global DB      │
-                                                       │  S3 CRR Replica        │
-                                                       │  ECR Mirror            │
-                                                       └────────────────────────┘
-```
+terraform/environments/prod/
+│
+├── 01-network/   VPC · 서브넷 · NAT GW · VPC Endpoint · 보안그룹
+│   State Key: prod/network/terraform.tfstate
+│
+├── 02-eks/       EKS 클러스터 · Node Group · OIDC Provider · EKS Addon
+│   State Key: prod/platform/terraform.tfstate
+│   Depends on: 01-network (vpc_id, subnet_ids)
+│
+├── 03-services/  RDS · Redis · S3 · SQS · Secrets · IRSA
+│                 Karpenter Interruption Queue
+│   State Key: prod/services/terraform.tfstate
+│   Depends on: 01-network, 02-eks
+│
+└── 04-addons/    Helm 릴리스 전체 (LBC · KEDA · Karpenter · Monitoring …)
+                  ENIConfig (Custom Networking) · CloudFront · Route53
+    State Key: prod/addons/terraform.tfstate
+    Depends on: 01-network, 02-eks, 03-services
 
-**계정 분리 이유**
-- CI/CD 도구(GitHub Actions, Argo CD) 침해 시 Prod 데이터 직접 접근 불가
-- Dev / Prod는 AWS 계정 경계로 완전히 격리
-- Shared Tooling Account 1개가 두 환경을 공통 관리 → 운영 효율화
+State Backend: S3 utterai-prod-terraform-state (ap-northeast-2)
+State Lock: S3 Native Locking (Terraform 1.10+)
+```
 
 ---
 
 ## 3. 네트워크 아키텍처
 
-### 3.1 VPC 구조 (10.0.0.0/16)
+### 3.1 VPC 서브넷 구성
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│  VPC: utterai-prod-vpc  (10.0.0.0/16)                                       │
-│                                                                              │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐             │
-│  │  AZ: 2a         │  │  AZ: 2b         │  │  AZ: 2c         │             │
-│  │                 │  │                 │  │                 │             │
-│  │ ┌─────────────┐ │  │ ┌─────────────┐ │  │ ┌─────────────┐ │             │
-│  │ │Public Subnet│ │  │ │Public Subnet│ │  │ │Public Subnet│ │             │
-│  │ │10.0.1.0/24  │ │  │ │10.0.2.0/24  │ │  │ │10.0.3.0/24  │ │             │
-│  │ │  ALB        │ │  │ │  ALB        │ │  │ │  ALB        │ │             │
-│  │ │  NAT GW ①  │ │  │ │  NAT GW ②  │ │  │ │  NAT GW ③  │ │             │
-│  │ └─────────────┘ │  │ └─────────────┘ │  │ └─────────────┘ │             │
-│  │                 │  │                 │  │                 │             │
-│  │ ┌─────────────┐ │  │ ┌─────────────┐ │  │ ┌─────────────┐ │             │
-│  │ │Private App  │ │  │ │Private App  │ │  │ │Private App  │ │             │
-│  │ │10.0.11.0/24 │ │  │ │10.0.12.0/24 │ │  │ │10.0.13.0/24 │ │             │
-│  │ │  EKS Pods   │ │  │ │  EKS Pods   │ │  │ │  EKS Pods   │ │             │
-│  │ └─────────────┘ │  │ └─────────────┘ │  │ └─────────────┘ │             │
-│  │                 │  │                 │  │                 │             │
-│  │ ┌─────────────┐ │  │ ┌─────────────┐ │  │ ┌─────────────┐ │             │
-│  │ │Private Data │ │  │ │Private Data │ │  │ │Private Data │ │             │
-│  │ │10.0.21.0/24 │ │  │ │10.0.22.0/24 │ │  │ │10.0.23.0/24 │ │             │
-│  │ │  Aurora     │ │  │ │  Aurora     │ │  │ │  Aurora     │ │             │
-│  │ │  Redis      │ │  │ │  Redis      │ │  │ │  Redis      │ │             │
-│  │ └─────────────┘ │  │ └─────────────┘ │  │ └─────────────┘ │             │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘             │
-│                                                                              │
-│  VPC Endpoints (트래픽이 인터넷 미경유)                                        │
-│  ┌──────────────────────────────────────────────────────────────────────┐   │
-│  │  Gateway: S3                                                         │   │
-│  │  Interface: SQS · Secrets Manager · CloudWatch Logs · ECR API       │   │
-│  │            ECR Docker · STS · KMS                                    │   │
-│  └──────────────────────────────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────┐
+│  VPC: utterai-prod-vpc  (10.20.0.0/16)   Region: ap-northeast-2          │
+│  Secondary CIDR: 100.64.0.0/16  (Pod 전용 IP 공간)                        │
+│                                                                           │
+│         ap-northeast-2a                    ap-northeast-2c               │
+│  ┌─────────────────────────┐      ┌─────────────────────────┐            │
+│  │  Public Subnet          │      │  Public Subnet          │            │
+│  │  10.20.1.0/24           │      │  10.20.2.0/24           │            │
+│  │                         │      │                         │            │
+│  │  ┌───────────────────┐  │      │                         │            │
+│  │  │  NAT Gateway (1개)│  │      │  (NAT GW 없음)          │            │
+│  │  │  Elastic IP 부착  │  │      │                         │            │
+│  │  └───────────────────┘  │      │                         │            │
+│  │  ALB 노드 (AZ 2a)       │      │  ALB 노드 (AZ 2c)       │            │
+│  └────────────┬────────────┘      └────────────┬────────────┘            │
+│               │ Internet GW ◄──────────────────┘                         │
+│               │                                                           │
+│  ┌────────────▼────────────┐      ┌──────────────────────────┐           │
+│  │  Private App Subnet     │      │  Private App Subnet      │           │
+│  │  10.20.11.0/24          │      │  10.20.12.0/24           │           │
+│  │                         │      │                          │           │
+│  │  EKS Node (Node IP)     │      │  EKS Node (Node IP)      │           │
+│  │  tag: karpenter.sh/     │      │  tag: karpenter.sh/      │           │
+│  │       discovery         │      │       discovery          │           │
+│  └─────────────────────────┘      └──────────────────────────┘           │
+│                                                                           │
+│  ┌─────────────────────────┐      ┌──────────────────────────┐           │
+│  │  Pod Subnet (Secondary) │      │  Pod Subnet (Secondary)  │           │
+│  │  100.64.0.0/17          │      │  100.64.128.0/17         │           │
+│  │                         │      │                          │           │
+│  │  EKS Pod IP (Custom     │      │  EKS Pod IP (Custom      │           │
+│  │  Networking via ENIConf)│      │  Networking via ENIConf) │           │
+│  └─────────────────────────┘      └──────────────────────────┘           │
+│                                                                           │
+│  ┌─────────────────────────┐      ┌──────────────────────────┐           │
+│  │  Private Data Subnet    │      │  Private Data Subnet     │           │
+│  │  10.20.21.0/24          │      │  10.20.22.0/24           │           │
+│  │                         │      │                          │           │
+│  │  RDS PostgreSQL         │      │  RDS PostgreSQL          │           │
+│  │  ElastiCache Redis      │      │  ElastiCache Redis       │           │
+│  └─────────────────────────┘      └──────────────────────────┘           │
+└───────────────────────────────────────────────────────────────────────────┘
 ```
 
-> NAT Gateway를 AZ별 1개씩 3개 배치 → 특정 AZ 장애 시에도 해당 AZ 파드의 아웃바운드 트래픽 유지
+> NAT Gateway는 2a에 1개만 배치 (비용 최적화). 2c Private App → 2a NAT GW 경유 아웃바운드.
 
-### 3.2 보안 그룹 흐름
+### 3.2 라우팅 테이블 요약
+
+| 서브넷 | 라우팅 |
+|---|---|
+| Public (2a, 2c) | 0.0.0.0/0 → Internet GW |
+| Private App (2a, 2c) | 0.0.0.0/0 → NAT GW (2a) |
+| Pod Subnet (2a, 2c) | Private App 라우팅 테이블 공유 |
+| Private Data (2a, 2c) | 로컬 전용 (외부 아웃바운드 없음) |
+
+### 3.3 VPC Endpoint
+
+| 종류 | 서비스 | 유형 | 배치 서브넷 |
+|---|---|---|---|
+| S3 | com.amazonaws.ap-northeast-2.s3 | Gateway | Private App RT |
+| SQS | com.amazonaws.ap-northeast-2.sqs | Interface | Private App (2a, 2c) |
+| Secrets Manager | com.amazonaws.ap-northeast-2.secretsmanager | Interface | Private App (2a, 2c) |
+| ECR API | com.amazonaws.ap-northeast-2.ecr.api | Interface | Private App (2a, 2c) |
+| ECR DKR | com.amazonaws.ap-northeast-2.ecr.dkr | Interface | Private App (2a, 2c) |
+
+모든 Interface Endpoint는 `utterai-prod-vpc-endpoint-sg`(포트 443, VPC CIDR 내부만 허용)에 부착.
+
+---
+
+## 4. EKS 클러스터
+
+### 4.1 클러스터 기본 정보
+
+| 항목 | 값 |
+|---|---|
+| 클러스터 이름 | `utterai-prod-eks` |
+| Kubernetes 버전 | 1.31 |
+| 인증 방식 | API_AND_CONFIG_MAP |
+| 엔드포인트 | Private + Public 모두 활성 |
+| 배치 서브넷 | Private App (10.20.11.0/24, 10.20.12.0/24) |
+| CNI | VPC CNI v1.18.1 (Custom Networking + Prefix Delegation) |
+
+### 4.2 Node Group 구성
 
 ```
-Internet (0.0.0.0/0 : 443)
-        │
-   ┌────▼──────────────────────┐
-   │  WAF WebACL               │  ALB에 부착
-   │  - OWASP Managed Rules    │  (api.utterai.com 진입점)
-   │  - Rate-Limit: 2000/5min  │
-   └────┬──────────────────────┘
-        │
-   ┌────▼────────┐
-   │  sg-prod-alb │  0.0.0.0/0 : 443
-   └────┬────────┘
-        │ :8000
-   ┌────▼──────────────┐
-   │  sg-prod-backend  │  (EKS Pod, Private App Subnet)
-   └────┬──────┬───────┘
-        │      │
-   :5432│      │:6379
-   ┌────▼───┐  ┌▼────────────┐
-   │sg-prod │  │ sg-prod     │
-   │-aurora │  │ -redis      │
-   └────────┘  └─────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│  EKS Cluster: utterai-prod-eks (k8s 1.31)                               │
+│                                                                          │
+│  ┌───────────────────────────────────────────────────────────────────┐   │
+│  │  System Node Group  (utterai-prod-system)             [ENABLED]  │   │
+│  │  인스턴스: t3.medium (ON_DEMAND)                                  │   │
+│  │  규모: desired 2 / min 2 / max 4                                  │   │
+│  │  서브넷: Private App (2a, 2c)                                     │   │
+│  │  Taint: CriticalAddonsOnly=true:NoSchedule                       │   │
+│  │  Label: role=system                                               │   │
+│  │                                                                   │   │
+│  │  실행 워크로드:                                                    │   │
+│  │    CoreDNS · kube-proxy · AWS LBC · Karpenter · KEDA             │   │
+│  │    External Secrets Operator · ArgoCD · Metrics Server           │   │
+│  │    Promtail · Prometheus · Grafana · Loki · Tempo · Kubecost     │   │
+│  └───────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+│  ┌───────────────────────────────────────────────────────────────────┐   │
+│  │  API Node Group  (utterai-prod-api)                  [DISABLED]  │   │
+│  │  인스턴스: t3.large (ON_DEMAND)                                   │   │
+│  │  규모: desired 2 / min 2 / max 6                                  │   │
+│  │  Taint: dedicated=api:NoSchedule                                  │   │
+│  │  Label: role=api, workload=api                                    │   │
+│  │  → Karpenter NodePool로 대체 예정                                  │   │
+│  └───────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+│  ┌───────────────────────────────────────────────────────────────────┐   │
+│  │  Worker Node Group  (utterai-prod-worker)            [DISABLED]  │   │
+│  │  인스턴스: m5.2xlarge (ON_DEMAND) · 디스크: 100 GB gp3           │   │
+│  │  Taint: 없음 (일반 워커)                                          │   │
+│  │  Label: role=worker, workload=worker                              │   │
+│  │  → Karpenter NodePool로 대체 예정                                  │   │
+│  └───────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+│  ┌───────────────────────────────────────────────────────────────────┐   │
+│  │  GPU Node Group  (utterai-prod-gpu)                  [DISABLED]  │   │
+│  │  인스턴스: g4dn.xlarge (ON_DEMAND)                                │   │
+│  │  AMI: AL2023_x86_64_NVIDIA                                       │   │
+│  │  디스크: 100 GB gp3 (Launch Template)                             │   │
+│  │  규모: desired 1 / min 1                                          │   │
+│  │  Taint: dedicated=ai-gpu:NoSchedule, nvidia.com/gpu:NoSchedule   │   │
+│  │  Label: role=gpu, workload=ai-gpu                                 │   │
+│  │  → Karpenter NodePool로 대체 예정                                  │   │
+│  └───────────────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### 4.3 Custom Networking (Pod IP 분리)
+
+```
+문제: Primary 서브넷(/24 = 최대 ~250 IP)에서 노드 IP + 파드 IP 혼용 시 IP 고갈
+해결: Secondary CIDR 100.64.0.0/16 + Custom Networking
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│  VPC CNI 환경변수                                                        │
+│    ENABLE_PREFIX_DELEGATION           = true  (노드당 Pod 수 확장)       │
+│    WARM_PREFIX_TARGET                 = 1                               │
+│    AWS_VPC_K8S_CNI_CUSTOM_NETWORK_CFG = true  (Custom Networking 활성)   │
+│    ENI_CONFIG_LABEL_DEF = topology.kubernetes.io/zone                  │
+│                                                                         │
+│  ENIConfig (04-addons에서 kubernetes_manifest로 생성)                    │
+│    ap-northeast-2a → Pod Subnet 100.64.0.0/17  + node-sg               │
+│    ap-northeast-2c → Pod Subnet 100.64.128.0/17 + node-sg              │
+│                                                                         │
+│  결과: 노드 IP는 10.20.11-12.x / 파드 IP는 100.64.x.x 로 완전 분리       │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### 4.4 EKS 관리형 Addon
+
+| Addon | 버전 |
+|---|---|
+| vpc-cni | v1.18.1-eksbuild.1 |
+| coredns | (latest managed) |
+| kube-proxy | (latest managed) |
+
+### 4.5 Security Group 구조
+
+```
+                 클러스터 SG (EKS 자동 생성)
+                       ▲
+                       │  ingress: All from node-sg
+                       │  (Custom Networking pod secondary ENI → cluster SG 통신용)
+                       │
+         ┌─────────────┴──────────────┐
+         │   utterai-prod-eks-node-sg  │
+         │                            │
+         │   Ingress:                 │
+         │   - self (Node-to-Node)    │
+         │   - cluster SG: 443        │  Control plane → kubelet API
+         │   - cluster SG: 10250      │  Control plane → kubelet
+         │   - cluster SG: All        │  pod secondary ENI 통신
+         │                            │
+         │   Egress: 0.0.0.0/0 All   │
+         │                            │
+         │   Tag: karpenter.sh/       │
+         │        discovery=utterai-  │
+         │        prod-eks            │
+         └────────────────────────────┘
 ```
 
 ---
 
-## 4. 트래픽 흐름
+## 5. 데이터 레이어
 
-### 4.1 사용자 요청 흐름
-
-**프론트엔드 (utterai.com)**
-```
-Browser ── HTTPS utterai.com ──► Route 53 (A Alias)
-                                       │
-                                       ▼
-                               CloudFront Distribution
-                               ACM 인증서 (us-east-1)
-                               OAC (S3 직접접근 차단)
-                                       │
-                                       ▼
-                           S3 utterai-prod-frontend
-                           (정적 파일 서빙 / SPA 라우팅)
-```
-
-**백엔드 API (api.utterai.com)**
-```
-Browser ── HTTPS api.utterai.com ──► Route 53 (A Alias)
-                                            │
-                                            ▼
-                                   WAF WebACL (ALB 부착)
-                                   OWASP / Rate-Limit
-                                            │
-                                            ▼
-                                   ALB Ingress (internet-facing)
-                                   ACM 인증서 / HTTPS:443
-                                   TLS Termination
-                                            │
-                                            ▼
-                                   utterai-api namespace
-                                   Backend API Pods (3~10개, HPA)
-                                            │
-                           ┌────────────────┼──────────────────┐
-                           │                │                  │
-                      ┌────▼───┐       ┌────▼────┐  ┌─────────▼──────┐
-                      │Cognito │       │ Aurora  │  │ Redis          │
-                      │JWT 검증│       │PostgreSQL│  │ Session/Cache  │
-                      └────────┘       └────┬────┘  └────────────────┘
-                                            │
-                                   ┌────────▼──────────┐
-                                   │ SQS               │
-                                   │ audio-preprocess  │
-                                   │ -queue            │
-                                   └────────┬──────────┘
-                                            │
-                                       AI Pipeline
-                                       (섹션 6 참고)
-```
-
-### 4.2 음성 파일 업로드 흐름
+### 5.1 RDS PostgreSQL
 
 ```
-Client
-  │  POST /api/v1/audio/upload-url
-  ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  RDS Instance: utterai-prod-rds                                      │
+│                                                                      │
+│  엔진: PostgreSQL 16.9                                               │
+│  인스턴스 클래스: db.r6g.large                                        │
+│  배치: Private Data Subnet (2a, 2c) — DB Subnet Group                │
+│                                                                      │
+│  스토리지:                                                           │
+│    allocated_storage:     20 GB (gp3)                                │
+│    max_allocated_storage: 100 GB (Auto Scaling)                      │
+│    암호화: AES-256 (storage_encrypted=true)                           │
+│                                                                      │
+│  백업:                                                               │
+│    retention: 7일 (기본값)                                           │
+│    window: 03:00–04:00 UTC (매일)                                    │
+│    maintenance: 일요일 04:00–05:00 UTC                               │
+│    deletion_protection: true                                         │
+│    skip_final_snapshot: false                                        │
+│                                                                      │
+│  비밀번호 관리:                                                       │
+│    manage_master_user_password = true                                │
+│    → Terraform state에 비밀번호 미저장                                │
+│    → AWS Secrets Manager 자동 관리 + 자동 로테이션                   │
+│                                                                      │
+│  파라미터:                                                           │
+│    log_min_duration_statement = 1000ms (슬로우 쿼리 로깅)            │
+│    auto_minor_version_upgrade = true                                 │
+│                                                                      │
+│  접근 허용: node-sg · cluster-sg (포트 5432)                         │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### 5.2 ElastiCache Redis
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  Replication Group: utterai-prod-redis                               │
+│                                                                      │
+│  엔진: Redis 7.1                                                     │
+│  노드 타입: cache.r6g.large                                           │
+│  노드 수: 2 (Primary + Replica, 각 AZ 분산)                          │
+│  배치: Private Data Subnet (2a, 2c) — ElastiCache Subnet Group       │
+│                                                                      │
+│    AZ 2a: Primary Node (cache.r6g.large)                            │
+│    AZ 2c: Replica Node (cache.r6g.large)                            │
+│                                                                      │
+│  보안:                                                               │
+│    at_rest_encryption_enabled:  true                                 │
+│    transit_encryption_enabled:  true (TLS)                           │
+│    auth_token: Secrets Manager에 저장                                │
+│      (/utterai-prod/redis-auth-token → REDIS_AUTH_TOKEN)            │
+│                                                                      │
+│  접근 허용: node-sg · cluster-sg (포트 6379)                         │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 6. 메시지 큐 (SQS)
+
+### 6.1 AI 파이프라인 큐 체인
+
+```
 Backend API
-  │  S3 Presigned PUT URL 생성 (만료: 900초)
-  │  (utterai-prod-raw-audio)
-  ▼
-Client
-  │  PUT (Presigned URL) → S3 직접 업로드
-  ▼
-S3 utterai-prod-raw-audio
-  │
-  ▼
-Backend API: POST /api/v1/analysis/jobs  (분석 요청 생성)
-  │  analysis_jobs 레코드 생성 (Aurora)
-  │  SQS audio-preprocess-queue 발행
-  ▼
-AI Pipeline 시작
+    │  SendMessage
+    ▼
+┌───────────────────────────────────────────┐
+│ utterai-prod-audio-preprocess-queue       │
+│   Visibility Timeout: 900s (15분)         │
+│   DLQ: utterai-prod-audio-preprocess-dlq  │
+│   maxReceiveCount: 3 (기본값)              │
+└────────────────────┬──────────────────────┘
+                     │  CPU Worker (KEDA 트리거)
+                     ▼
+              [Stage 1: 오디오 전처리 / VAD]
+                     │  SendMessage
+                     ▼
+┌───────────────────────────────────────────┐
+│ utterai-prod-gpu-inference-queue          │
+│   Visibility Timeout: 1800s (30분)        │
+│   DLQ: utterai-prod-gpu-inference-dlq     │
+│   maxReceiveCount: 3                      │
+└────────────────────┬──────────────────────┘
+                     │  GPU Worker (KEDA 트리거)
+                     ▼
+         [Stage 2: 화자분리 + ASR 추론]
+                     │  SendMessage
+                     ▼
+┌───────────────────────────────────────────┐
+│ utterai-prod-report-analysis-queue        │
+│   Visibility Timeout: 900s (15분)         │
+│   DLQ: utterai-prod-report-analysis-dlq   │
+│   maxReceiveCount: 3                      │
+└────────────────────┬──────────────────────┘
+                     │  CPU Worker (KEDA 트리거)
+                     ▼
+       [Stage 3: 지표 계산 + LLM 리포트 생성]
+```
+
+### 6.2 RAG Ingest 큐
+
+```
+┌───────────────────────────────────────────┐
+│ utterai-prod-rag-ingest-queue             │
+│   DLQ: utterai-prod-rag-ingest-dlq        │
+│   Batch Worker 소비 (문서 임베딩 → RDS)   │
+└───────────────────────────────────────────┘
+```
+
+### 6.3 Karpenter Interruption 큐
+
+```
+utterai-prod-eks  (Karpenter 전용 SQS)
+  message_retention: 300s
+  EventBridge 규칙:
+    - EC2 Spot Instance Interruption Warning
+    - EC2 Instance Rebalance Recommendation
+    - EC2 Instance State-change Notification
+```
+
+### 6.4 SQS 구성 공통 사항
+
+모든 큐: `sqs_managed_sse_enabled = true` (SSE-SQS 암호화)
+Dead Letter Queue: 메시지 보존 7일 (`message_retention_seconds = 604800`)
+
+---
+
+## 7. 스토리지 (S3)
+
+### 7.1 버킷 목록
+
+| 버킷 이름 | 용도 |
+|---|---|
+| `utterai-prod-frontend` | 프론트엔드 정적 파일 (CloudFront 원본) |
+| `utterai-prod-raw-audio` | 사용자 업로드 원본 음성 (365일 후 자동 삭제) |
+| `utterai-prod-template` | 분석 템플릿 파일 |
+| `utterai-prod-rag-ingest` | RAG 임베딩 대상 문서 |
+| `utterai-prod-reports` | 최종 분석 리포트 |
+| `utterai-prod-kubecost` | Kubecost ETL 비용 데이터 (S3 백엔드) |
+| `utterai-prod-loki` | Loki 로그 청크 (S3 백엔드) |
+| `utterai-prod-tempo` | Tempo 트레이스 (S3 백엔드, 옵션) |
+
+### 7.2 공통 보안 설정
+
+- 퍼블릭 액세스 차단: `block_public_acls/policy/ignore/restrict` 전부 `true`
+- 서버 사이드 암호화: AES-256 (SSE-S3)
+- 접근 경로: VPC Endpoint Gateway (인터넷 미경유)
+
+### 7.3 raw-audio 버킷 특이 사항
+
+```
+수명주기: 365일 후 객체 자동 삭제 (expire-raw-audio 규칙)
+CORS: frontend_domain + 추가 허용 도메인 (GET, PUT, POST 허용)
 ```
 
 ---
 
-## 5. EKS 클러스터 아키텍처
+## 8. Helm Addon 스택
 
-### 5.1 NodeGroup 구성
+### 8.1 Addon 전체 목록
 
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│  EKS Cluster: utterai-prod-eks (Kubernetes 1.31)                            │
-│  Control Plane Endpoint: Private Only                                        │
-│                                                                              │
-│  ┌─────────────────────────────┐  ┌─────────────────────────────────────┐   │
-│  │  prod-system-nodegroup       │  │  prod-api-nodegroup                 │   │
-│  │  (EKS Managed NodeGroup)     │  │  (EKS Managed NodeGroup + HPA)      │   │
-│  │  t3.large / On-Demand        │  │  t3.xlarge / On-Demand              │   │
-│  │  2 ~ 3 nodes (상시)          │  │  2 ~ 5 nodes (HPA 연동)             │   │
-│  │                              │  │                                     │   │
-│  │  - CoreDNS                   │  │  - utterai-api (Backend REST API)   │   │
-│  │  - ALB Controller            │  │  - Pod Anti-Affinity 적용           │   │
-│  │  - Karpenter Controller      │  │  - RollingUpdate (maxUnavailable:0) │   │
-│  │  - KEDA Operator             │  │                                     │   │
-│  │  - ESO Operator              │  └─────────────────────────────────────┘   │
-│  │  - Kyverno                   │                                            │
-│  │  - Cilium                    │  ┌─────────────────────────────────────┐   │
-│  └─────────────────────────────┘  │  cpu-worker-nodepool                 │   │
-│                                    │  (Karpenter NodePool + KEDA)         │   │
-│                                    │  c5.2xlarge / c5.4xlarge 자동 선택   │   │
-│                                    │  0 ~ 4 nodes (수요 기반)             │   │
-│                                    │                                     │   │
-│                                    │  - utterai-ai-cpu (CPU Worker)      │   │
-│                                    │  - utterai-ai-api (Internal AI API) │   │
-│                                    └─────────────────────────────────────┘   │
-│                                                                              │
-│                                    ┌─────────────────────────────────────┐   │
-│                                    │  gpu-worker-nodepool                 │   │
-│                                    │  (Karpenter NodePool + KEDA)         │   │
-│                                    │  g4dn.xlarge / g4dn.2xlarge 자동 선택│   │
-│                                    │  0 ~ 3 nodes (수요 기반)             │   │
-│                                    │                                     │   │
-│                                    │  - utterai-ai-gpu (GPU Worker)      │   │
-│                                    │  - utterai-batch (Batch Worker)     │   │
-│                                    └─────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────────────────────────┘
-```
+| Helm 릴리스 | 차트 버전 | 네임스페이스 | 상태 |
+|---|---|---|---|
+| aws-load-balancer-controller | 1.8.1 | ingress-system | 활성 |
+| kube-prometheus-stack | 66.2.1 | monitoring | 활성 |
+| kubecost (cost-analyzer) | (variable) | kubecost | 활성 |
+| tempo | (variable) | monitoring | 활성 |
+| loki | 7.0.0 | monitoring | 활성 |
+| promtail | 6.17.1 | monitoring | 활성 |
+| metrics-server | 3.12.1 | kube-system | 활성 |
+| external-secrets | 0.10.4 | external-secrets | 활성 |
+| aws-efs-csi-driver | 3.0.7 | kube-system | 조건부 (IRSA 설정 시) |
+| nvidia-device-plugin | 0.16.2 | kube-system | 활성 (GPU 노드 대상) |
+| keda | 2.16.1 | keda | 활성 |
+| karpenter | 1.3.3 | karpenter | 활성 |
+| argocd (argo-cd) | 9.5.20 | argocd | 활성 |
+| cluster-autoscaler | 9.37.0 | kube-system | 비활성 (`enabled=false`) |
 
-### 5.2 Namespace 구성
+### 8.2 KEDA + Karpenter 자동 스케일링 흐름
 
 ```
-utterai-prod-eks
-│
-├── utterai-api              Backend REST API (외부 트래픽)
-│     └── backend-api-sa     IRSA: S3, SQS, SecretsManager, CloudWatch
-│
-├── utterai-ai-api           Internal AI API (클러스터 내부 전용)
-│     └── utterai-ai-api-sa  IRSA: SQS(audio-preprocess) SendMessage
-│
-├── utterai-ai-cpu           CPU 기반 음성 전처리 워커
-│     └── utterai-cpu-worker-sa  IRSA: SQS(2개 큐), S3, Bedrock
-│
-├── utterai-ai-gpu           GPU 기반 ML/LLM 추론 워커
-│     └── utterai-ml-gpu-worker-sa  IRSA: SQS(2개 큐), S3
-│
-├── utterai-batch            RAG 문서 ingest 배치 워커
-│     └── utterai-batch-worker-sa  IRSA: SQS(rag-ingest), S3, SecretsManager
-│
-└── utterai-observability    OTel Collector 등 모니터링 스택
+SQS 큐에 메시지 쌓임
+        │
+        ▼
+┌───────────────────────┐
+│  KEDA ScaledObject    │  SQS Trigger: 큐 메시지 수 모니터링
+│  (SQS 기반 트리거)    │  → Deployment replicas 증가 요청
+└────────────┬──────────┘
+             │ Pod Pending (노드 부족)
+             ▼
+┌───────────────────────┐
+│  Karpenter NodePool   │  Pod 리소스 요구 분석
+│  (1.3.3)              │  → 최적 EC2 인스턴스 선택 + 기동 (~60초)
+└────────────┬──────────┘
+             │
+             ▼
+      새 노드 준비 → Pod 스케줄 → 처리 시작
+
+SQS 큐 소진
+        │
+        ▼
+KEDA → replicas 감소 → Pod 종료
+        │
+        ▼
+Karpenter consolidation → 빈 노드 EC2 종료 → 비용 최소화
+
+Karpenter 인터럽션 처리:
+  EventBridge → utterai-prod-eks SQS →
+  Karpenter가 Spot 인터럽션 사전 감지 + 드레인 + 대체 노드 기동
 ```
 
----
+### 8.3 모니터링 스택 세부 설정
 
-## 6. AI 분석 파이프라인
-
-### 6.1 SQS 큐 체인
+**kube-prometheus-stack**
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                        AI Analysis Pipeline                                  │
-│                                                                              │
-│  Backend API                                                                 │
-│  (utterai-api)                                                               │
-│       │                                                                      │
-│       │ SendMessage                                                          │
-│       ▼                                                                      │
-│  ┌────────────────────────────┐                                              │
-│  │ audio-preprocess-queue     │  VisibilityTimeout: 300s                    │
-│  │ DLQ: audio-preprocess-dlq  │  maxReceiveCount: 3                         │
-│  └────────────┬───────────────┘                                              │
-│               │ ReceiveMessage / DeleteMessage                               │
-│               ▼                                                              │
-│  ┌────────────────────────────┐                                              │
-│  │  CPU Worker                │  Stage 1: VAD + 오디오 전처리               │
-│  │  (utterai-ai-cpu)          │  → 중간 결과 S3 저장                        │
-│  └────────────┬───────────────┘  → processed.wav / vad_segments.json       │
-│               │ SendMessage                                                  │
-│               ▼                                                              │
-│  ┌────────────────────────────┐                                              │
-│  │ gpu-inference-queue        │  VisibilityTimeout: 600s                    │
-│  │ DLQ: gpu-inference-dlq     │  maxReceiveCount: 3                         │
-│  └────────────┬───────────────┘                                              │
-│               │ ReceiveMessage / DeleteMessage                               │
-│               ▼                                                              │
-│  ┌────────────────────────────┐                                              │
-│  │  GPU Worker                │  Stage 2: 화자분리(pyannote) + ASR(Whisper) │
-│  │  (utterai-ai-gpu)          │  → S3 저장 + transcript draft 작성          │
-│  └────────────┬───────────────┘  → speaker_segments / asr_result.json      │
-│               │ SendMessage                                                  │
-│               ▼                                                              │
-│  ┌────────────────────────────┐                                              │
-│  │ report-analysis-queue      │  VisibilityTimeout: 600s                    │
-│  │ DLQ: report-analysis-dlq   │  maxReceiveCount: 3                         │
-│  └────────────┬───────────────┘                                              │
-│               │ ReceiveMessage / DeleteMessage                               │
-│               ▼                                                              │
-│  ┌────────────────────────────┐                                              │
-│  │  CPU Worker (LLM Stage)    │  Stage 3: 지표 계산 + RAG + EXAONE 리포트  │
-│  │  (utterai-ai-cpu)          │  → 최종 리포트 S3 저장                      │
-│  └────────────────────────────┘  → reports/{session_id}/{job_id}.json      │
-│                                                                              │
-│  ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─   │
-│                                                                              │
-│  RAG Ingest (별도 파이프라인)                                                │
-│  ┌────────────────────────────┐                                              │
-│  │ rag-ingest-queue           │  관리자가 기준 문서 업로드 시 발행          │
-│  │ DLQ: rag-ingest-dlq        │                                             │
-│  └────────────┬───────────────┘                                              │
-│               ▼                                                              │
-│  ┌────────────────────────────┐                                              │
-│  │  Batch Worker              │  문서 임베딩 → pgvector 저장               │
-│  │  (utterai-batch)           │  KURE 임베딩 모델 사용                      │
-│  └────────────────────────────┘                                              │
-└──────────────────────────────────────────────────────────────────────────────┘
+Prometheus:
+  retention:      3d
+  scrapeInterval: 60s
+  resourceRequest: cpu=200m / memory=1Gi
+  resourceLimit:   cpu=1    / memory=3Gi
+
+  비활성 규칙 (EKS 관리형 컨트롤 플레인 접근 불가):
+    etcd / kubeControllerManager / kubeScheduler
+
+Grafana:
+  서비스 타입: ClusterIP
+  타임존: Asia/Seoul
+  외부 DataSource: Loki (uid=loki), Tempo (uid=tempo)
+  admin 자격증명: Secrets Manager → ESO → K8s Secret
+
+AlertManager:
+  모든 경보 → null receiver (Slack 등 연동 비활성 상태)
 ```
 
-### 6.2 S3 중간 결과 저장 구조
+**Grafana Loki**
 
 ```
-utterai-prod-raw-audio
-  └── {user_upload_key}                      ← 사용자 원본 음성
+배포 모드: SingleBinary (replicas=1)
+스토리지:  S3 utterai-prod-loki
+보존 기간: 336h (14일)
+스키마:    tsdb v13 (from 2024-04-01)
+```
 
-utterai-prod-processed-audio
-  └── intermediate/{session_id}/{job_id}/
-        ├── processed.wav                    ← CPU Stage 전처리 결과
-        ├── vad_segments.json                ← VAD 결과
-        ├── speaker_segments.json            ← GPU Stage 화자분리 결과
-        └── asr_result.json                  ← GPU Stage ASR 결과
+**Grafana Tempo**
 
-utterai-prod-reports
-  ├── transcript-drafts/{session_id}/{job_id}/
-  │     └── transcript_draft.json            ← GPU Stage 초안
-  └── reports/{session_id}/{job_id}.json     ← 최종 분석 리포트
+```
+배포 모드: 단일 Pod
+스토리지:  S3 utterai-prod-tempo
+보존 기간: 72h (3일)
+수신 프로토콜:
+  OTLP gRPC: 0.0.0.0:4317
+  OTLP HTTP: 0.0.0.0:4318
+```
+
+**Kubecost**
+
+```
+Prometheus: 외부 사용 (utterai-monitoring-prometheus:9090)
+Grafana:    외부 사용 (proxy=false)
+스토리지:  S3 utterai-prod-kubecost (Thanos Object Store)
+IRSA:       kubecost ServiceAccount에 kubecost-role 부착
+```
+
+**Karpenter**
+
+```
+설정:
+  clusterName:       utterai-prod-eks
+  clusterEndpoint:   <EKS API Endpoint>
+  interruptionQueue: utterai-prod-eks (SQS)
+
+System Node에 배치 (taint toleration: CriticalAddonsOnly)
+```
+
+**Promtail**
+
+```
+로그 전송 대상: http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push
+DaemonSet 배치: 전 노드 (toleration: CriticalAddonsOnly, dedicated=api/worker/ai-gpu, nvidia.com/gpu)
 ```
 
 ---
 
-## 7. 자동 스케일링 구조
+## 9. CloudFront · ALB · 트래픽 흐름
 
-### 7.1 KEDA + Karpenter 연동 흐름
-
-```
-                     SQS 메시지 증가
-                           │
-              ┌────────────▼────────────┐
-              │  KEDA ScaledObject      │
-              │  (SQS Trigger)          │
-              │  queueLength: 5         │  메시지 5개당 Pod 1개
-              └────────────┬────────────┘
-                           │ replicas 증가 요청
-                           ▼
-              ┌────────────────────────┐
-              │  Deployment            │
-              │  (cpu-worker /         │
-              │   gpu-worker)          │
-              └────────────┬───────────┘
-                           │ 신규 Pod → Pending (노드 부족)
-                           ▼
-              ┌────────────────────────┐
-              │  Karpenter             │
-              │  NodePool              │  Pod 리소스 요청 분석
-              └────────────┬───────────┘  → 최적 인스턴스 자동 선택
-                           │ EC2 기동 (~60초)
-                           ▼
-              ┌────────────────────────┐
-              │  새 Node 준비 완료     │
-              └────────────┬───────────┘
-                           │ Pod 스케줄링
-                           ▼
-                    분석 처리 시작
-
-
-                     SQS 큐 소진
-                           │
-              ┌────────────▼────────────┐
-              │  KEDA                   │
-              │  replicas → 0/1         │
-              └────────────┬────────────┘
-                           │ Pod 종료
-                           ▼
-              ┌────────────────────────┐
-              │  Karpenter             │
-              │  consolidateAfter: 30s │  빈 노드 감지
-              └────────────┬───────────┘
-                           │ EC2 종료 → 과금 중단
-                           ▼
-                      비용 최소화
-```
-
-### 7.2 ScaledObject 구성
-
-| Worker | Trigger 큐 | queueLength | minReplica | maxReplica |
-|---|---|---|---|---|
-| cpu-worker | audio-preprocess-queue | 5 | 1 | 4 |
-| gpu-worker | gpu-inference-queue | 1 | 0 | 3 |
-| batch-worker | rag-ingest-queue | 1 | 0 | 2 |
-
----
-
-## 8. 데이터 레이어
-
-### 8.1 Aurora PostgreSQL
+### 9.1 프론트엔드 트래픽
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Aurora Cluster: utterai-prod-aurora                        │
-│  Engine: Aurora PostgreSQL 16                               │
-│  암호화: KMS CMK (prod-aurora-kms-key)                       │
-│                                                             │
-│  ┌───────────────────────┐  ┌──────────────────────────┐   │
-│  │  Writer Instance      │  │  Reader Instance         │   │
-│  │  db.r6g.large         │  │  db.r6g.large            │   │
-│  │  AZ: ap-northeast-2a  │  │  AZ: ap-northeast-2c     │   │
-│  └───────────┬───────────┘  └──────────┬───────────────┘   │
-│              │                         │                   │
-│              └────────────┬────────────┘                   │
-│                           │ Aurora Storage (6-way 복제)     │
-│                           │                                 │
-│  비밀번호 관리: manage_master_user_password = true           │
-│  → Terraform state에 비밀번호 미저장                         │
-│  → AWS가 Secrets Manager에 자동 저장 + 90일 자동 교체        │
-└─────────────────────────────────────────────────────────────┘
-
-연결 방식:
-  Backend API Pod
-    └── SQLAlchemy (pool_size=10, max_overflow=20)
-          ├── Writer: cluster endpoint (DDL / Write)
-          └── Reader: cluster-ro endpoint (조회)
+사용자 브라우저
+    │  HTTPS app.utterai.org
+    ▼
+Route 53 (Hosted Zone: Z06102331M4SC2S9CO5RJ)
+    │  A Record Alias + AAAA Record Alias
+    ▼
+CloudFront Distribution
+    │  ACM 인증서 (us-east-1, app.utterai.org)
+    │  원본 1: S3 utterai-prod-frontend (정적 파일)
+    │  원본 2: ALB (API 요청 프록시)
+    ▼
+S3 utterai-prod-frontend (SPA 정적 파일 서빙)
 ```
 
-### 8.2 ElastiCache Redis
+### 9.2 API 트래픽
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Replication Group: utterai-prod-redis                      │
-│  Engine: Redis 7.1 / TLS + AUTH Token 필수                  │
-│  암호화: KMS (AWS Managed Key)                               │
-│                                                             │
-│  ┌───────────────────────┐  ┌──────────────────────────┐   │
-│  │  Primary Node         │  │  Replica Node            │   │
-│  │  cache.r6g.large      │  │  cache.r6g.large         │   │
-│  │  AZ: ap-northeast-2a  │  │  AZ: ap-northeast-2c     │   │
-│  └───────────────────────┘  └──────────────────────────┘   │
-│                                                             │
-│  AUTH Token: Terraform random_password → Secrets Manager   │
-│  ※ 현재 state 파일에 노출 → Terraform 1.10 ephemeral 전환 예정  │
-└─────────────────────────────────────────────────────────────┘
+사용자 브라우저 / 모바일
+    │  HTTPS (API 호출)
+    ▼
+CloudFront → ALB (EKS ingress)
+    │  ALB는 ingress.k8s.aws/stack=utterai-prod 태그로 자동 조회
+    │  (04-addons에서 data.aws_lb.api로 DNS 자동 감지)
+    ▼
+EKS 워커 Pod (utterai-api namespace)
+    │
+    ├── RDS PostgreSQL (5432)
+    ├── ElastiCache Redis (6379, TLS)
+    └── SQS audio-preprocess-queue (VPC Endpoint 경유)
 ```
 
-### 8.3 S3 버킷 구성
+### 9.3 Route 53 레코드
 
 ```
-utterai-prod-frontend         프론트엔드 정적 파일 (CloudFront OAC)
-utterai-prod-raw-audio        사용자 업로드 원본 음성 (Presigned URL)
-utterai-prod-processed-audio  AI 처리 중간 결과 (30일 후 자동 삭제)
-utterai-prod-documents        RAG 기준 문서 (관리자 업로드)
-utterai-prod-reports          최종 분석 리포트 (영구 보존)
-utterai-prod-artifacts        분석 JSON 결과 (1년 후 Glacier)
-
-공통 설정:
-  - 퍼블릭 액세스 차단: 전체 활성화
-  - 서버 사이드 암호화: KMS
-  - VPC Endpoint Gateway 경유 (인터넷 미사용)
+app.utterai.org  →  A   (alias CloudFront distribution)
+app.utterai.org  →  AAAA (alias CloudFront distribution)
 ```
 
 ---
 
-## 9. 보안 아키텍처
+## 10. 보안 (IAM / IRSA / Secrets)
 
-### 9.1 IRSA (IAM Roles for Service Accounts)
+### 10.1 IRSA 역할 목록 (03-services irsa 모듈)
 
-```
-EKS OIDC Provider
-       │
-       │  신뢰 관계 (Web Identity)
-       ▼
-┌──────────────────────────────────────────────────────────────┐
-│  Platform IRSA (3개)                                         │
-│                                                              │
-│  lbc-irsa-role          ALB 생성/관리                        │
-│  cluster-autoscaler     (미사용, Karpenter 대체)              │
-│  eso-irsa-role          SecretsManager GetSecretValue        │
-└──────────────────────────────────────────────────────────────┘
+| IAM Role | 서비스 어카운트 | 권한 범위 |
+|---|---|---|
+| `utterai-prod-lbc-role` | aws-load-balancer-controller | ALB 생성·관리 |
+| `utterai-prod-cluster-autoscaler-role` | cluster-autoscaler | (현재 미사용, Karpenter 대체) |
+| `utterai-prod-eso-role` | external-secrets | Secrets Manager GetSecretValue |
+| `utterai-prod-keda-role` | keda-operator | SQS 큐 메시지 수 조회 |
+| `utterai-prod-karpenter-role` | karpenter | EC2 생성·종료·SQS |
+| `utterai-prod-kubecost-role` | kubecost | S3(kubecost 버킷) |
+| `utterai-prod-loki-role` | loki | S3(loki 버킷) PutObject/GetObject |
+| `utterai-prod-tempo-role` | tempo | S3(tempo 버킷) PutObject/GetObject |
 
-┌──────────────────────────────────────────────────────────────┐
-│  Application IRSA (5개)                                      │
-│                                                              │
-│  api-irsa-role          S3(raw-audio/reports) · SQS(send)   │
-│                          SecretsManager · CloudWatch         │
-│                                                              │
-│  ai-api-irsa-role        SQS(audio-preprocess) SendMessage   │
-│                                                              │
-│  ai-cpu-irsa-role        SQS(audio-preprocess) Recv/Del      │
-│                          SQS(gpu-inference) Send             │
-│                          SQS(report-analysis) Recv/Del       │
-│                          S3 · Bedrock InvokeModel            │
-│                                                              │
-│  ai-ml-gpu-irsa-role     SQS(gpu-inference) Recv/Del         │
-│                          SQS(report-analysis) Send           │
-│                          S3                                  │
-│                                                              │
-│  batch-irsa-role         SQS(rag-ingest) Recv/Del            │
-│                          S3(reports) PutObject               │
-│                          SecretsManager (db-password)        │
-└──────────────────────────────────────────────────────────────┘
-```
+애플리케이션 IRSA (워크로드별):
 
-### 9.2 External Secrets Operator (ESO) 흐름
+| IAM Role | 권한 범위 |
+|---|---|
+| `utterai-prod-api-role` | S3(raw-audio, reports) · SQS(send) · Secrets Manager |
+| `utterai-prod-ai-api-role` | SQS(audio-preprocess) SendMessage |
+| `utterai-prod-ai-cpu-role` | SQS(audio-preprocess recv/del, gpu-inference send, report-analysis recv/del) · S3 · Bedrock InvokeModel |
+| `utterai-prod-ai-ml-gpu-role` | SQS(gpu-inference recv/del, report-analysis send) · S3 |
+| `utterai-prod-batch-role` | SQS(rag-ingest recv/del) · S3(rag-ingest, reports) · Secrets Manager |
+
+### 10.2 External Secrets Operator (ESO) 흐름
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│  AWS Secrets Manager                                         │
-│                                                              │
-│  utterai-prod/backend-api-secret                            │
-│    DB_PASSWORD · JWT_SECRET_KEY                              │
-│    INTERNAL_CALLBACK_TOKEN · INTERNAL_CALLBACK_HMAC_SECRET  │
-│                                                              │
-│  utterai-prod/redis-auth-token                              │
-│    REDIS_AUTH_TOKEN                                          │
-│                                                              │
-│  utterai-prod/ai-worker-secret                              │
-│    DB_USER · DB_PASSWORD · DB_HOST · DB_PORT · DB_NAME       │
-│                                                              │
-│  utterai-prod/gpu-worker-secret                             │
-│    (GPU Worker 전용 시크릿)                                  │
-└───────────────────────┬──────────────────────────────────────┘
-                        │  eso-irsa-role (IRSA)
-                        │  GetSecretValue
-                        ▼
-             ┌──────────────────────┐
-             │  ClusterSecretStore  │  aws-secrets-manager
-             │  (ESO CRD)           │  region: ap-northeast-2
-             └──────────┬───────────┘
-                        │  refreshInterval: 1h
-                        ▼
-             ┌──────────────────────┐
-             │  ExternalSecret      │  네임스페이스별 개별 적용
-             │  (ESO CRD)           │
-             └──────────┬───────────┘
-                        │ 자동 생성/갱신
-                        ▼
-             ┌──────────────────────┐
-             │  K8s Secret          │  Pod에 envFrom 주입
-             │  (각 Namespace)      │
-             └──────────────────────┘
+AWS Secrets Manager
+  utterai-prod/backend-api-secret
+  utterai-prod/redis-auth-token
+  utterai-prod/grafana-admin-credentials
+         │
+         │  IRSA (eso-role) GetSecretValue
+         ▼
+  ClusterSecretStore (aws-secrets-manager, ap-northeast-2)
+         │
+         │  refreshInterval: 1h
+         ▼
+  ExternalSecret CRD (네임스페이스별)
+         │
+         │  자동 생성/갱신
+         ▼
+  Kubernetes Secret → Pod envFrom 주입
 ```
 
-### 9.3 KMS 암호화 전략
+### 10.3 Node IAM 역할 정책
+
+| 정책 | 용도 |
+|---|---|
+| AmazonEKSWorkerNodePolicy | EKS 워커 노드 기본 |
+| AmazonEKS_CNI_Policy | VPC CNI ENI 관리 |
+| AmazonEC2ContainerRegistryReadOnly | ECR 이미지 풀 |
+| AmazonSSMManagedInstanceCore | SSM Session Manager 접속 |
+
+---
+
+## 11. 모니터링 스택
+
+### 11.1 데이터 수집 흐름
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Aurora PostgreSQL  →  CMK (prod-aurora-kms-key)            │
-│    이유: Cross-Account DR(Tokyo) 복호화 시 CMK 필수         │
-│                                                             │
-│  ElastiCache Redis  →  AWS Managed Key (aws/elasticache)    │
-│  SQS Queues (4개)   →  AWS Managed Key (aws/sqs)            │
-│  Secrets Manager    →  AWS Managed Key (aws/secretsmanager) │
-│  S3 Buckets (6개)   →  AWS Managed Key (aws/s3)             │
-│  CloudWatch Logs    →  KMS Key (prod-logs-kms-key)          │
-└─────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│  EKS 클러스터 (monitoring namespace)                                   │
+│                                                                        │
+│  Promtail (DaemonSet)                                                  │
+│    모든 노드 로그 수집 → Loki Gateway                                  │
+│                                                                        │
+│  Prometheus (kube-prometheus-stack)                                    │
+│    Pod/Node 메트릭 수집 (60s 간격) → 3일 보존                          │
+│    ServiceMonitor: kubecost, tempo, keda, node-exporter …             │
+│                                                                        │
+│  Grafana                                                               │
+│    DataSource 1: Prometheus (메트릭)                                   │
+│    DataSource 2: Loki       (로그)                                     │
+│    DataSource 3: Tempo      (트레이스)                                 │
+│                                                                        │
+│  Tempo (OTLP 수신기)                                                   │
+│    gRPC :4317 / HTTP :4318 → S3 utterai-prod-tempo (3일 보존)          │
+│                                                                        │
+│  Loki (SingleBinary)                                                   │
+│    S3 utterai-prod-loki (14일 보존)                                    │
+│                                                                        │
+│  AlertManager                                                          │
+│    receiver: null (알림 연동 비활성)                                   │
+│    route: Watchdog 알람 → null                                         │
+│                                                                        │
+│  Kubecost                                                              │
+│    Prometheus: utterai-monitoring-prometheus:9090 (외부 연동)          │
+│    S3 utterai-prod-kubecost (비용 ETL 데이터)                          │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 9.4 Pod 보안 계층
+### 11.2 Grafana Admin 자격증명 관리
 
 ```
-계층 1 — Pod Security Standards (Namespace 레이블)
-  utterai-api        enforce: restricted  (root 불허, 최소 권한)
-  utterai-ai-*       enforce: baseline    (GPU Device Plugin 호환)
-
-계층 2 — Kyverno ClusterPolicy
-  require-resource-limits     limits 없는 Pod 배포 거부
-  disallow-latest-tag         :latest 이미지 태그 거부
-  restrict-gpu-to-ai-worker   GPU 리소스는 ai-worker namespace만
-  generate-default-networkpolicy  Namespace 생성 시 default-deny 자동 생성
-
-계층 3 — Cilium (eBPF 기반)
-  CiliumNetworkPolicy         L3/L4/L7 트래픽 화이트리스트
-  mTLS                        utterai-api ↔ utterai-ai-* 간 상호 인증
-  Hubble                      실시간 트래픽 가시성
+Secrets Manager: utterai-prod/grafana-admin-credentials
+    │  ESO ExternalSecret (refreshInterval 1h)
+    ▼
+K8s Secret: grafana-admin-credentials (monitoring namespace)
+    │  kube-prometheus-stack grafana.admin.existingSecret
+    ▼
+Grafana Pod 환경변수 주입
 ```
 
 ---
 
-## 10. CI/CD 파이프라인
+## 참고 문서
 
-### 10.1 전체 흐름
-
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                   Shared Tooling Account                                     │
-│                                                                              │
-│  개발자  ──── PR ────►  GitHub                                               │
-│                          │                                                   │
-│                          │ main 머지 (리뷰 1명 이상 필수)                    │
-│                          ▼                                                   │
-│              GitHub Actions (prod-deploy.yaml)                               │
-│                  │                                                           │
-│                  ├─ 단위 테스트 / 통합 테스트                                │
-│                  ├─ Docker Build                                              │
-│                  ├─ ECR Push (utterai-prod-backend:{git_sha})                │
-│                  │    Seoul (ap-northeast-2) ECR                             │
-│                  ├─ ECR Cross-Region Copy                                    │
-│                  │    Tokyo (ap-northeast-1) ECR  ← DR용                    │
-│                  ├─ 이미지 취약점 스캔 (ECR Scanning)                        │
-│                  └─ K8s Manifest 이미지 태그 업데이트                        │
-│                          │                                                   │
-│                          ▼                                                   │
-│              Argo CD  (GitOps)                                               │
-│                  │  Git 저장소 감시 (overlays/prod)                          │
-│                  │  Prod: Auto-Sync 비활성화 → 담당자 수동 Sync              │
-│                  │                                                           │
-└──────────────────┼───────────────────────────────────────────────────────────┘
-                   │ Cross-Account AssumeRole
-                   ▼
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                   Prod Account                                               │
-│                                                                              │
-│              EKS utterai-prod-eks                                            │
-│                  │  Rolling Update (maxUnavailable: 0)                       │
-│                  │  PDB: minAvailable 2                                      │
-│                  ▼                                                           │
-│              utterai-api namespace                                           │
-│              backend-api Deployment (새 이미지 배포)                         │
-└──────────────────────────────────────────────────────────────────────────────┘
-```
-
-### 10.2 Terraform 4-Layer 상태 관리
-
-```
-terraform/environments/prod/
-│
-├── 01-network/    VPC · 서브넷 · NAT GW · 보안그룹 · VPC Endpoint
-│   State: s3://utterai-prod-terraform-state/prod/01-network/
-│
-├── 02-eks/        EKS 클러스터 · NodeGroup · OIDC Provider
-│   State: s3://utterai-prod-terraform-state/prod/02-eks/
-│   Depends on: 01-network outputs (vpc_id, subnet_ids)
-│
-├── 03-services/   Aurora · Redis · S3 · SQS · Cognito · IRSA · Secrets
-│   State: s3://utterai-prod-terraform-state/prod/03-services/
-│   Depends on: 01-network, 02-eks outputs
-│
-└── 04-addons/     ALB Controller · Karpenter · KEDA · ESO · Kyverno · Cilium
-    State: s3://utterai-prod-terraform-state/prod/04-addons/
-    Depends on: 02-eks, 03-services outputs
-
-State Lock: S3 Native Locking (DynamoDB 불필요, Terraform 1.10+)
-State 암호화: KMS
-```
-
----
-
-## 11. DR 아키텍처
-
-### 11.1 Tokyo Warm Standby 구성
-
-```
-Seoul (ap-northeast-2) Primary          Tokyo (ap-northeast-1) DR
-──────────────────────────────          ──────────────────────────────
-utterai-prod-alb                        utterai-dr-alb
-    │                                       │
-Route 53 Health Check                  Route 53 Failover Record
-(30초 간격, 3회 실패 시 발동) ─────────►(자동 전환)
-
-utterai-prod-eks                        utterai-dr-eks
-    (운영 규모)                              (최소 Standby 노드)
-
-Aurora utterai-prod-aurora              Aurora utterai-dr-aurora
-Writer + Reader                         Global DB Secondary
-    │                                       │
-    └── Global DB Replication ──────────────┘
-        (복제 지연 < 1초)
-
-S3 utterai-prod-raw-audio       ──CRR──► S3 utterai-dr-raw-audio
-S3 utterai-prod-reports         ──CRR──► S3 utterai-dr-reports
-S3 utterai-prod-artifacts       ──CRR──► S3 utterai-dr-artifacts
-
-ECR Seoul utterai-prod-backend  ──────► ECR Tokyo utterai-prod-backend
-    (GitHub Actions CI에서 이미지 빌드 후 자동 복사)
-```
-
-### 11.2 DR 전환 절차
-
-```
-1. Route 53 Health Check 실패 감지 (90초 이내)
-      │
-      ▼
-2. Failover Record 활성화 → api.utterai.com → Tokyo ALB로 자동 전환
-      │
-      ▼
-3. Aurora Global DB Promote
-   AWS Console / CLI: aws rds failover-global-cluster
-      │
-      ▼
-4. Tokyo EKS DB_HOST 환경변수 → Tokyo Writer Endpoint로 전환
-   Argo CD 통해 K8s ConfigMap 업데이트 + 재배포
-      │
-      ▼
-5. Tokyo EKS 스케일 업 (최소 → 운영 규모)
-      │
-      ▼
-6. CloudWatch 알람 정상화 확인
-   목표 RTO: 30분 이내 / RPO: 1분 이내
-```
-
----
-
-## 12. 모니터링 아키텍처
-
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│  EKS Cluster                                                                 │
-│                                                                              │
-│  ┌──────────────────────────────────────────────┐                           │
-│  │  utterai-observability namespace             │                           │
-│  │                                              │                           │
-│  │  OTel Collector (DaemonSet)                  │                           │
-│  │  - 각 노드에서 Trace / Metrics / Logs 수집    │                           │
-│  │  - Sampling: 정상 10% / 에러 100%            │                           │
-│  └────────┬─────────────────────────────────────┘                           │
-│           │                                                                  │
-└───────────┼──────────────────────────────────────────────────────────────────┘
-            │
-     ┌──────┴─────────────────┐
-     │                        │
-     ▼                        ▼
-┌──────────────┐      ┌───────────────────────────────┐
-│  CloudWatch  │      │  Shared Tooling Account        │
-│  (Prod Acct) │      │                               │
-│              │      │  ┌──────────────────────────┐ │
-│  Metrics     │      │  │  Grafana                 │ │
-│  Logs        │      │  │                          │ │
-│  Alarms(10개)│      │  │  DataSource:             │ │
-│  Dashboard   │      │  │  - CloudWatch (메트릭)    │ │
-└──────────────┘      │  │  - OTel/Tempo (Trace)    │ │
-                      │  │  - Aurora Perf Insights   │ │
-                      │  │                          │ │
-                      │  │  Dashboard:              │ │
-                      │  │  - utterai-prod-overview  │ │
-                      │  │  - ai-pipeline           │ │
-                      │  │  - db-detail             │ │
-                      │  └──────────────────────────┘ │
-                      └───────────────────────────────┘
-
-주요 알람:
-  prod-backend-5xx-rate       5xx 비율 > 5% (5분)   → Discord + 온콜
-  prod-aurora-replica-lag     Replica Lag > 5초      → Discord + 온콜
-  prod-sqs-dlq-count          DLQ 메시지 수 > 0      → Discord + 온콜
-  prod-backend-latency-p95    p95 > 2초 (5분)        → Discord
-  prod-aurora-cpu             CPU > 70% (5분)        → Discord
-  prod-redis-memory           메모리 > 80% (5분)     → Discord
-```
-
----
-
-## 참고
-
-- 운영 가이드 (설정값·명령어): [`docs/prod/README.md`](./README.md)
-- Dev vs Prod 환경 비교: [`docs/README.md`](../README.md)
-- Dev 환경 가이드: [`docs/dev/README.md`](../dev/README.md)
-- EKS 플랫폼 구현 방향: [`docs/shared/eks-architecture-flow.md`](../shared/eks-architecture-flow.md)
-- Prod 마이그레이션 체크리스트: [`docs/prod/migration-checklist.md`](./migration-checklist.md)
+- 운영 절차·명령어: [`docs/prod/README.md`](./README.md)
+- 보안 상세: [`docs/prod/security.md`](./security.md)
+- Dev vs Prod 비교: [`docs/README.md`](../README.md)
+- EKS 아키텍처 흐름: [`docs/shared/eks-architecture-flow.md`](../shared/eks-architecture-flow.md)
+- KEDA → Karpenter 전환: [`docs/dev/keda-karpenter-transition.md`](../dev/keda-karpenter-transition.md)
+- 마이그레이션 체크리스트: [`docs/prod/migration-checklist.md`](./migration-checklist.md)
