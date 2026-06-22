@@ -5,7 +5,7 @@ metadata:
   annotations:
     alb.ingress.kubernetes.io/group.name: utterai-prod
     # TODO: prod ACM 인증서 ARN으로 교체합니다.
-    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-2:000000000000:certificate/TODO_PROD
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-2:032886669461:certificate/cfe5d73f-f638-4da0-9aee-01e12b5a4a9d
 spec:
   rules:
     - host: api.utterai.com
