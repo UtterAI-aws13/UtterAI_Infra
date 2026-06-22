@@ -92,15 +92,14 @@ jobs:
           RAG_INGEST_QUEUE_URL="$(terraform -chdir="$TERRAFORM_DIR" output -raw rag_ingest_queue_url)"
           BACKEND_API_SECRET_ARN="$(terraform -chdir="$TERRAFORM_DIR" output -raw backend_api_secret_arn)"
           BACKEND_API_ROLE_ARN="$(terraform -chdir="$TERRAFORM_DIR" output -raw backend_api_role_arn)"
-          AI_API_ROLE_ARN="$(terraform -chdir="$TERRAFORM_DIR" output -raw ai_api_role_arn)"
           AI_CPU_WORKER_ROLE_ARN="$(terraform -chdir="$TERRAFORM_DIR" output -raw ai_cpu_worker_role_arn)"
           AI_ML_GPU_WORKER_ROLE_ARN="$(terraform -chdir="$TERRAFORM_DIR" output -raw ai_ml_gpu_worker_role_arn)"
           BATCH_WORKER_ROLE_ARN="$(terraform -chdir="$TERRAFORM_DIR" output -raw batch_worker_role_arn)"
-          ECR_BACKEND_URL="$(terraform -chdir="$TERRAFORM_DIR" output -json ecr_repository_urls | ruby -rjson -e 'data = JSON.parse(STDIN.read); puts data.fetch("utterai-backend")')"
-          ECR_AI_CPU_URL="$(terraform -chdir="$TERRAFORM_DIR" output -json ecr_repository_urls | ruby -rjson -e 'data = JSON.parse(STDIN.read); puts data.fetch("utterai-ai-cpu")')"
-          ECR_AI_GPU_URL="$(terraform -chdir="$TERRAFORM_DIR" output -json ecr_repository_urls | ruby -rjson -e 'data = JSON.parse(STDIN.read); puts data.fetch("utterai-ai-gpu")')"
 
           AUDIO_PREPROCESS_DLQ_URL="https://sqs.${AWS_REGION}.amazonaws.com/${AWS_ACCOUNT_ID}/utterai-prod-audio-preprocess-dlq"
+          ECR_BACKEND_URL="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/utterai-backend"
+          ECR_AI_CPU_URL="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/utterai-ai-cpu"
+          ECR_AI_GPU_URL="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/utterai-ai-gpu"
 
           sanitize_single_line() {
             printf '%s' "$1" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
@@ -119,7 +118,6 @@ jobs:
             echo "rag_ingest_queue_url=$(sanitize_single_line "$RAG_INGEST_QUEUE_URL")"
             echo "backend_api_secret_arn=$(sanitize_single_line "$BACKEND_API_SECRET_ARN")"
             echo "backend_api_role_arn=$(sanitize_single_line "$BACKEND_API_ROLE_ARN")"
-            echo "ai_api_role_arn=$(sanitize_single_line "$AI_API_ROLE_ARN")"
             echo "ai_cpu_worker_role_arn=$(sanitize_single_line "$AI_CPU_WORKER_ROLE_ARN")"
             echo "ai_ml_gpu_worker_role_arn=$(sanitize_single_line "$AI_ML_GPU_WORKER_ROLE_ARN")"
             echo "batch_worker_role_arn=$(sanitize_single_line "$BATCH_WORKER_ROLE_ARN")"
@@ -141,7 +139,6 @@ jobs:
           RAG_INGEST_QUEUE_URL: ${{ steps.prod-config.outputs.rag_ingest_queue_url }}
           BACKEND_API_SECRET_ARN: ${{ steps.prod-config.outputs.backend_api_secret_arn }}
           BACKEND_API_ROLE_ARN: ${{ steps.prod-config.outputs.backend_api_role_arn }}
-          AI_API_ROLE_ARN: ${{ steps.prod-config.outputs.ai_api_role_arn }}
           AI_CPU_WORKER_ROLE_ARN: ${{ steps.prod-config.outputs.ai_cpu_worker_role_arn }}
           AI_ML_GPU_WORKER_ROLE_ARN: ${{ steps.prod-config.outputs.ai_ml_gpu_worker_role_arn }}
           BATCH_WORKER_ROLE_ARN: ${{ steps.prod-config.outputs.batch_worker_role_arn }}
@@ -164,7 +161,6 @@ jobs:
               "TODO_PROD_REDIS_AUTH_TOKEN_SECRET_ARN" => ENV.fetch("REDIS_AUTH_TOKEN_SECRET_ARN"),
               "arn:aws:acm:ap-northeast-2:000000000000:certificate/TODO_PROD" => ENV.fetch("ACM_CERTIFICATE_ARN"),
               "arn:aws:iam::000000000000:role/utterai-prod-backend-irsa-role" => ENV.fetch("BACKEND_API_ROLE_ARN"),
-              "arn:aws:iam::000000000000:role/utterai-prod-ai-api-irsa-role" => ENV.fetch("AI_API_ROLE_ARN"),
               "arn:aws:iam::000000000000:role/utterai-prod-ai-cpu-irsa-role" => ENV.fetch("AI_CPU_WORKER_ROLE_ARN"),
               "arn:aws:iam::000000000000:role/utterai-prod-ai-ml-gpu-irsa-role" => ENV.fetch("AI_ML_GPU_WORKER_ROLE_ARN"),
               "arn:aws:iam::000000000000:role/utterai-prod-batch-irsa-role" => ENV.fetch("BATCH_WORKER_ROLE_ARN")
