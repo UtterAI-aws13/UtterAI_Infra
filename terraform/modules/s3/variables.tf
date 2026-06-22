@@ -8,6 +8,10 @@ variable "environment" {
 
 variable "frontend_domain" {
   type = string
+  validation {
+    condition     = var.frontend_domain != ""
+    error_message = "frontend_domain must not be empty (e.g. app.utterai.org). Empty value generates invalid CORS origin 'https://'."
+  }
 }
 
 variable "allowed_extra_origins" {
