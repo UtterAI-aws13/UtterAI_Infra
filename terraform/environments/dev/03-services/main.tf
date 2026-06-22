@@ -170,9 +170,9 @@ resource "aws_iam_role_policy" "collect_papers_permissions" {
         Resource = module.secrets.collect_papers_secret_arn
       },
       {
-        Sid    = "S3RagBucket"
-        Effect = "Allow"
-        Action = ["s3:GetObject", "s3:PutObject"]
+        Sid      = "S3RagBucket"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject", "s3:PutObject"]
         Resource = "${module.s3.rag_ingest_bucket_arn}/*"
       },
       {
@@ -198,7 +198,7 @@ resource "aws_lambda_function" "collect_papers" {
   source_code_hash = data.archive_file.collect_papers.output_base64sha256
   handler          = "collect_papers_handler.handler"
   runtime          = "python3.12"
-  timeout          = 900  # 논문 수집 + Bedrock 호출 포함, 최대 15분
+  timeout          = 900 # 논문 수집 + Bedrock 호출 포함, 최대 15분
 
   environment {
     variables = {
