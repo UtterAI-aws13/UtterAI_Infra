@@ -400,3 +400,4 @@ labels:
 - [Dev 보안 하드닝 이력](../dev/security/hardening.md)
 - [Prod 인프라 가이드](./README.md) — §21(PSS+Kyverno 계획), §22(Cilium 계획), §23(Secrets 계획)
 - [Prod 전환 체크리스트](./migration-checklist.md)
+- [EKS Private Endpoint 전환 가이드](./eks-private-endpoint.md) — 왜 하는지, 워크플로우 변화, SSM/VPN 접근 수단 구성
