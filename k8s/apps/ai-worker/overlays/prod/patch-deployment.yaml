@@ -11,6 +11,9 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
+      volumes:
+        - name: tmp
+          emptyDir: {}
       containers:
         - name: worker
           env:
@@ -30,10 +33,16 @@ spec:
               value: INFO
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: deployment.environment=prod,team=utterai
+            - name: HF_HOME
+              value: /tmp/huggingface
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -48,6 +57,9 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
+      volumes:
+        - name: tmp
+          emptyDir: {}
       containers:
         - name: ml-gpu-worker
           env:
@@ -63,10 +75,16 @@ spec:
               value: utterai-prod-reports
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: deployment.environment=prod,team=utterai
+            - name: HF_HOME
+              value: /tmp/huggingface
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -81,6 +99,9 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
+      volumes:
+        - name: tmp
+          emptyDir: {}
       containers:
         - name: worker
           env:
@@ -96,3 +117,7 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp

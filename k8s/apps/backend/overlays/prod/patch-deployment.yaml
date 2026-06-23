@@ -11,6 +11,9 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
+      volumes:
+      - name: tmp
+        emptyDir: {}
       initContainers:
       - name: db-migrate
         securityContext:
@@ -18,6 +21,10 @@ spec:
           capabilities:
             drop:
             - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
       containers:
       - name: api
         securityContext:
@@ -25,6 +32,10 @@ spec:
           capabilities:
             drop:
             - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -38,6 +49,9 @@ spec:
         runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
+      volumes:
+      - name: tmp
+        emptyDir: {}
       initContainers:
       - name: db-migrate
         securityContext:
@@ -45,6 +59,10 @@ spec:
           capabilities:
             drop:
             - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
       containers:
       - name: api
         securityContext:
@@ -52,3 +70,7 @@ spec:
           capabilities:
             drop:
             - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
