@@ -92,22 +92,3 @@ spec:
     ports:
     - port: 4318
       protocol: TCP
----
-# backend → ai-worker namespace 내부 호출 허용 (utterai.io/environment: prod)
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: allow-egress-ai-api
-spec:
-  podSelector:
-    matchLabels:
-      app: utterai-api
-  policyTypes:
-  - Egress
-  egress:
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          utterai.io/environment: prod
-    ports:
-    - port: 8080
