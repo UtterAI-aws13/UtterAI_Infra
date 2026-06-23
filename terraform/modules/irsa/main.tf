@@ -96,7 +96,7 @@ resource "aws_iam_role" "api" {
       Condition = {
         StringEquals = {
           "${local.oidc_aud}" = "sts.amazonaws.com"
-          "${local.oidc_sub}" = "system:serviceaccount:utterai-prod-api:utterai-api-sa"
+          "${local.oidc_sub}" = "system:serviceaccount:${var.api_namespace}:utterai-api-sa"
         }
       }
     }]

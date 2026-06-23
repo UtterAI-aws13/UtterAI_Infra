@@ -82,6 +82,11 @@ variable "node_security_group_id" {
   type = string
 }
 
+variable "api_namespace" {
+  type        = string
+  description = "K8s namespace where the API service account lives"
+}
+
 variable "kubecost_bucket_arn" {
   type = string
 }

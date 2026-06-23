@@ -271,4 +271,6 @@ module "irsa" {
 
   private_app_subnet_ids = data.terraform_remote_state.network.outputs.private_app_subnet_ids
   node_security_group_id = data.terraform_remote_state.eks.outputs.node_security_group_id
+
+  api_namespace = "utterai-api"
 }
