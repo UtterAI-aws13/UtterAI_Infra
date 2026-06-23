@@ -25,3 +25,8 @@ output "pod_subnet_ids" {
 output "pod_subnet_az_map" {
   value = module.vpc.pod_subnet_az_map
 }
+
+output "client_vpn_endpoint_id" {
+  value       = aws_ec2_client_vpn_endpoint.this.id
+  description = "Client VPN endpoint ID — .ovpn 파일 생성 시 사용"
+}
