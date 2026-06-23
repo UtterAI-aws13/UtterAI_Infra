@@ -36,7 +36,6 @@ jobs:
       - name: Render dev overlay
         run: |
           kubectl kustomize k8s/apps/ai-worker/overlays/dev > /tmp/ai-worker-dev.yaml
-          grep "namespace: utterai-ai-api" /tmp/ai-worker-dev.yaml
           grep "namespace: utterai-ai-cpu" /tmp/ai-worker-dev.yaml
           grep "namespace: utterai-ai-gpu" /tmp/ai-worker-dev.yaml
           grep "namespace: utterai-batch" /tmp/ai-worker-dev.yaml
