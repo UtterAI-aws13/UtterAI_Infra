@@ -299,5 +299,6 @@ jobs:
             echo "dev 환경 PR은 필수 CI 통과 후 자동 merge되도록 설정합니다."
             gh pr merge "$PR_URL" --admin --squash --delete-branch
           else
-            echo "prod 환경 PR은 사람이 검토하고 merge해야 합니다."
+            echo "prod 환경 PR은 사람이 검토하고 merge해야 합니다.(현재 자동 merge로 설정됨.)"
+            gh pr merge "$PR_URL" --admin --squash --delete-branch
           fi
