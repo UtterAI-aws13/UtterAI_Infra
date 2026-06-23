@@ -23,8 +23,6 @@ data:
   JWT_ALGORITHM: HS256
   ACCESS_TOKEN_EXPIRE_MINUTES: '60'
   REFRESH_TOKEN_EXPIRE_DAYS: '14'
-  AI_SERVICE_BASE_URL: http://utterai-ai-api-service.utterai-ai-api.svc.cluster.local:8080
-  AI_SERVICE_ANALYSIS_PATH: "/internal/ai/analysis-jobs"
   AWS_REGION: ap-northeast-2
   RAW_AUDIO_BUCKET: PLACEHOLDER
   TEMPLATE_BUCKET: PLACEHOLDER

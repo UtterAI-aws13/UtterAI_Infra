@@ -293,7 +293,6 @@ Cilium 미사용 결정에 따라 AWS VPC CNI 내장 NetworkPolicy로 대체.
 | `allow-egress-dns` | 전체 Pod | 53/UDP, 53/TCP 허용 |
 | `allow-egress-aws` | 전체 Pod | 443 (SQS/S3/Bedrock/SM VPC Endpoint) |
 | `allow-egress-aws` | backend | + 5432 (RDS), 6379 (Redis) |
-| `allow-egress-ai-api` | backend api | utterai-prod-ai-worker ns → 8080 허용 |
 
 **적용 파일**:
 - `k8s/apps/backend/overlays/prod/network-policy.yaml`
@@ -309,7 +308,6 @@ Cilium 미사용 결정에 따라 AWS VPC CNI 내장 NetworkPolicy로 대체.
 |------|---------------|------|
 | `utterai-api-blue` | 1 | prod replicas: 2 |
 | `utterai-api-green` | 1 | prod replicas: 2 |
-| `utterai-ai-api` | 1 | prod replicas: 2 |
 | cpu-worker, ml-gpu-worker, batch-worker | 미적용 | KEDA 0-scale 허용 필요 |
 
 **적용 파일**:
@@ -351,7 +349,7 @@ labels:
   pod-security.kubernetes.io/warn: restricted
   pod-security.kubernetes.io/audit: restricted
 
-# utterai-ai-api, utterai-ai-cpu, utterai-ai-gpu, utterai-batch — enforce: baseline
+# utterai-ai-cpu, utterai-ai-gpu, utterai-batch — enforce: baseline
 # GPU NVIDIA Device Plugin 특성상 restricted 시 스케줄링 실패 가능 → 전체 baseline
 labels:
   pod-security.kubernetes.io/enforce: baseline
@@ -364,40 +362,50 @@ labels:
 
 ---
 
-## 4. 우선순위별 TODO 목록
+## 4. 보안 TODO — 적용 현황 및 우선순위
 
 ### 적용 완료
 
 | 항목 | 확인일 | 파일 |
 |------|--------|------|
 | NetworkPolicy — 네임스페이스별 deny-all + 명시적 허용 정책 | 2026-06-16 | `terraform/modules/eks/main.tf`, `k8s/apps/*/overlays/prod/network-policy.yaml` |
-| PodDisruptionBudget — backend blue/green + ai-api `minAvailable: 1` | 2026-06-16 | `k8s/apps/*/overlays/prod/pdb.yaml` |
+| PodDisruptionBudget — backend blue/green `minAvailable: 1` | 2026-06-16 | `k8s/apps/*/overlays/prod/pdb.yaml` |
 | ALB ACM 인증서 ARN 주입 + HTTP→HTTPS 리다이렉트 | 2026-06-22 | `k8s/apps/backend/overlays/prod/patch-ingress.yaml` |
 | ArgoCD admin bcrypt 비밀번호 주입 | 2026-06-22 | `terraform/modules/eks-addons/main.tf` |
-| PSA 레이블 — `utterai-prod-api`: restricted / `utterai-ai-*|utterai-batch`: baseline | 2026-06-22 | `k8s/apps/*/overlays/prod/namespace.yaml` |
+| PSA 레이블 — `utterai-prod-api`: restricted / `utterai-ai-*`, `utterai-batch`: baseline | 2026-06-22 | `k8s/apps/*/overlays/prod/namespace.yaml` |
 | SecurityContext — `allowPrivilegeEscalation: false`, `capabilities.drop: ALL`, `runAsNonRoot: true`, `seccompProfile: RuntimeDefault` 전 워크로드 | 2026-06-22 | `k8s/apps/*/overlays/prod/patch-deployment.yaml` |
 | podAntiAffinity — backend blue/green `requiredDuringSchedulingIgnoredDuringExecution` | 2026-06-22 | `k8s/apps/backend/overlays/prod/deployment-blue/green.yaml` |
+| ai-api 게이트웨이 dead reference 제거 — ConfigMap, Namespace, AI_SERVICE_BASE_URL, allow-egress-ai-api NetworkPolicy | 2026-06-23 | `k8s/apps/ai-worker/base/configmap.yaml`, `k8s/apps/ai-worker/overlays/prod/namespace.yaml`, `k8s/apps/backend/base/configmap.yaml`, `k8s/apps/backend/overlays/prod/network-policy.yaml` |
 
-### K8s 미적용 — 우선순위 순
+---
 
-| # | 항목 | 비고 |
-|---|------|------|
-| 1 | WAF 연결 (ALB + CloudFront) | WebACL 미생성. CloudFront는 `us-east-1` provider 필요 |
-| 2 | `readOnlyRootFilesystem: true` + `/tmp` emptyDir | cpu/gpu-worker는 `HF_HOME=/tmp/huggingface` emptyDir 마운트 병행 필요 |
-| 3 | Per-Namespace SecretStore 분리 | base ExternalSecret 5개 전부 `ClusterSecretStore` 참조 중 |
-| 4 | ECR imageTagMutability IMMUTABLE | `modules/ecr/main.tf`: `image_tag_mutability = "MUTABLE"` |
+### 미적용 항목 — 리스크/난이도별 우선순위
 
-### Terraform 미적용 — 우선순위 순
+#### 즉시 적용 가능 (운영 영향 없음, ArgoCD sync 또는 terraform apply로 반영)
 
-| # | 항목 | 파일 |
-|---|------|------|
-| 1 | EKS `endpoint_public_access = false` | `terraform/modules/eks/main.tf:70` — 현재 `true` |
-| 2 | VPC Flow Logs 활성화 | `terraform/environments/prod/01-network/main.tf` (신규 추가 필요) |
-| 3 | EKS etcd KMS 봉투 암호화 | `terraform/modules/eks/main.tf` — `encryption_config` 블록 없음 (기존 클러스터 적용 시 Secret 전체 재암호화 발생) |
-| 4 | Redis `automatic_failover_enabled = true` + `multi_az_enabled = true` | `terraform/modules/redis/main.tf` — `num_cache_clusters=2`이나 failover 미설정 |
-| 5 | Redis tfstate 토큰 노출 해소 (Terraform 1.10+) | `terraform/modules/redis/main.tf` — `random_password` → ephemeral 전환 |
-| 6 | S3/SQS/Secrets Manager KMS CMK 전환 | 현재 모두 AWS managed key 또는 SSE-S3 사용 중 |
-| 7 | S3 버전 관리 + 액세스 로깅 | `terraform/modules/s3/main.tf` — 두 블록 모두 없음 |
+| 순위 | 항목 | 작업 위치 | 비고 |
+|------|------|----------|------|
+| 1 | `readOnlyRootFilesystem: true` | K8s — `patch-deployment.yaml` 수정 | cpu/gpu-worker는 `HF_HOME=/tmp/huggingface`용 `/tmp` emptyDir 마운트 병행 필요 |
+| 2 | ECR `imageTagMutability = "IMMUTABLE"` | Terraform — `modules/ecr/main.tf` 1줄 | 기존 이미지 영향 없음. CI/CD가 이미 SHA 태그 사용 중이면 충돌 없음 |
+| 3 | S3 버전 관리 (`raw-audio`, `reports`) + 액세스 로깅 | Terraform — `modules/s3/main.tf` | 기존 데이터 영향 없음, 스토리지 비용 소폭 증가 |
+
+#### 중간 난이도 (신규 리소스 생성 또는 다수 파일 수정, 기존 서비스 영향 없음)
+
+| 순위 | 항목 | 작업 위치 | 비고 |
+|------|------|----------|------|
+| 4 | WAF 연결 — ALB regional WebACL + CloudFront WebACL | Terraform — `04-addons/main.tf` 신규 + `patch-ingress.yaml` ARN 주입 | CloudFront WAF는 `us-east-1` provider 필요. AWS Managed Rule Group으로 시작 권장 |
+| 5 | Per-Namespace SecretStore 분리 | K8s — 네임스페이스별 `SecretStore` yaml 추가 + ExternalSecret 5개 `secretStoreRef` 수정 | 현재 `ClusterSecretStore` 1개가 클러스터 전체 커버 중. 대상: `utterai-prod-api`, `utterai-ai-gpu`, `utterai-ai-cpu`, `utterai-batch` |
+| 6 | Redis `automatic_failover_enabled = true` + `multi_az_enabled = true` | Terraform — `modules/redis/main.tf` 2줄 추가 | `num_cache_clusters=2`이나 failover 미설정 상태. `terraform apply` 중 ElastiCache 수분 downtime 가능 |
+| 7 | S3/SQS/Secrets Manager KMS CMK 전환 | Terraform — `modules/s3`, `modules/sqs`, `modules/secrets` | 현재 SSE-S3/Managed SSE/AWS 기본 키 사용 중. 기존 버킷/큐는 설정 변경만으로 가능 (데이터 이동 없음) |
+
+#### 신중하게 계획 필요 (운영 영향 또는 불가역적 변경)
+
+| 순위 | 항목 | 작업 위치 | 주의사항 |
+|------|------|----------|---------|
+| 8 | EKS `endpoint_public_access = false` | Terraform — `modules/eks/main.tf:70` | 적용 즉시 퍼블릭 kubectl 차단. GitHub Actions가 VPC 내부에서 실행 중인지 사전 확인 필수. Bastion 또는 VPN 없으면 이후 접근 불가 |
+| 9 | VPC Flow Logs 활성화 | Terraform — `01-network/main.tf` 신규 | CloudWatch Logs 비용 발생 (트래픽량에 따라 월 수만~수십만원). 보존 기간 30일 권장 |
+| 10 | EKS etcd KMS 봉투 암호화 | Terraform — `modules/eks/main.tf` `encryption_config` 블록 추가 | 기존 클러스터 적용 시 클러스터 내 모든 Secret 전체 재암호화 발생. 신규 클러스터 생성 시 처음부터 포함하는 것이 안전 |
+| 11 | Redis tfstate 토큰 노출 해소 | Terraform — `modules/redis/main.tf` | Terraform 1.10+ `ephemeral` 리소스 필요. 현재 `random_password` 결과가 S3 tfstate에 평문 저장 중 |
 
 ---
 
