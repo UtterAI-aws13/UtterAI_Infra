@@ -7,7 +7,7 @@
 >
 > **2026-06-16 적용 완료**: NetworkPolicy (AWS VPC CNI native), PodDisruptionBudget  
 > **2026-06-22 적용 완료**: ALB ACM 인증서, ArgoCD admin bcrypt 비밀번호, PSA 레이블, SecurityContext 기본값 (allowPrivilegeEscalation/capabilities.drop/runAsNonRoot/seccompProfile), podAntiAffinity  
-> **2026-06-23 적용 완료**: readOnlyRootFilesystem (전 워크로드 + /tmp emptyDir 마운트), ai-api dead reference 제거
+> **2026-06-23 적용 완료**: readOnlyRootFilesystem (전 워크로드 + /tmp emptyDir 마운트), ai-api dead reference 제거, ECR imageTagMutability IMMUTABLE
 
 ---
 
@@ -55,7 +55,7 @@
 | **Kyverno** | 없음 | **미설치** |
 | **NetworkPolicy** | 없음 | ✅ VPC CNI native NetworkPolicy 활성화 + 네임스페이스별 deny-all + 명시적 허용 정책 (`network-policy.yaml`) |
 | **ClusterSecretStore** | 클러스터 전체 공유 | **미분리** — base ExternalSecret 전체가 `ClusterSecretStore` 사용 중 |
-| **ECR Immutability** | MUTABLE | **미적용** — `modules/ecr/main.tf`: `image_tag_mutability = "MUTABLE"` |
+| **ECR Immutability** | MUTABLE | ✅ `image_tag_mutability = "IMMUTABLE"` — `modules/ecr/variables.tf` default 변경 |
 | **PodDisruptionBudget** | 없음 | ✅ backend blue/green + ai-api `minAvailable: 1` (`pdb.yaml`) |
 | **podAntiAffinity** | 없음 | ✅ backend blue/green `requiredDuringSchedulingIgnoredDuringExecution` 적용 (`deployment-blue/green.yaml`, PR #262) |
 | **ArgoCD 인증** | Helm 기본 admin | ✅ bcrypt 비밀번호 주입 완료 |
@@ -361,6 +361,7 @@ labels:
 | podAntiAffinity — backend blue/green `requiredDuringSchedulingIgnoredDuringExecution` | 2026-06-22 | `k8s/apps/backend/overlays/prod/deployment-blue/green.yaml` |
 | ai-api 게이트웨이 dead reference 제거 — ConfigMap, Namespace, AI_SERVICE_BASE_URL, allow-egress-ai-api NetworkPolicy | 2026-06-23 | `k8s/apps/ai-worker/base/configmap.yaml`, `k8s/apps/ai-worker/overlays/prod/namespace.yaml`, `k8s/apps/backend/base/configmap.yaml`, `k8s/apps/backend/overlays/prod/network-policy.yaml` |
 | `readOnlyRootFilesystem: true` — 전 워크로드 container 레벨 적용. `/tmp` emptyDir 마운트. cpu/gpu-worker `HF_HOME=/tmp/huggingface` 명시 | 2026-06-23 | `k8s/apps/backend/overlays/prod/patch-deployment.yaml`, `k8s/apps/ai-worker/overlays/prod/patch-deployment.yaml` |
+| ECR `image_tag_mutability = "IMMUTABLE"` — 모듈 variable 추가 (default IMMUTABLE). 기존 호출부 수정 불필요 | 2026-06-23 | `terraform/modules/ecr/variables.tf`, `terraform/modules/ecr/main.tf` |
 
 ---
 
@@ -370,8 +371,7 @@ labels:
 
 | 순위 | 항목 | 작업 위치 | 비고 |
 |------|------|----------|------|
-| 1 | ECR `imageTagMutability = "IMMUTABLE"` | Terraform — `modules/ecr/main.tf` 1줄 | 기존 이미지 영향 없음. CI/CD가 이미 SHA 태그 사용 중이면 충돌 없음 |
-| 2 | S3 버전 관리 (`raw-audio`, `reports`) + 액세스 로깅 | Terraform — `modules/s3/main.tf` | 기존 데이터 영향 없음, 스토리지 비용 소폭 증가 |
+| 1 | S3 버전 관리 (`raw-audio`, `reports`) + 액세스 로깅 | Terraform — `modules/s3/main.tf` | 기존 데이터 영향 없음, 스토리지 비용 소폭 증가 |
 
 #### 중간 난이도 (신규 리소스 생성 또는 다수 파일 수정, 기존 서비스 영향 없음)
 
