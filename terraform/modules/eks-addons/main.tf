@@ -329,11 +329,9 @@ resource "helm_release" "kubecost" {
         }
       }
 
-      federatedStorageConfig = var.kubecost_s3_bucket_name != "" ? {
-        enabled = true
+      federatedStorageConfig = {
+        enabled             = var.kubecost_s3_bucket_name != "" ? true : false
         storageConfigSecret = "kubecost-federated-storage"
-      } : {
-        enabled = false
       }
 
       kubecostAggregator = {
