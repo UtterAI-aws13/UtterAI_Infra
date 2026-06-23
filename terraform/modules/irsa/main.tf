@@ -397,6 +397,20 @@ resource "aws_iam_role_policy" "kubecost" {
           var.kubecost_bucket_arn,
           "${var.kubecost_bucket_arn}/*"
         ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:DescribeAddresses",
+          "ec2:DescribeInstances",
+          "ec2:DescribeRegions",
+          "ec2:DescribeSnapshots",
+          "ec2:DescribeVolumes",
+          "ec2:DescribeVolumesModifications",
+          "ec2:DescribeVolumeStatus",
+          "pricing:GetProducts"
+        ]
+        Resource = "*"
       }
     ]
   })

@@ -314,9 +314,9 @@ resource "helm_release" "kubecost" {
       }
 
       kubecostModel = {
-        etlDailyStoreDurationDays   = var.kubecost_etl_daily_store_duration_days
-        etlHourlyStoreDurationHours = var.kubecost_etl_hourly_store_duration_hours
-        maxQueryConcurrency         = 3
+        etlDailyStoreDurationDays    = var.kubecost_etl_daily_store_duration_days
+        etlHourlyStoreDurationHours  = var.kubecost_etl_hourly_store_duration_hours
+        maxQueryConcurrency          = 3
         federatedStorageConfigSecret = var.kubecost_s3_bucket_name != "" ? "kubecost-federated-storage" : null
         resources = {
           requests = {
