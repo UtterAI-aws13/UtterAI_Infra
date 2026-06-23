@@ -46,3 +46,13 @@ variable "pod_subnet_cidrs" {
   type    = list(string)
   default = ["100.64.0.0/17", "100.64.128.0/17"]
 }
+
+variable "vpn_server_certificate_arn" {
+  type        = string
+  description = "ACM certificate ARN for Client VPN server (ap-northeast-2)."
+}
+
+variable "vpn_ca_certificate_arn" {
+  type        = string
+  description = "ACM CA certificate ARN for Client VPN client authentication (ap-northeast-2)."
+}
