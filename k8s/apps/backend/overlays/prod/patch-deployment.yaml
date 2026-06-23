@@ -5,6 +5,10 @@ metadata:
   name: utterai-api-blue
 spec:
   replicas: 0
+  strategy:
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   template:
     spec:
       securityContext:
@@ -43,6 +47,10 @@ metadata:
   name: utterai-api-green
 spec:
   replicas: 2
+  strategy:
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   template:
     spec:
       securityContext:
