@@ -327,18 +327,13 @@ resource "helm_release" "kubecost" {
             memory = "1Gi"
           }
         }
-        thanos = {
-          objectStore = {
-            enabled = var.kubecost_s3_bucket_name != "" ? true : false
-            config = var.kubecost_s3_bucket_name != "" ? yamlencode({
-              type = "S3"
-              config = {
-                bucket   = var.kubecost_s3_bucket_name
-                endpoint = "s3.${var.aws_region}.amazonaws.com"
-              }
-            }) : ""
-          }
-        }
+      }
+
+      federatedStorageConfig = var.kubecost_s3_bucket_name != "" ? {
+        enabled = true
+        storageConfigSecret = "kubecost-federated-storage"
+      } : {
+        enabled = false
       }
 
       kubecostAggregator = {
@@ -383,6 +378,30 @@ resource "helm_release" "kubecost" {
       }
     })
   ]
+}
+
+# ── Kubecost Federated Storage Secret ────────────────────────────────────────
+
+resource "kubernetes_secret" "kubecost_federated_storage" {
+  count = var.kubecost_enabled && var.kubecost_s3_bucket_name != "" ? 1 : 0
+
+  metadata {
+    name      = "kubecost-federated-storage"
+    namespace = var.kubecost_namespace
+  }
+
+  data = {
+    "object-store.yaml" = yamlencode({
+      type = "S3"
+      config = {
+        bucket   = var.kubecost_s3_bucket_name
+        endpoint = "s3.${var.aws_region}.amazonaws.com"
+        region   = var.aws_region
+      }
+    })
+  }
+
+  depends_on = [helm_release.kubecost]
 }
 
 # ── Grafana Tempo ────────────────────────────────────────────────────────────
