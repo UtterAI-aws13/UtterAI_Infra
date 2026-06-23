@@ -317,6 +317,7 @@ resource "helm_release" "kubecost" {
         etlDailyStoreDurationDays   = var.kubecost_etl_daily_store_duration_days
         etlHourlyStoreDurationHours = var.kubecost_etl_hourly_store_duration_hours
         maxQueryConcurrency         = 3
+        federatedStorageConfigSecret = var.kubecost_s3_bucket_name != "" ? "kubecost-federated-storage" : null
         resources = {
           requests = {
             cpu    = "100m"
@@ -327,11 +328,6 @@ resource "helm_release" "kubecost" {
             memory = "1Gi"
           }
         }
-      }
-
-      federatedStorageConfig = {
-        enabled             = var.kubecost_s3_bucket_name != "" ? true : false
-        storageConfigSecret = "kubecost-federated-storage"
       }
 
       kubecostAggregator = {
@@ -389,14 +385,13 @@ resource "kubernetes_secret" "kubecost_federated_storage" {
   }
 
   data = {
-    "object-store.yaml" = yamlencode({
-      type = "S3"
-      config = {
-        bucket   = var.kubecost_s3_bucket_name
-        endpoint = "s3.${var.aws_region}.amazonaws.com"
-        region   = var.aws_region
-      }
-    })
+    "federated-store.yaml" = <<-EOT
+      type: S3
+      config:
+        bucket: ${var.kubecost_s3_bucket_name}
+        endpoint: s3.${var.aws_region}.amazonaws.com
+        region: ${var.aws_region}
+    EOT
   }
 
   depends_on = [helm_release.kubecost]
