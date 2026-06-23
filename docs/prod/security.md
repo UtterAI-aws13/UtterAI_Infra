@@ -6,7 +6,8 @@
 > Dev에서 허용한 것 중 Prod에서 강화해야 할 항목을 정리한다.
 >
 > **2026-06-16 적용 완료**: NetworkPolicy (AWS VPC CNI native), PodDisruptionBudget  
-> **2026-06-22 적용 완료**: ALB ACM 인증서, ArgoCD admin bcrypt 비밀번호, PSA 레이블, SecurityContext 기본값 (allowPrivilegeEscalation/capabilities.drop/runAsNonRoot/seccompProfile), podAntiAffinity
+> **2026-06-22 적용 완료**: ALB ACM 인증서, ArgoCD admin bcrypt 비밀번호, PSA 레이블, SecurityContext 기본값 (allowPrivilegeEscalation/capabilities.drop/runAsNonRoot/seccompProfile), podAntiAffinity  
+> **2026-06-23 적용 완료**: readOnlyRootFilesystem (전 워크로드 + /tmp emptyDir 마운트), ai-api dead reference 제거
 
 ---
 
@@ -49,7 +50,7 @@
 | **ALB HTTPS** | 미설정 | ✅ HTTP→HTTPS 리다이렉트 + ACM ARN 주입 완료 (`patch-ingress.yaml`) |
 | **ALB WAF 연결** | 없음 | **미적용** — `wafv2-acl-arn` annotation 없음 |
 | **Pod SecurityContext** | 부분 적용 | ✅ `allowPrivilegeEscalation: false` + `capabilities.drop: ALL` + `runAsNonRoot: true` (pod 레벨) + `seccompProfile: RuntimeDefault` (pod 레벨) — 전 워크로드 적용 |
-| **readOnlyRootFilesystem** | 없음 | **미적용** — prod patch-deployment.yaml에 없음 |
+| **readOnlyRootFilesystem** | 없음 | ✅ `readOnlyRootFilesystem: true` + `/tmp` emptyDir 마운트 — 전 워크로드 적용. cpu/gpu-worker는 `HF_HOME=/tmp/huggingface` 명시 |
 | **PSA 레이블** | 없음 | ✅ `utterai-prod-api`: enforce restricted / `utterai-ai-api|cpu|gpu`, `utterai-batch`: enforce baseline (`namespace.yaml`) |
 | **Kyverno** | 없음 | **미설치** |
 | **NetworkPolicy** | 없음 | ✅ VPC CNI native NetworkPolicy 활성화 + 네임스페이스별 deny-all + 명시적 허용 정책 (`network-policy.yaml`) |
@@ -218,28 +219,11 @@ WAF 연결을 위해서는 `04-addons/main.tf`에서 `aws_wafv2_web_acl` 생성 
 | `seccompProfile: RuntimeDefault` | ✅ pod 레벨 | ✅ pod 레벨 | ✅ pod 레벨 | ✅ pod 레벨 |
 | `allowPrivilegeEscalation: false` | ✅ container 레벨 | ✅ container 레벨 | ✅ container 레벨 | ✅ container 레벨 |
 | `capabilities.drop: ALL` | ✅ container 레벨 | ✅ container 레벨 | ✅ container 레벨 | ✅ container 레벨 |
-| `readOnlyRootFilesystem: true` | ❌ 미적용 | ❌ 미적용 | ❌ 미적용 | ❌ 미적용 |
+| `readOnlyRootFilesystem: true` | ✅ container 레벨 | ✅ container 레벨 | ✅ container 레벨 | ✅ container 레벨 |
 
-**남은 작업 — `readOnlyRootFilesystem: true`:**
+**적용 완료 (2026-06-23)** — 전 워크로드에 `readOnlyRootFilesystem: true` + `/tmp` emptyDir 마운트 적용. cpu/gpu-worker는 `HF_HOME=/tmp/huggingface` 환경변수 명시.
 
-CPU/GPU Worker는 `HF_HOME: /tmp/huggingface` 사용으로 인해 `/tmp`를 emptyDir로 마운트해야 한다:
-
-```yaml
-# k8s/apps/ai-worker/overlays/prod/patch-deployment.yaml
-spec:
-  template:
-    spec:
-      volumes:
-        - name: hf-cache
-          emptyDir: {}
-      containers:
-        - name: worker
-          securityContext:
-            readOnlyRootFilesystem: true
-          volumeMounts:
-            - name: hf-cache
-              mountPath: /tmp/huggingface
-```
+> GPU worker에서 CUDA 커널 캐시(`~/.nv`)를 `/tmp` 외 경로에 쓰는 경우 `Read-only file system` 에러가 발생할 수 있다. 발생 시 해당 경로에 별도 emptyDir를 추가할 것.
 
 ---
 
@@ -376,6 +360,7 @@ labels:
 | SecurityContext — `allowPrivilegeEscalation: false`, `capabilities.drop: ALL`, `runAsNonRoot: true`, `seccompProfile: RuntimeDefault` 전 워크로드 | 2026-06-22 | `k8s/apps/*/overlays/prod/patch-deployment.yaml` |
 | podAntiAffinity — backend blue/green `requiredDuringSchedulingIgnoredDuringExecution` | 2026-06-22 | `k8s/apps/backend/overlays/prod/deployment-blue/green.yaml` |
 | ai-api 게이트웨이 dead reference 제거 — ConfigMap, Namespace, AI_SERVICE_BASE_URL, allow-egress-ai-api NetworkPolicy | 2026-06-23 | `k8s/apps/ai-worker/base/configmap.yaml`, `k8s/apps/ai-worker/overlays/prod/namespace.yaml`, `k8s/apps/backend/base/configmap.yaml`, `k8s/apps/backend/overlays/prod/network-policy.yaml` |
+| `readOnlyRootFilesystem: true` — 전 워크로드 container 레벨 적용. `/tmp` emptyDir 마운트. cpu/gpu-worker `HF_HOME=/tmp/huggingface` 명시 | 2026-06-23 | `k8s/apps/backend/overlays/prod/patch-deployment.yaml`, `k8s/apps/ai-worker/overlays/prod/patch-deployment.yaml` |
 
 ---
 
@@ -385,9 +370,8 @@ labels:
 
 | 순위 | 항목 | 작업 위치 | 비고 |
 |------|------|----------|------|
-| 1 | `readOnlyRootFilesystem: true` | K8s — `patch-deployment.yaml` 수정 | cpu/gpu-worker는 `HF_HOME=/tmp/huggingface`용 `/tmp` emptyDir 마운트 병행 필요 |
-| 2 | ECR `imageTagMutability = "IMMUTABLE"` | Terraform — `modules/ecr/main.tf` 1줄 | 기존 이미지 영향 없음. CI/CD가 이미 SHA 태그 사용 중이면 충돌 없음 |
-| 3 | S3 버전 관리 (`raw-audio`, `reports`) + 액세스 로깅 | Terraform — `modules/s3/main.tf` | 기존 데이터 영향 없음, 스토리지 비용 소폭 증가 |
+| 1 | ECR `imageTagMutability = "IMMUTABLE"` | Terraform — `modules/ecr/main.tf` 1줄 | 기존 이미지 영향 없음. CI/CD가 이미 SHA 태그 사용 중이면 충돌 없음 |
+| 2 | S3 버전 관리 (`raw-audio`, `reports`) + 액세스 로깅 | Terraform — `modules/s3/main.tf` | 기존 데이터 영향 없음, 스토리지 비용 소폭 증가 |
 
 #### 중간 난이도 (신규 리소스 생성 또는 다수 파일 수정, 기존 서비스 영향 없음)
 
