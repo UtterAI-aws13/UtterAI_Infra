@@ -2,7 +2,7 @@
 
 > 작성일: 2026-06-23  
 > 상태: **미적용** — 사전 조건 구성 후 적용 예정  
-> 관련 파일: `terraform/modules/eks/main.tf:69-71`, `terraform/modules/vpc/main.tf`
+> 관련 파일: `terraform/modules/eks/main.tf:69-71`, `terraform/environments/prod/01-network/main.tf`
 
 ---
 
@@ -12,8 +12,10 @@
 2. [EKS Endpoint 보안이 중요한 이유](#2-eks-endpoint-보안이-중요한-이유)
 3. [현재 워크플로우](#3-현재-워크플로우)
 4. [적용 후 워크플로우](#4-적용-후-워크플로우)
-5. [사전 조건 — 접근 수단 확보](#5-사전-조건--접근-수단-확보)
-6. [적용 절차](#6-적용-절차)
+5. [ACM 현황 및 VPN 인증서 위치](#5-acm-현황-및-vpn-인증서-위치)
+6. [구현 순서 — 인프라 작업](#6-구현-순서--인프라-작업)
+7. [팀원 각각 해야 할 순서](#7-팀원-각각-해야-할-순서)
+8. [EKS Endpoint 닫기](#8-eks-endpoint-닫기)
 
 ---
 
@@ -49,7 +51,7 @@
 
 **시나리오 B: 인터넷 스캐너에 의한 익스플로잇**
 
-[Shodan](https://www.shodan.io), [Censys](https://censys.io) 같은 인터넷 스캐너는 Kubernetes API 서버(`port 443`, `k8s` 헤더)를 상시 탐색한다. 공개된 EKS endpoint는 자동으로 인덱싱되고, 알려진 취약점(misconfigured RBAC, anonymous access 등)을 자동 시도하는 봇의 대상이 된다.
+Shodan, Censys 같은 인터넷 스캐너는 Kubernetes API 서버(`port 443`, `k8s` 헤더)를 상시 탐색한다. 공개된 EKS endpoint는 자동으로 인덱싱되고, 알려진 취약점(misconfigured RBAC, anonymous access 등)을 자동 시도하는 봇의 대상이 된다.
 
 → **Endpoint가 비공개면**: 스캐너에 노출되지 않아 탐색 자체가 차단된다.
 
@@ -85,7 +87,7 @@ vpc_config {
 }
 ```
 
-`endpoint_public_access = true`인 상태에서 EKS API 서버 URL은 다음과 같이 공개 DNS로 노출된다:
+`endpoint_public_access = true`인 상태에서 EKS API 서버 URL은 공개 DNS로 노출된다:
 
 ```
 https://<CLUSTER_ID>.gr7.ap-northeast-2.eks.amazonaws.com
@@ -119,7 +121,6 @@ https://<CLUSTER_ID>.gr7.ap-northeast-2.eks.amazonaws.com
                                                   │
                                                   ▼
                                           EKS Control Plane
-                                          (ap-northeast-2)
 
 ┌─────────────────────────────────────────────────────┐
 │ GitHub Actions (ubuntu-latest, VPC 외부)             │
@@ -129,7 +130,6 @@ https://<CLUSTER_ID>.gr7.ap-northeast-2.eks.amazonaws.com
                                                    │ GitHub (퍼블릭)
                                                    ▼
                                               Git 저장소
-                                                   │
                                                    │ ArgoCD가 감지 (VPC 내부)
                                                    ▼
                                           EKS Control Plane
@@ -150,182 +150,372 @@ https://<CLUSTER_ID>.gr7.ap-northeast-2.eks.amazonaws.com
 └─────────────────────┼───────────────────────────────┘
                       │
                       ▼
-          [SSM 포트포워딩 or Client VPN]
+           AWS VPN Client (앱 클릭 → Connect)
+                      │ TLS 터널
+                      ▼
+              Client VPN Endpoint
+              (utterai-prod VPC 내부 서브넷)
                       │ VPC 내부 경로
                       ▼
               EKS Private Endpoint
-              (VPC 내부에서만 접근 가능)
                       │
                       ▼
             EKS Control Plane
 
 ┌─────────────────────────────────────────────────────┐
 │ GitHub Actions                                       │
-│                                                     │
-│  git push ─────────────────────────────────────────┐│
-└────────────────────────────────────────────────────┼┘
-                                                     │ 변경 없음
-                                                     ▼
-                                                Git 저장소
-                                                     │
-                                                     │ ArgoCD (VPC 내부)
-                                                     ▼
-                                           EKS Control Plane
+│  git push ──────────────────────────────────────┐   │
+└─────────────────────────────────────────────────┼───┘
+                                                  │ 변경 없음
+                                                  ▼
+                                             Git 저장소
+                                                  │ ArgoCD (VPC 내부)
+                                                  ▼
+                                        EKS Control Plane
 ```
 
 **GitHub Actions 워크플로우는 변경 없다.** 영향받는 것은 개발자 로컬에서의 직접 접근뿐이다.
 
+VPN 연결 중에는 EKS 외에 VPC 안 모든 리소스에도 직접 접근 가능해진다:
+
+```bash
+# 현재는 불가능 — VPN 연결 후 가능
+psql -h utterai-prod-rds.xxxx.ap-northeast-2.rds.amazonaws.com
+redis-cli -h utterai-prod-redis.xxxx.ap-northeast-2.cache.amazonaws.com
+```
+
 ---
 
-## 5. 사전 조건 — 접근 수단 확보
+## 5. ACM 현황 및 VPN 인증서 위치
 
-`endpoint_public_access = false` 적용 전에 반드시 VPC 내부 접근 수단이 있어야 한다. 수단 없이 적용하면 로컬 `kubectl`과 `terraform apply`(04-addons)가 영구 차단된다.
+### 현재 ACM 인증서 구조
 
-### 현재 인프라에서 활용 가능한 것
+| 인증서 | 리전 | 용도 | Terraform 위치 | 상태 |
+|--------|------|------|----------------|------|
+| `api.utterai.org` + `*.utterai.org` | ap-northeast-2 | ALB HTTPS 종료 | `prod/04-addons/main.tf:199` | ✅ 올바른 위치 |
+| CloudFront 도메인 인증서 | us-east-1 | CloudFront HTTPS | `prod/04-addons/main.tf:116` | ✅ 올바른 위치 (CloudFront는 us-east-1 필수) |
 
-`modules/eks/main.tf:55`에 노드 IAM Role에 SSM이 이미 붙어 있다:
+### VPN용 인증서 위치
+
+Client VPN은 기존 인증서와 **완전히 별개**다. VPN 전용 인증서를 새로 만들어 `ap-northeast-2` ACM에 올린다.
+
+| 인증서 | 올리는 위치 | 역할 |
+|--------|------------|------|
+| 서버 인증서 | ACM ap-northeast-2 | VPN 서버 신원 증명 |
+| CA(루트) 인증서 | ACM ap-northeast-2 | 클라이언트 인증서 서명 검증 |
+| 클라이언트 인증서 | ACM 업로드 불필요 | 팀원 `.ovpn` 파일에 포함 |
+
+> 클라이언트 인증서는 ACM에 올리지 않는다. 팀원별 `.ovpn` 파일에 직접 삽입해서 배포한다.
+
+---
+
+## 6. 구현 순서 — 인프라 작업
+
+> 인프라 담당자 1인이 진행. 팀원에게는 §7의 순서만 전달.
+
+---
+
+### Step 1: easy-rsa 설치 및 인증서 생성
+
+```bash
+# easy-rsa 클론
+git clone https://github.com/OpenVPN/easy-rsa.git
+cd easy-rsa/easyrsa3
+
+# PKI 초기화
+./easyrsa init-pki
+
+# CA 생성 (Common Name 입력 프롬프트: utterai-prod-vpn-ca)
+./easyrsa build-ca nopass
+
+# 서버 인증서 생성
+./easyrsa build-server-full utterai-prod-vpn-server nopass
+
+# 팀원별 클라이언트 인증서 생성 (팀원 이름으로 구분)
+./easyrsa build-client-full vpn-alice nopass
+./easyrsa build-client-full vpn-bob nopass
+./easyrsa build-client-full vpn-carol nopass
+./easyrsa build-client-full vpn-david nopass
+```
+
+생성 결과 위치:
+
+```
+pki/
+├── ca.crt                        # CA 인증서
+├── issued/
+│   ├── utterai-prod-vpn-server.crt
+│   ├── vpn-alice.crt
+│   ├── vpn-bob.crt
+│   ├── vpn-carol.crt
+│   └── vpn-david.crt
+└── private/
+    ├── utterai-prod-vpn-server.key
+    ├── vpn-alice.key
+    ├── vpn-bob.key
+    ├── vpn-carol.key
+    └── vpn-david.key
+```
+
+---
+
+### Step 2: ACM에 서버 인증서 + CA 업로드
+
+```bash
+# 서버 인증서 업로드 (ap-northeast-2)
+aws acm import-certificate \
+  --region ap-northeast-2 \
+  --certificate fileb://pki/issued/utterai-prod-vpn-server.crt \
+  --private-key fileb://pki/private/utterai-prod-vpn-server.key \
+  --certificate-chain fileb://pki/ca.crt
+
+# 출력된 ARN을 저장 (Terraform에 사용)
+# CertificateArn: arn:aws:acm:ap-northeast-2:032886669461:certificate/xxxx
+
+# CA 인증서 업로드 (클라이언트 인증서 검증용)
+aws acm import-certificate \
+  --region ap-northeast-2 \
+  --certificate fileb://pki/ca.crt \
+  --private-key fileb://pki/private/ca.key
+
+# 출력된 ARN을 저장
+# CertificateArn: arn:aws:acm:ap-northeast-2:032886669461:certificate/yyyy
+```
+
+---
+
+### Step 3: Terraform — Client VPN 리소스 추가
+
+`terraform/environments/prod/01-network/main.tf`에 추가:
 
 ```hcl
-resource "aws_iam_role_policy_attachment" "node_ssm" {
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
-```
+# ── Client VPN ────────────────────────────────────────────────────────────────
 
-EKS 노드는 이미 SSM Session Manager로 접속 가능한 상태다.
-
----
-
-### 옵션 A: SSM 포트포워딩 (권장 — 추가 리소스 없음)
-
-SSM을 이용해 로컬 포트를 EKS Private Endpoint로 터널링한다. 비용 발생 없음.
-
-**동작 방식:**
-
-```
-로컬 kubectl → localhost:8443
-                    │ SSM Session (암호화 터널)
-                    ▼
-              EKS 노드 (SSM Agent)
-                    │ VPC 내부
-                    ▼
-         EKS Private Endpoint (443)
-```
-
-**설정 방법:**
-
-```bash
-# 1. EKS 노드 인스턴스 ID 확인
-aws ec2 describe-instances \
-  --filters "Name=tag:eks:cluster-name,Values=utterai-prod" \
-            "Name=instance-state-name,Values=running" \
-  --query "Reservations[0].Instances[0].InstanceId" \
-  --output text
-
-# 2. SSM 포트포워딩 시작 (백그라운드)
-aws ssm start-session \
-  --target <INSTANCE_ID> \
-  --document-name AWS-StartPortForwardingSessionToRemoteHost \
-  --parameters '{
-    "host": ["<EKS_PRIVATE_ENDPOINT>"],
-    "portNumber": ["443"],
-    "localPortNumber": ["8443"]
-  }'
-
-# 3. kubeconfig에서 server 주소를 localhost로 변경
-kubectl config set-cluster <CLUSTER_NAME> \
-  --server=https://localhost:8443 \
-  --insecure-skip-tls-verify=true
-
-# 4. kubectl 사용
-kubectl get pods -A
-```
-
-**EKS Private Endpoint 주소 확인:**
-
-```bash
-aws eks describe-cluster \
-  --name utterai-prod \
-  --query "cluster.endpoint" \
-  --output text
-# 출력: https://XXXX.gr7.ap-northeast-2.eks.amazonaws.com
-# → "https://" 제거한 호스트명을 host 파라미터에 사용
-```
-
-**작업 완료 후 kubeconfig 원복:**
-
-```bash
-aws eks update-kubeconfig --name utterai-prod --region ap-northeast-2
-# endpoint_public_access = false 적용 후에는 이 명령은 VPN/SSM 연결 중에만 동작
-```
-
----
-
-### 옵션 B: AWS Client VPN (팀 전체 상시 연결)
-
-팀 인원이 늘거나 SSM 포트포워딩이 불편해지면 전환을 고려한다.
-
-**비용**: VPN Endpoint ~$0.10/hr + 연결당 $0.05/hr ≈ 월 **$70~120**
-
-```hcl
-# terraform/environments/prod/01-network/main.tf 에 추가
 resource "aws_ec2_client_vpn_endpoint" "this" {
-  description            = "utterai-prod-client-vpn"
-  server_certificate_arn = aws_acm_certificate.vpn_server.arn
-  client_cidr_block      = "172.16.0.0/22"
-  vpc_id                 = module.vpc.vpc_id
+  description            = "${local.prefix}-client-vpn"
+  server_certificate_arn = var.vpn_server_certificate_arn
+  client_cidr_block      = "172.16.0.0/22"   # VPC CIDR(10.10.0.0/16)과 겹치지 않는 대역
+  vpc_id                 = aws_vpc.this.id
   security_group_ids     = [aws_security_group.vpn.id]
 
   authentication_options {
     type                       = "certificate-authentication"
-    root_certificate_chain_arn = aws_acm_certificate.vpn_client.arn
+    root_certificate_chain_arn = var.vpn_ca_certificate_arn
   }
 
   connection_log_options {
     enabled = false
   }
+
+  tags = {
+    Name = "${local.prefix}-client-vpn"
+  }
+}
+
+resource "aws_ec2_client_vpn_network_association" "this" {
+  client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.this.id
+  subnet_id              = aws_subnet.private_app[0].id
+}
+
+resource "aws_ec2_client_vpn_authorization_rule" "vpc" {
+  client_vpn_endpoint_id = aws_ec2_client_vpn_endpoint.this.id
+  target_network_cidr    = var.vpc_cidr   # VPC 전체 대역 접근 허용
+  authorize_all_groups   = true
+}
+
+resource "aws_security_group" "vpn" {
+  name        = "${local.prefix}-vpn-sg"
+  description = "Security group for Client VPN endpoint"
+  vpc_id      = aws_vpc.this.id
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${local.prefix}-vpn-sg"
+  }
 }
 ```
 
----
-
-### 옵션 C: EC2 Bastion (가장 단순)
-
-퍼블릭 서브넷에 t3.nano 하나. SSH 없이 SSM으로 접속, 노드에서 kubectl 실행.
-
-**비용**: t3.nano 월 **$4~5**
+`terraform/environments/prod/01-network/variables.tf`에 추가:
 
 ```hcl
-resource "aws_instance" "bastion" {
-  ami                    = data.aws_ami.amazon_linux_2023.id
-  instance_type          = "t3.nano"
-  subnet_id              = module.vpc.public_subnet_ids[0]
-  iam_instance_profile   = aws_iam_instance_profile.bastion_ssm.name
-  vpc_security_group_ids = [aws_security_group.bastion.id]
-
-  tags = { Name = "utterai-prod-bastion" }
+variable "vpn_server_certificate_arn" {
+  type        = string
+  description = "ACM certificate ARN for Client VPN server (ap-northeast-2)."
 }
-# SSH 인바운드 없음 — SSM으로만 접속
+
+variable "vpn_ca_certificate_arn" {
+  type        = string
+  description = "ACM CA certificate ARN for Client VPN client authentication (ap-northeast-2)."
+}
+```
+
+`terraform/environments/prod/01-network/terraform.tfvars` (또는 Secrets Manager / CI 변수)에 추가:
+
+```hcl
+vpn_server_certificate_arn = "arn:aws:acm:ap-northeast-2:032886669461:certificate/xxxx"
+vpn_ca_certificate_arn     = "arn:aws:acm:ap-northeast-2:032886669461:certificate/yyyy"
+```
+
+```bash
+cd terraform/environments/prod/01-network
+terraform plan
+terraform apply
 ```
 
 ---
 
-## 6. 적용 절차
+### Step 4: 팀원별 .ovpn 파일 생성
 
-`endpoint_public_access = false`는 **불가역적 변경**이다. 아래 순서를 반드시 지킨다.
+```bash
+# AWS에서 VPN 기본 설정 파일 다운로드
+ENDPOINT_ID=$(aws ec2 describe-client-vpn-endpoints \
+  --region ap-northeast-2 \
+  --query "ClientVpnEndpoints[?Tags[?Key=='Name'&&Value=='utterai-prod-client-vpn']].ClientVpnEndpointId" \
+  --output text)
 
-### 사전 확인 체크리스트
+aws ec2 export-client-vpn-client-configuration \
+  --region ap-northeast-2 \
+  --client-vpn-endpoint-id $ENDPOINT_ID \
+  --output text > base.ovpn
+
+# 팀원별 인증서/키를 삽입해서 개인 파일 생성
+# (아래 스크립트를 팀원 수만큼 반복)
+for NAME in alice bob carol david; do
+  cp base.ovpn utterai-prod-${NAME}.ovpn
+
+  echo "" >> utterai-prod-${NAME}.ovpn
+  echo "<cert>" >> utterai-prod-${NAME}.ovpn
+  cat pki/issued/vpn-${NAME}.crt >> utterai-prod-${NAME}.ovpn
+  echo "</cert>" >> utterai-prod-${NAME}.ovpn
+
+  echo "<key>" >> utterai-prod-${NAME}.ovpn
+  cat pki/private/vpn-${NAME}.key >> utterai-prod-${NAME}.ovpn
+  echo "</key>" >> utterai-prod-${NAME}.ovpn
+done
+```
+
+각 팀원에게 본인 이름의 `.ovpn` 파일을 전달한다. **슬랙 DM 직접 전송은 피하고, 비밀번호 걸린 zip 또는 1Password 같은 비밀번호 관리자를 통해 공유한다.**
+
+---
+
+### Step 5: 동작 검증
+
+팀원 1명이 §7 순서를 완료한 뒤, VPN 연결 상태에서 아래를 확인한다.
+
+```bash
+# VPN 연결 상태에서
+kubectl get nodes   # 성공 확인
+terraform plan      # prod/04-addons에서 정상 실행 확인
+```
+
+검증 완료 후 §8(EKS endpoint 닫기)로 진행한다.
+
+---
+
+## 7. 팀원 각각 해야 할 순서
+
+> 인프라 담당자에게 `.ovpn` 파일을 받은 후 진행.
+
+---
+
+### Step 1: AWS VPN Client 앱 설치
+
+[https://aws.amazon.com/vpn/client-vpn-download/](https://aws.amazon.com/vpn/client-vpn-download/) 에서 OS에 맞는 버전 설치.
+
+---
+
+### Step 2: .ovpn 파일 import
 
 ```
-[ ] 옵션 A/B/C 중 하나를 구성하고 실제로 kubectl 동작 확인
-[ ] SSM 포트포워딩 또는 VPN 통해 kubectl get nodes 성공 확인
-[ ] terraform plan (04-addons)이 새 접근 경로로 정상 실행 확인
-[ ] 팀 전체가 새 접근 방법 숙지
+AWS VPN Client 앱 실행
+→ File > Manage Profiles
+→ Add Profile
+→ 전달받은 utterai-prod-<본인이름>.ovpn 선택
+→ Add Profile 클릭
+```
+
+---
+
+### Step 3: VPN 연결
+
+```
+AWS VPN Client 앱
+→ utterai-prod 프로파일 선택
+→ Connect 클릭
+→ 상태가 "Connected"로 바뀌면 완료 (30초 내외)
+```
+
+---
+
+### Step 4: kubeconfig 업데이트 (최초 1회, VPN 연결 상태에서)
+
+```bash
+aws eks update-kubeconfig \
+  --name utterai-prod \
+  --region ap-northeast-2
+```
+
+---
+
+### Step 5: 동작 확인
+
+```bash
+kubectl get nodes
+# NAME                STATUS   ROLES    AGE
+# ip-10-10-x-x ...   Ready    <none>   ...
+```
+
+---
+
+### 이후 매번 사용할 때
+
+```
+AWS VPN Client → Connect → kubectl / terraform 사용 → Disconnect
+```
+
+VPN을 끊으면 EKS endpoint 및 VPC 내부 리소스 접근이 차단된다.
+
+---
+
+### 팀원 퇴사 시 처리
+
+```bash
+# 해당 팀원 클라이언트 인증서 revoke
+cd easy-rsa/easyrsa3
+./easyrsa revoke vpn-<퇴사자이름>
+./easyrsa gen-crl
+
+# CRL을 VPN endpoint에 적용 (Terraform 변수로 관리하거나 AWS CLI로 직접 업로드)
+aws ec2 import-client-vpn-client-certificate-revocation-list \
+  --client-vpn-endpoint-id $ENDPOINT_ID \
+  --certificate-revocation-list fileb://pki/crl.pem \
+  --region ap-northeast-2
+```
+
+---
+
+## 8. EKS Endpoint 닫기
+
+> §6 Step 5 검증 완료 후 진행. **불가역적 변경.**
+
+### 사전 체크리스트
+
+```
+[ ] 팀원 전체 VPN 연결 후 kubectl get nodes 성공 확인
+[ ] terraform plan (prod/04-addons) VPN 연결 상태에서 정상 실행 확인
+[ ] 팀 전체에 "오늘부터 VPN 없이 kubectl 안 됩니다" 공지
 ```
 
 ### Terraform 변경
 
 ```hcl
-# terraform/modules/eks/main.tf:67-71
+# terraform/modules/eks/main.tf:69-71
 vpc_config {
   subnet_ids              = var.private_app_subnet_ids
   endpoint_private_access = true
@@ -335,19 +525,18 @@ vpc_config {
 
 ```bash
 cd terraform/environments/prod/02-eks
-terraform plan   # 변경 내용 확인
-terraform apply  # 적용 즉시 퍼블릭 차단
+terraform plan
+terraform apply   # 적용 즉시 퍼블릭 차단
 ```
 
 ### 적용 후 즉시 확인
 
 ```bash
-# VPN/SSM 없이 시도 → 타임아웃 또는 연결 거부 확인
-kubectl get nodes  # 실패해야 정상
+# VPN 끊은 상태에서 시도 → 타임아웃 확인 (정상)
+kubectl get nodes   # 타임아웃 또는 연결 거부
 
-# VPN/SSM 연결 후 시도 → 성공 확인
-[SSM 포트포워딩 실행]
-kubectl get nodes  # 성공해야 정상
+# VPN 연결 후 시도 → 성공 확인 (정상)
+kubectl get nodes   # Ready 노드 목록 출력
 ```
 
 ---
