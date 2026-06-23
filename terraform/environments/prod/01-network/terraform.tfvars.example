@@ -6,3 +6,8 @@ azs      = ["ap-northeast-2a", "ap-northeast-2c"]
 public_subnet_cidrs       = ["10.20.1.0/24", "10.20.2.0/24"]
 private_app_subnet_cidrs  = ["10.20.11.0/24", "10.20.12.0/24"]
 private_data_subnet_cidrs = ["10.20.21.0/24", "10.20.22.0/24"]
+
+# Client VPN — easy-rsa 또는 OpenSSL로 생성 후 ACM(ap-northeast-2)에 업로드한 ARN
+# 생성 방법: docs/prod/eks-private-endpoint.md §6 참고
+vpn_server_certificate_arn = "arn:aws:acm:ap-northeast-2:<ACCOUNT_ID>:certificate/<SERVER_CERT_ID>"
+vpn_ca_certificate_arn     = "arn:aws:acm:ap-northeast-2:<ACCOUNT_ID>:certificate/<CA_CERT_ID>"
