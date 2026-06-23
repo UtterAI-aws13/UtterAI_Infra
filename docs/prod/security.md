@@ -1,12 +1,12 @@
-# UtterAI Prod 환경 — 보안 적용 계획
+# UtterAI Prod 환경 — 보안 현황
 
-> 작성일: 2026-06-15 / 최종 업데이트: 2026-06-16
-> **이 문서는 Prod 전환 시 적용해야 할 보안 항목 계획이다.**
+> 작성일: 2026-06-15 / 최종 업데이트: 2026-06-23
+> **이 문서는 Prod 보안 항목의 실제 현황을 코드 기준으로 기록한다.**
 > Dev 보안 문서(`security-overview`, `security-gaps`, `security-hardening`)를 기반으로
 > Dev에서 허용한 것 중 Prod에서 강화해야 할 항목을 정리한다.
 >
 > **2026-06-16 적용 완료**: NetworkPolicy (AWS VPC CNI native), PodDisruptionBudget  
-> **2026-06-22 적용 확인**: ALB ACM 인증서, ArgoCD admin bcrypt 비밀번호, PSA 레이블, SecurityContext 기본값 (allowPrivilegeEscalation/capabilities.drop)
+> **2026-06-22 적용 완료**: ALB ACM 인증서, ArgoCD admin bcrypt 비밀번호, PSA 레이블, SecurityContext 기본값 (allowPrivilegeEscalation/capabilities.drop/runAsNonRoot/seccompProfile), podAntiAffinity
 
 ---
 
@@ -21,48 +21,47 @@
 
 ## 1. Dev vs Prod 보안 계획 비교
 
-> **범례**: Dev 현재 상태 vs Prod에서 적용 예정인 것. Prod 열의 내용은 **모두 미적용 / 적용 예정**.
+> **범례**: ✅ = 코드에서 확인된 실제 완료 / ⚠️ = 부분 적용 또는 불일치 / **미적용** = 코드에 없음. 2026-06-23 기준.
 
-| 보안 영역 | Dev 현재 상태 | Prod 적용 예정 |
+| 보안 영역 | Dev 현재 상태 | Prod 실제 상태 |
 |----------|-------------|--------------|
-| **EKS API Endpoint** | Public (0.0.0.0/0) | Private only (`endpoint_public_access = false`) |
-| **EKS etcd KMS** | 미설정 | CMK 봉투 암호화 |
-| **EKS Node SG** | Control Plane SG만 허용 (수정 완료) | 동일 |
-| **VPC NAT** | 1개 (공유) | 3개 (AZ별) |
-| **VPC Flow Logs** | 미설정 | CloudWatch Logs로 전송 |
-| **WAF** | 없음 | CloudFront + ALB 연결 |
-| **RDS 종류** | Single Instance | Aurora Multi-AZ |
-| **RDS deletion_protection** | false | true |
-| **RDS skip_final_snapshot** | true | false |
-| **RDS KMS** | AWS 기본 키 | CMK (`prod-aurora-kms-key`) |
-| **Redis 리소스 타입** | `aws_elasticache_replication_group` (TLS 적용 완료) | 동일 모듈 사용 (변경 없음) |
-| **Redis TLS** | `transit_encryption_enabled = true` (적용 완료) | 동일 |
-| **Redis Auth Token** | `random_password` → Secrets Manager 저장 중 | 동일 (개선 예정: §2-E) |
-| **Redis tfstate 노출** | `random_password` 결과 → .tfstate 평문 저장 | Terraform 1.10+ ephemeral 전환 |
-| **S3 암호화** | SSE-S3 (AES256) | SSE-KMS (CMK) |
-| **S3 버전 관리** | 없음 | raw-audio, reports 활성화 |
-| **S3 액세스 로깅** | 없음 | 활성화 |
-| **SQS 암호화** | Managed SSE | CMK |
-| **Secrets Manager KMS** | AWS 기본 키 | CMK (`prod-secrets-kms-key`) |
-| **Secrets Manager 교체** | 없음 | DB 비밀번호 90일 자동 교체 |
-| **ALB HTTPS** | dev overlay에서 설정 예정 | ✅ HTTP→HTTPS 리다이렉트 + ACM ARN 주입 완료 (2026-06-22 확인) |
-| **ALB WAF 연결** | 없음 | `wafv2-acl-arn` annotation — **미적용** |
-| **Pod SecurityContext** | Prod overlay에 부분 적용 | ✅ `allowPrivilegeEscalation: false`, `capabilities.drop: ALL` 전 워크로드 적용 / `runAsNonRoot`, `readOnlyRootFilesystem`, `seccompProfile` **미적용** (§3-B) |
-| **readOnlyRootFilesystem** | 없음 | **미적용** — Prod overlay에 추가 필요 |
-| **seccompProfile** | 없음 | **미적용** — `enforce: restricted` 네임스페이스에서 신규 배포 시 rejection 위험 |
-| **PSA 레이블** | 없음 | ✅ 적용 완료 — `utterai-prod-api`: enforce restricted / `utterai-ai-*`: enforce baseline (2026-06-22 확인) |
-| **Kyverno** | 없음 | 미설치 — ClusterPolicy 4종 설치 예정 |
-| **NetworkPolicy** | 없음 | ✅ AWS VPC CNI native NetworkPolicy 활성화 + 네임스페이스별 deny-all + 명시적 허용 정책 적용 완료 (2026-06-16) |
-| **ClusterSecretStore** | 클러스터 전체 공유 | **미적용** — 여전히 ClusterSecretStore 단일 사용 중. 네임스페이스별 SecretStore 분리 필요 |
-| **이미지 태그** | mutable tag 허용 | **미적용** — git SHA 고정 + Kyverno latest 차단 예정 |
-| **ECR Immutability** | MUTABLE | **미적용** — 3개 레포 모두 MUTABLE 상태 |
-| **PodDisruptionBudget** | 없음 | ✅ backend blue/green `minAvailable: 1`, cpu-worker `minAvailable: 1` 적용 완료 (2026-06-16) |
-| **podAntiAffinity** | 없음 | **미적용** — backend api 다른 노드 분산 예정 |
-| **ArgoCD 인증** | Helm 기본 admin (초기값) | ✅ bcrypt 비밀번호 주입 완료 (2026-06-22 확인) |
-| **배포 방식** | envsubst + 수동 스크립트 | Kustomize + ArgoCD GitOps |
-| **Cognito MFA** | 없음 | TOTP 지원 + 고급 보안 |
-| **CloudWatch 알람** | 없음 | 10종 알람 + Discord 연결 |
-| **VPC Endpoint 추가** | S3/SQS/SM/ECR | + STS, KMS Interface |
+| **EKS API Endpoint** | Public (0.0.0.0/0) | ⚠️ 여전히 Public (`endpoint_public_access = true`) — `modules/eks/main.tf` |
+| **EKS etcd KMS** | 미설정 | **미적용** — `encryption_config` 블록 없음 |
+| **EKS Node SG** | Control Plane SG만 허용 (수정 완료) | ✅ 동일 + Custom Networking용 cluster↔node SG 상호 허용 규칙 추가 |
+| **VPC NAT** | 1개 (공유) | 확인 필요 |
+| **VPC Flow Logs** | 미설정 | **미적용** — `01-network/main.tf`에 `aws_flow_log` 없음 |
+| **WAF** | 없음 | **미적용** — WebACL 미생성, `wafv2-acl-arn` annotation 없음 |
+| **RDS 종류** | Single Instance | Single Instance (Aurora 미전환 — 계획은 migration-checklist 참고) |
+| **RDS deletion_protection** | false | ✅ `deletion_protection = true` |
+| **RDS skip_final_snapshot** | true | ✅ `skip_final_snapshot = false` |
+| **RDS KMS** | AWS 기본 키 | ✅ `storage_encrypted = true` (AWS 기본 키, CMK 미전환) |
+| **Redis 리소스 타입** | `aws_elasticache_replication_group` | ✅ 동일 (`modules/redis/main.tf`) |
+| **Redis TLS** | `transit_encryption_enabled = true` | ✅ 동일 |
+| **Redis 노드 수** | 1 | ✅ `num_cache_nodes = 2` (default) — `automatic_failover_enabled` / `multi_az_enabled` **미설정** |
+| **Redis Auth Token** | `random_password` → Secrets Manager | ✅ 동일 (`utterai-prod/redis-auth-token`) |
+| **Redis tfstate 노출** | `random_password` → .tfstate 평문 | **미해소** — Terraform 1.10+ ephemeral 전환 필요 (§2-E) |
+| **S3 암호화** | SSE-S3 (AES256) | ⚠️ SSE-S3 (AES256) — CMK 미전환 (`modules/s3/main.tf:50`) |
+| **S3 버전 관리** | 없음 | **미적용** — 모듈에 versioning 블록 없음 |
+| **S3 액세스 로깅** | 없음 | **미적용** |
+| **SQS 암호화** | Managed SSE | ⚠️ Managed SSE (`sqs_managed_sse_enabled = true`) — CMK 미전환 |
+| **Secrets Manager KMS** | AWS 기본 키 | AWS 기본 키 (CMK 미전환) |
+| **Secrets Manager 교체** | 없음 | **미적용** |
+| **ALB HTTPS** | 미설정 | ✅ HTTP→HTTPS 리다이렉트 + ACM ARN 주입 완료 (`patch-ingress.yaml`) |
+| **ALB WAF 연결** | 없음 | **미적용** — `wafv2-acl-arn` annotation 없음 |
+| **Pod SecurityContext** | 부분 적용 | ✅ `allowPrivilegeEscalation: false` + `capabilities.drop: ALL` + `runAsNonRoot: true` (pod 레벨) + `seccompProfile: RuntimeDefault` (pod 레벨) — 전 워크로드 적용 |
+| **readOnlyRootFilesystem** | 없음 | **미적용** — prod patch-deployment.yaml에 없음 |
+| **PSA 레이블** | 없음 | ✅ `utterai-prod-api`: enforce restricted / `utterai-ai-api|cpu|gpu`, `utterai-batch`: enforce baseline (`namespace.yaml`) |
+| **Kyverno** | 없음 | **미설치** |
+| **NetworkPolicy** | 없음 | ✅ VPC CNI native NetworkPolicy 활성화 + 네임스페이스별 deny-all + 명시적 허용 정책 (`network-policy.yaml`) |
+| **ClusterSecretStore** | 클러스터 전체 공유 | **미분리** — base ExternalSecret 전체가 `ClusterSecretStore` 사용 중 |
+| **ECR Immutability** | MUTABLE | **미적용** — `modules/ecr/main.tf`: `image_tag_mutability = "MUTABLE"` |
+| **PodDisruptionBudget** | 없음 | ✅ backend blue/green + ai-api `minAvailable: 1` (`pdb.yaml`) |
+| **podAntiAffinity** | 없음 | ✅ backend blue/green `requiredDuringSchedulingIgnoredDuringExecution` 적용 (`deployment-blue/green.yaml`, PR #262) |
+| **ArgoCD 인증** | Helm 기본 admin | ✅ bcrypt 비밀번호 주입 완료 |
+| **배포 방식** | 수동 스크립트 | ✅ Kustomize + ArgoCD GitOps |
+| **Cognito MFA** | 없음 | **미적용** |
+| **CloudWatch 알람** | 없음 | **미적용** |
+| **VPC Endpoint** | S3/SQS/SM/ECR | ✅ 기존 4종 유지 (STS/KMS Interface 미추가) |
 
 ---
 
@@ -193,68 +192,77 @@ resource "aws_ecr_repository" "this" {
 
 ## 3. Kubernetes — Prod 전환 시 적용 항목
 
-### 3-A. ALB ACM 인증서 + WAF 연결
+### 3-A. ALB ACM 인증서 ✅ / WAF 연결 미적용
 
-현재 `k8s/apps/backend/overlays/prod/patch-ingress.yaml`의 `certificate-arn`이 `TODO` 상태.
+`k8s/apps/backend/overlays/prod/patch-ingress.yaml` 현재 상태:
 
 ```yaml
 annotations:
-  alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
-  alb.ingress.kubernetes.io/ssl-redirect: "443"
-  alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-2:<PROD_ACCOUNT_ID>:certificate/<CERT_ID>
-  alb.ingress.kubernetes.io/wafv2-acl-arn: arn:aws:wafv2:ap-northeast-2:<PROD_ACCOUNT_ID>:regional/webacl/<NAME>/<ID>
+  alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-2:032886669461:certificate/ee72a793-6b79-4560-8f5e-7faf88aad699
+  alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80,"HTTPS":443}]'
+  alb.ingress.kubernetes.io/ssl-redirect: '443'
+  # wafv2-acl-arn: 미적용 — WAF WebACL 미생성 상태
 ```
+
+WAF 연결을 위해서는 `04-addons/main.tf`에서 `aws_wafv2_web_acl` 생성 후 ARN을 annotation에 주입해야 한다.
 
 ---
 
-### 3-B. readOnlyRootFilesystem + seccompProfile + ml-gpu-worker securityContext 누락
+### 3-B. SecurityContext 현황
 
-현재 prod overlay 상태:
-- `backend` (blue/green): `runAsNonRoot`, `allowPrivilegeEscalation: false`, `capabilities.drop` 있음 / `readOnlyRootFilesystem`, `seccompProfile` **없음**
-- `ai-api`, `cpu-worker`: 동일하게 `readOnlyRootFilesystem`, `seccompProfile` **없음**
-- **`ml-gpu-worker`: securityContext 자체가 patch에 없음** (`k8s/apps/ai-worker/overlays/prod/patch-deployment.yaml`에서 `replicas: 1`만 정의)
+**적용 완료** (`patch-deployment.yaml` 코드 확인 기준):
 
-PSS `restricted` 레이블 적용 시 `seccompProfile`은 자동 요건이 되므로 반드시 추가해야 배포가 통과된다.
+| 항목 | backend (blue/green) | cpu-worker | ml-gpu-worker | batch-worker |
+|------|---------------------|------------|---------------|--------------|
+| `runAsNonRoot: true` | ✅ pod 레벨 | ✅ pod 레벨 | ✅ pod 레벨 | ✅ pod 레벨 |
+| `seccompProfile: RuntimeDefault` | ✅ pod 레벨 | ✅ pod 레벨 | ✅ pod 레벨 | ✅ pod 레벨 |
+| `allowPrivilegeEscalation: false` | ✅ container 레벨 | ✅ container 레벨 | ✅ container 레벨 | ✅ container 레벨 |
+| `capabilities.drop: ALL` | ✅ container 레벨 | ✅ container 레벨 | ✅ container 레벨 | ✅ container 레벨 |
+| `readOnlyRootFilesystem: true` | ❌ 미적용 | ❌ 미적용 | ❌ 미적용 | ❌ 미적용 |
 
-```yaml
-# k8s/apps/backend/overlays/prod/patch-deployment.yaml
-containers:
-  - name: api
-    securityContext:
-      allowPrivilegeEscalation: false
-      capabilities:
-        drop: ["ALL"]
-      readOnlyRootFilesystem: true
-      runAsNonRoot: true
-      runAsUser: 1000
-      seccompProfile:
-        type: RuntimeDefault
-```
+**남은 작업 — `readOnlyRootFilesystem: true`:**
 
-CPU/GPU Worker는 `HF_HOME: /tmp/huggingface` 사용으로 인해 `/tmp`를 emptyDir로 마운트 필요:
+CPU/GPU Worker는 `HF_HOME: /tmp/huggingface` 사용으로 인해 `/tmp`를 emptyDir로 마운트해야 한다:
 
 ```yaml
-volumes:
-  - name: hf-cache
-    emptyDir: {}
-volumeMounts:
-  - name: hf-cache
-    mountPath: /tmp/huggingface
+# k8s/apps/ai-worker/overlays/prod/patch-deployment.yaml
+spec:
+  template:
+    spec:
+      volumes:
+        - name: hf-cache
+          emptyDir: {}
+      containers:
+        - name: worker
+          securityContext:
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /tmp/huggingface
 ```
 
 ---
 
 ### 3-C. ClusterSecretStore → Per-Namespace SecretStore
 
-Dev는 `ClusterSecretStore` 하나가 클러스터 전체를 커버한다. 악의적 사용자가 새 네임스페이스에 `ExternalSecret`을 만들면 `utterai-prod/*` 전체를 꺼낼 수 있다.
+**현재 상태**: `k8s/apps/backend/base/external-secret.yaml` 및 `ai-worker/base/*-external-secret.yaml` 전체가 `ClusterSecretStore`를 사용 중. 악의적 사용자가 새 네임스페이스에 `ExternalSecret`을 만들면 `utterai-prod/*` 전체를 꺼낼 수 있다.
+
+**prod 실제 네임스페이스 구조** (단일 ai-worker 네임스페이스가 아닌 4개 분리):
+- `utterai-prod-api` — backend API
+- `utterai-ai-api` — AI REST API
+- `utterai-ai-cpu` — CPU worker
+- `utterai-ai-gpu` — ML GPU worker
+- `utterai-batch` — RAG ingest batch worker
+
+적용 방법: 네임스페이스별 `SecretStore` 생성 후 각 `ExternalSecret`의 `secretStoreRef.kind`를 `ClusterSecretStore` → `SecretStore`로 변경.
 
 ```yaml
-# k8s/apps/backend/overlays/prod/secret-store.yaml
+# 예시: k8s/apps/backend/overlays/prod/secret-store.yaml
 apiVersion: external-secrets.io/v1beta1
 kind: SecretStore
 metadata:
   name: aws-secrets-manager
-  namespace: utterai-prod-api          # 실제 prod 네임스페이스명
+  namespace: utterai-prod-api
 spec:
   provider:
     aws:
@@ -265,12 +273,6 @@ spec:
           serviceAccountRef:
             name: utterai-api-sa       # 이 SA의 IRSA 범위 내 시크릿만 접근 가능
 ```
-
-생성 대상 네임스페이스:
-- `utterai-prod-api` (backend)
-- `utterai-prod-ai-worker` (ai-api, cpu-worker, ml-gpu-worker, batch-worker 통합 — prod overlay 단일 네임스페이스)
-
-각 `ExternalSecret`의 `secretStoreRef.kind`를 `ClusterSecretStore` → `SecretStore`로 변경.
 
 ---
 
@@ -338,26 +340,27 @@ resource "helm_release" "argocd" {
 
 ---
 
-### 3-G. Namespace PSA 레이블 — k8s prod overlay에 적용 완료
+### 3-G. Namespace PSA 레이블 ✅ 적용 완료
 
-`k8s/apps/backend/overlays/prod/namespace.yaml`과 `k8s/apps/ai-worker/overlays/prod/namespace.yaml`에 이미 적용되어 있다.
+`k8s/apps/backend/overlays/prod/namespace.yaml`과 `k8s/apps/ai-worker/overlays/prod/namespace.yaml`에 적용 완료.
 
 ```yaml
-# k8s/apps/backend/overlays/prod/namespace.yaml (utterai-prod-api) — 적용 완료
+# utterai-prod-api — enforce: restricted
 labels:
   pod-security.kubernetes.io/enforce: restricted
   pod-security.kubernetes.io/warn: restricted
   pod-security.kubernetes.io/audit: restricted
 
-# k8s/apps/ai-worker/overlays/prod/namespace.yaml (utterai-prod-ai-worker) — 적용 완료
-# GPU NVIDIA Device Plugin 특성상 restricted 적용 시 스케줄링 실패 가능 → baseline
+# utterai-ai-api, utterai-ai-cpu, utterai-ai-gpu, utterai-batch — enforce: baseline
+# GPU NVIDIA Device Plugin 특성상 restricted 시 스케줄링 실패 가능 → 전체 baseline
 labels:
   pod-security.kubernetes.io/enforce: baseline
   pod-security.kubernetes.io/warn: restricted
   pod-security.kubernetes.io/audit: restricted
 ```
 
-> `k8s-legacy/namespaces/namespaces.yaml` (Dev base 네임스페이스)에는 PSA 레이블 없음 — Dev는 의도적으로 미적용.
+> `utterai-prod-api`가 `enforce: restricted`이므로 `seccompProfile`이 없는 Pod는 배포 자체가 거부된다. 현재 patch-deployment.yaml에 pod 레벨 `seccompProfile: RuntimeDefault`가 적용되어 있어 통과.  
+> Dev 네임스페이스에는 PSA 레이블 없음 — 의도적 미적용.
 
 ---
 
@@ -368,32 +371,33 @@ labels:
 | 항목 | 확인일 | 파일 |
 |------|--------|------|
 | NetworkPolicy — 네임스페이스별 deny-all + 명시적 허용 정책 | 2026-06-16 | `terraform/modules/eks/main.tf`, `k8s/apps/*/overlays/prod/network-policy.yaml` |
-| PodDisruptionBudget — backend blue/green + cpu-worker `minAvailable: 1` | 2026-06-16 | `k8s/apps/*/overlays/prod/pdb.yaml` |
-| ALB ACM 인증서 ARN 주입 | 2026-06-22 | `k8s/apps/backend/overlays/prod/patch-ingress.yaml` |
+| PodDisruptionBudget — backend blue/green + ai-api `minAvailable: 1` | 2026-06-16 | `k8s/apps/*/overlays/prod/pdb.yaml` |
+| ALB ACM 인증서 ARN 주입 + HTTP→HTTPS 리다이렉트 | 2026-06-22 | `k8s/apps/backend/overlays/prod/patch-ingress.yaml` |
 | ArgoCD admin bcrypt 비밀번호 주입 | 2026-06-22 | `terraform/modules/eks-addons/main.tf` |
-| PSA 레이블 — `utterai-prod-api`: restricted / `utterai-ai-*`: baseline | 2026-06-22 | `k8s/apps/*/overlays/prod/namespace.yaml` |
-| SecurityContext 기본값 — `allowPrivilegeEscalation: false`, `capabilities.drop: ALL` 전 워크로드 | 2026-06-22 | `k8s/apps/*/overlays/prod/patch-deployment.yaml` |
+| PSA 레이블 — `utterai-prod-api`: restricted / `utterai-ai-*|utterai-batch`: baseline | 2026-06-22 | `k8s/apps/*/overlays/prod/namespace.yaml` |
+| SecurityContext — `allowPrivilegeEscalation: false`, `capabilities.drop: ALL`, `runAsNonRoot: true`, `seccompProfile: RuntimeDefault` 전 워크로드 | 2026-06-22 | `k8s/apps/*/overlays/prod/patch-deployment.yaml` |
+| podAntiAffinity — backend blue/green `requiredDuringSchedulingIgnoredDuringExecution` | 2026-06-22 | `k8s/apps/backend/overlays/prod/deployment-blue/green.yaml` |
 
 ### K8s 미적용 — 우선순위 순
 
 | # | 항목 | 비고 |
 |---|------|------|
-| 1 | `seccompProfile: RuntimeDefault` 추가 | `enforce: restricted` 네임스페이스에서 신규 배포 시 rejection 위험 |
-| 2 | `runAsNonRoot: true` container-level 명시 | 현재 pod-level 미확인, 명시적 선언 필요 |
-| 3 | WAF 연결 (ALB + CloudFront) | WAF WebACL 미생성 상태 |
-| 4 | `readOnlyRootFilesystem: true` + `/tmp` emptyDir | cpu/gpu-worker는 HF_HOME `/tmp` 마운트 병행 필요 |
-| 5 | ECR imageTagMutability IMMUTABLE | 3개 레포 모두 MUTABLE |
-| 6 | Per-Namespace SecretStore 분리 | 현재 ClusterSecretStore 단일 사용 중 |
-| 7 | podAntiAffinity — backend api 다중 노드 분산 | — |
+| 1 | WAF 연결 (ALB + CloudFront) | WebACL 미생성. CloudFront는 `us-east-1` provider 필요 |
+| 2 | `readOnlyRootFilesystem: true` + `/tmp` emptyDir | cpu/gpu-worker는 `HF_HOME=/tmp/huggingface` emptyDir 마운트 병행 필요 |
+| 3 | Per-Namespace SecretStore 분리 | base ExternalSecret 5개 전부 `ClusterSecretStore` 참조 중 |
+| 4 | ECR imageTagMutability IMMUTABLE | `modules/ecr/main.tf`: `image_tag_mutability = "MUTABLE"` |
 
-### Terraform 미적용 — 우선순위 순 (K8s 외)
+### Terraform 미적용 — 우선순위 순
 
 | # | 항목 | 파일 |
 |---|------|------|
-| 1 | EKS etcd KMS 봉투 암호화 | `terraform/environments/prod/02-eks/main.tf` (신규) |
-| 2 | VPC Flow Logs 활성화 | `terraform/environments/prod/01-network/` (신규) |
-| 3 | Redis tfstate 토큰 노출 해소 (Terraform 1.10+) | `terraform/modules/redis/main.tf` |
-| 4 | Redis Prod: num_cache_nodes=2, multi-AZ, Prod CMK | `terraform/environments/prod/03-services/main.tf` |
+| 1 | EKS `endpoint_public_access = false` | `terraform/modules/eks/main.tf:70` — 현재 `true` |
+| 2 | VPC Flow Logs 활성화 | `terraform/environments/prod/01-network/main.tf` (신규 추가 필요) |
+| 3 | EKS etcd KMS 봉투 암호화 | `terraform/modules/eks/main.tf` — `encryption_config` 블록 없음 (기존 클러스터 적용 시 Secret 전체 재암호화 발생) |
+| 4 | Redis `automatic_failover_enabled = true` + `multi_az_enabled = true` | `terraform/modules/redis/main.tf` — `num_cache_clusters=2`이나 failover 미설정 |
+| 5 | Redis tfstate 토큰 노출 해소 (Terraform 1.10+) | `terraform/modules/redis/main.tf` — `random_password` → ephemeral 전환 |
+| 6 | S3/SQS/Secrets Manager KMS CMK 전환 | 현재 모두 AWS managed key 또는 SSE-S3 사용 중 |
+| 7 | S3 버전 관리 + 액세스 로깅 | `terraform/modules/s3/main.tf` — 두 블록 모두 없음 |
 
 ---
 
