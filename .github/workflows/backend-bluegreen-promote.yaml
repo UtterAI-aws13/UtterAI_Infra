@@ -16,6 +16,14 @@ on:
         options:
           - blue
           - green
+      scale_down_previous:
+        description: "promote와 같은 PR에서 이전 active color를 scale-down할지 선택합니다."
+        required: true
+        type: choice
+        default: "false"
+        options:
+          - "false"
+          - "true"
 
 permissions:
   contents: write
@@ -34,9 +42,11 @@ jobs:
         env:
           INPUT_TARGET_ENV: ${{ inputs.target_env }}
           INPUT_PROMOTE_COLOR: ${{ inputs.promote_color }}
+          INPUT_SCALE_DOWN_PREVIOUS: ${{ inputs.scale_down_previous }}
         run: |
           TARGET_ENV="$INPUT_TARGET_ENV"
           PROMOTE_COLOR="$INPUT_PROMOTE_COLOR"
+          SCALE_DOWN_PREVIOUS="$INPUT_SCALE_DOWN_PREVIOUS"
           TARGET_BRANCH="main"
 
           if [ "$TARGET_ENV" = "prod" ]; then
@@ -51,11 +61,17 @@ jobs:
             exit 1
           fi
 
+          if [ "$SCALE_DOWN_PREVIOUS" != "true" ] && [ "$SCALE_DOWN_PREVIOUS" != "false" ]; then
+            echo "scale_down_previous는 true 또는 false만 허용합니다."
+            exit 1
+          fi
+
           {
             echo "target_env=$TARGET_ENV"
             echo "target_branch=$TARGET_BRANCH"
             echo "overlay_path=$OVERLAY_PATH"
             echo "promote_color=$PROMOTE_COLOR"
+            echo "scale_down_previous=$SCALE_DOWN_PREVIOUS"
           } >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub App token
@@ -122,14 +138,122 @@ jobs:
           echo "Promote color: $PROMOTE_COLOR"
           cat "$ACTIVE_SERVICE_PATCH"
 
+      - name: Optionally scale down previous color
+        env:
+          OVERLAY_PATH: ${{ steps.meta.outputs.overlay_path }}
+          SCALE_DOWN_PREVIOUS: ${{ steps.meta.outputs.scale_down_previous }}
+          CURRENT_COLOR: ${{ steps.update_service.outputs.current_color }}
+          PROMOTE_COLOR: ${{ steps.meta.outputs.promote_color }}
+        run: |
+          if [ "$SCALE_DOWN_PREVIOUS" != "true" ]; then
+            echo "scale_down_previous=false 이므로 이전 color를 유지합니다."
+            exit 0
+          fi
+
+          if [ "$CURRENT_COLOR" = "$PROMOTE_COLOR" ]; then
+            echo "이미 $PROMOTE_COLOR color가 active입니다. promote가 발생하지 않아 이전 color scale-down을 건너뜁니다."
+            echo "기존 inactive color를 내리려면 Backend BlueGreen Scale Down workflow를 사용하세요."
+            exit 0
+          fi
+
+          TARGET_COLOR="$CURRENT_COLOR"
+          KUSTOMIZATION_FILE="$OVERLAY_PATH/kustomization.yaml"
+          PATCH_DEPLOYMENT_FILE="$OVERLAY_PATH/patch-deployment.yaml"
+          PATCH_HPA_FILE="$OVERLAY_PATH/patch-hpa.yaml"
+          DEPLOYMENT_FILE="$OVERLAY_PATH/deployment-$TARGET_COLOR.yaml"
+          HPA_FILE="hpa-$TARGET_COLOR.yaml"
+          DEPLOYMENT_NAME="utterai-api-$TARGET_COLOR"
+          HPA_NAME="utterai-api-$TARGET_COLOR-hpa"
+
+          for file in "$KUSTOMIZATION_FILE" "$PATCH_DEPLOYMENT_FILE" "$PATCH_HPA_FILE" "$DEPLOYMENT_FILE"; do
+            if [ ! -f "$file" ]; then
+              echo "$file 파일을 찾을 수 없습니다."
+              exit 1
+            fi
+          done
+
+          export KUSTOMIZATION_FILE PATCH_DEPLOYMENT_FILE PATCH_HPA_FILE
+          export DEPLOYMENT_FILE DEPLOYMENT_NAME HPA_FILE HPA_NAME
+
+          ruby -ryaml -e '
+            deployment_file = ENV.fetch("DEPLOYMENT_FILE")
+            patch_deployment_file = ENV.fetch("PATCH_DEPLOYMENT_FILE")
+            deployment_name = ENV.fetch("DEPLOYMENT_NAME")
+            kustomization_file = ENV.fetch("KUSTOMIZATION_FILE")
+            patch_hpa_file = ENV.fetch("PATCH_HPA_FILE")
+            hpa_file = ENV.fetch("HPA_FILE")
+            hpa_name = ENV.fetch("HPA_NAME")
+
+            deployment = YAML.load_file(deployment_file)
+            deployment["spec"] ||= {}
+            deployment["spec"]["replicas"] = 0
+            File.write(deployment_file, YAML.dump(deployment))
+
+            patch_deployments = YAML.load_stream(File.read(patch_deployment_file)).compact
+            patch_deployment = patch_deployments.find do |doc|
+              doc.is_a?(Hash) &&
+                doc["kind"] == "Deployment" &&
+                doc.dig("metadata", "name") == deployment_name
+            end
+
+            unless patch_deployment
+              warn "#{deployment_name} patch를 #{patch_deployment_file}에서 찾을 수 없습니다."
+              exit 1
+            end
+
+            patch_deployment["spec"] ||= {}
+            patch_deployment["spec"]["replicas"] = 0
+
+            File.open(patch_deployment_file, "w") do |file|
+              patch_deployments.each do |doc|
+                file.write(YAML.dump(doc))
+              end
+            end
+
+            kustomization = YAML.load_file(kustomization_file)
+            resources = kustomization.fetch("resources")
+            resources.delete(hpa_file)
+            kustomization["resources"] = resources
+            File.write(kustomization_file, YAML.dump(kustomization))
+
+            docs = YAML.load_stream(File.read(patch_hpa_file)).compact
+            docs.reject! do |doc|
+              doc.is_a?(Hash) &&
+                doc["kind"] == "HorizontalPodAutoscaler" &&
+                doc.dig("metadata", "name") == hpa_name
+            end
+
+            if docs.empty?
+              kustomization = YAML.load_file(kustomization_file)
+              patches = kustomization.fetch("patches", [])
+              patches.reject! do |patch|
+                patch.is_a?(Hash) && patch["path"] == "patch-hpa.yaml"
+              end
+              kustomization["patches"] = patches
+              File.write(kustomization_file, YAML.dump(kustomization))
+            end
+
+            File.open(patch_hpa_file, "w") do |file|
+              docs.each do |doc|
+                file.write(YAML.dump(doc))
+              end
+            end
+          '
+
+          echo "Promote와 함께 이전 active color인 $TARGET_COLOR 를 scale-down합니다."
+
       - name: Validate Kustomize render
         env:
           OVERLAY_PATH: ${{ steps.meta.outputs.overlay_path }}
           PROMOTE_COLOR: ${{ steps.meta.outputs.promote_color }}
+          SCALE_DOWN_PREVIOUS: ${{ steps.meta.outputs.scale_down_previous }}
+          CURRENT_COLOR: ${{ steps.update_service.outputs.current_color }}
         run: |
           kubectl kustomize "$OVERLAY_PATH" > /tmp/backend-promote-rendered.yaml
           ruby -ryaml -e '
-            service = YAML.load_stream(File.read("/tmp/backend-promote-rendered.yaml")).find do |doc|
+            docs = YAML.load_stream(File.read("/tmp/backend-promote-rendered.yaml")).compact
+
+            service = docs.find do |doc|
               doc.is_a?(Hash) &&
                 doc["kind"] == "Service" &&
                 doc.dig("metadata", "name") == "utterai-api-service"
@@ -151,7 +275,7 @@ jobs:
             puts "active Service selector color: #{actual_color}"
 
             deployment_name = "utterai-api-#{expected_color}"
-            deployment = YAML.load_stream(File.read("/tmp/backend-promote-rendered.yaml")).find do |doc|
+            deployment = docs.find do |doc|
               doc.is_a?(Hash) &&
                 doc["kind"] == "Deployment" &&
                 doc.dig("metadata", "name") == deployment_name
@@ -182,6 +306,43 @@ jobs:
 
             puts "promote target images:"
             images.each { |image| puts "- #{image}" }
+
+            if ENV.fetch("SCALE_DOWN_PREVIOUS") == "true" && ENV.fetch("CURRENT_COLOR") != expected_color
+              previous_color = ENV.fetch("CURRENT_COLOR")
+              previous_deployment_name = "utterai-api-#{previous_color}"
+              previous_hpa_name = "utterai-api-#{previous_color}-hpa"
+
+              previous_deployment = docs.find do |doc|
+                doc.is_a?(Hash) &&
+                  doc["kind"] == "Deployment" &&
+                  doc.dig("metadata", "name") == previous_deployment_name
+              end
+
+              unless previous_deployment
+                warn "#{previous_deployment_name} 렌더링 결과를 찾을 수 없습니다."
+                exit 1
+              end
+
+              replicas = previous_deployment.dig("spec", "replicas")
+              unless replicas == 0
+                warn "#{previous_deployment_name} replicas가 0이 아닙니다. actual=#{replicas.inspect}"
+                exit 1
+              end
+
+              previous_hpa = docs.find do |doc|
+                doc.is_a?(Hash) &&
+                  doc["kind"] == "HorizontalPodAutoscaler" &&
+                  doc.dig("metadata", "name") == previous_hpa_name
+              end
+
+              if previous_hpa
+                warn "#{previous_hpa_name}가 아직 렌더링되고 있습니다. scale_down_previous=true에서는 이전 color HPA를 제거해야 합니다."
+                exit 1
+              end
+
+              puts "#{previous_deployment_name} replicas: #{replicas}"
+              puts "#{previous_hpa_name}: not rendered"
+            end
           '
 
       - name: Create promote pull request
@@ -190,6 +351,7 @@ jobs:
           TARGET_BRANCH: ${{ steps.meta.outputs.target_branch }}
           PROMOTE_COLOR: ${{ steps.meta.outputs.promote_color }}
           CURRENT_COLOR: ${{ steps.update_service.outputs.current_color }}
+          SCALE_DOWN_PREVIOUS: ${{ steps.meta.outputs.scale_down_previous }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           UPDATE_BRANCH="ci/backend-promote-${TARGET_ENV}-${PROMOTE_COLOR}-${GITHUB_RUN_ID}"
@@ -218,8 +380,10 @@ jobs:
           - 기준 브랜치: \`$TARGET_BRANCH\`
           - 이전 active color: \`$CURRENT_COLOR\`
           - promote color: \`$PROMOTE_COLOR\`
+          - 이전 color scale-down: \`$SCALE_DOWN_PREVIOUS\`
 
-          이 PR은 image tag를 변경하지 않고 active Service selector만 변경합니다.
+          이 PR은 image tag를 변경하지 않고 active Service selector를 변경합니다.
+          \`scale_down_previous=true\`인 경우 이전 active color의 Deployment replicas를 0으로 낮추고 HPA를 렌더링 대상에서 제거합니다.
           문제가 생기면 같은 workflow에서 이전 color를 선택해 rollback할 수 있습니다.")"
 
           echo "Created PR: $PR_URL"

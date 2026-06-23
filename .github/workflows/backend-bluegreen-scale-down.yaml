@@ -192,6 +192,16 @@ jobs:
                   doc["kind"] == "HorizontalPodAutoscaler" &&
                   doc.dig("metadata", "name") == hpa_name
               end
+
+              if docs.empty?
+                kustomization = YAML.load_file(kustomization_file)
+                patches = kustomization.fetch("patches", [])
+                patches.reject! do |patch|
+                  patch.is_a?(Hash) && patch["path"] == "patch-hpa.yaml"
+                end
+                kustomization["patches"] = patches
+                File.write(kustomization_file, YAML.dump(kustomization))
+              end
             else
               exists = docs.any? do |doc|
                 doc.is_a?(Hash) &&
@@ -212,6 +222,14 @@ jobs:
                   },
                 }
               end
+
+              kustomization = YAML.load_file(kustomization_file)
+              patches = kustomization.fetch("patches", [])
+              unless patches.any? { |patch| patch.is_a?(Hash) && patch["path"] == "patch-hpa.yaml" }
+                patches << { "path" => "patch-hpa.yaml" }
+              end
+              kustomization["patches"] = patches
+              File.write(kustomization_file, YAML.dump(kustomization))
             end
 
             File.open(patch_hpa_file, "w") do |file|
