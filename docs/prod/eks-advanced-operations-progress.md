@@ -87,20 +87,29 @@ Service Graph (Node Graph) 활성화. BE→CPU→GPU 서비스 간 호출 관계
 
 | 항목 | 파일 | 상태 |
 |---|---|---|
-| servicegraph connector + metrics/servicegraph 파이프라인 추가 | `k8s/platform/observability/base/otel-collector.yaml` | ⬜ |
+| servicegraph connector + metrics/servicegraph 파이프라인 추가 | `k8s/platform/observability/base/otel-collector.yaml` | 🔄 |
 
 ```
 Grafana → Explore → Tempo → Service Graph 탭
 → utterai-be → utterai-cpu-worker → utterai-gpu-worker 노드 그래프
 ```
 
-### 2-2. ServiceMonitor — BE + AI Worker 앱 메트릭 직접 수집
+| 항목 | 파일 | 상태 |
+|---|---|---|
+| Tempo 데이터소스 serviceMap + nodeGraph + tracesToLogs 설정 | `terraform/modules/eks-addons/main.tf` | 🔄 |
 
-현재 OTel Collector prometheus exporter(:8889)만 수집 중. 앱 Pod의 `/metrics` 엔드포인트를 Prometheus가 직접 스크레이프.
+> Terraform 변경 후 `terraform apply` 필요 (eks-addons 모듈).
+
+### 2-2. ServiceMonitor — 앱 메트릭 수집
+
+`serviceMonitorSelectorNilUsesHelmValues = false` + `serviceMonitorNamespaceSelector = {}` 설정으로 Prometheus가 전 네임스페이스 ServiceMonitor를 자동 수집 중.
+OTel Collector ServiceMonitor(`utterai-observability`)가 이미 활성이므로 BE/Worker OTLP 메트릭은 Prometheus에서 조회 가능.
+Worker는 HTTP /metrics 미노출 → per-pod ServiceMonitor 실효 없음.
 
 | 항목 | 파일 | 상태 |
 |---|---|---|
-| BE + AI Worker ServiceMonitor | `k8s/platform/observability/base/service-monitor-utterai.yaml` (신규) | ⬜ |
+| OTel Collector ServiceMonitor (기존) | `k8s/platform/observability/base/otel-collector.yaml` | ✅ |
+| BE /metrics 노출 (prometheus-fastapi-instrumentator) | `UtterAI_BE` 앱 코드 | ⬜ 앱팀 작업 |
 
 ### 2-3. Grafana 대시보드 코드화
 
@@ -108,7 +117,7 @@ ConfigMap으로 대시보드를 코드화하여 ArgoCD 관리. 재현 가능한 
 
 | 항목 | 파일 | 상태 |
 |---|---|---|
-| UtterAI Service Overview 대시보드 (4개 Row) | `k8s/platform/observability/base/grafana-dashboard-utterai.yaml` (신규) | ⬜ |
+| UtterAI Service Overview 대시보드 (4개 Row) | `k8s/platform/observability/base/grafana-dashboard-utterai.yaml` (신규) | 🔄 |
 
 ```
 Row 1: API Health       — TPS, p50/p95/p99 응답시간, 5xx 에러율, Pod 수

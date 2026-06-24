@@ -5,6 +5,7 @@ resources:
   - namespace.yaml
   - otel-collector.yaml
   - grafana-dashboard-ca-karpenter.yaml
+  - grafana-dashboard-utterai.yaml
   - alert-rules-utterai.yaml
   # alertmanager-slack-secret.yaml — Slack 미사용으로 비활성화
   # alertmanager-config.yaml       — Slack 미사용으로 비활성화

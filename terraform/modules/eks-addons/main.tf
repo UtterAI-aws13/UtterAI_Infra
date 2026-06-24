@@ -206,6 +206,25 @@ resource "helm_release" "kube_prometheus_stack" {
               access    = "proxy"
               url       = "http://tempo.monitoring.svc.cluster.local:3100"
               isDefault = false
+              jsonData = {
+                # Service Graph: servicegraph connector가 생성한 메트릭을 Prometheus에서 조회
+                serviceMap = {
+                  datasourceUid = "prometheus"
+                }
+                # Node Graph 패널 활성화
+                nodeGraph = {
+                  enabled = true
+                }
+                # Tempo span에서 Loki 로그로 1클릭 이동
+                tracesToLogs = {
+                  datasourceUid = "loki"
+                  tags          = ["service.name"]
+                  mappedTags    = [{ key = "service.name", value = "service_name" }]
+                  filterByTraceID = true
+                  filterBySpanID  = false
+                  lokiSearch      = true
+                }
+              }
             }
           ]
         },
