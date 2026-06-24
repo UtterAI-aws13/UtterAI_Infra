@@ -626,7 +626,19 @@ resource "helm_release" "promtail" {
             },
             {
               replace = {
-                expression = "(?i)((authorization|cookie|set-cookie|x-internal-token|password|passwd|token|secret|api[_-]?key|hf_token|db_password|redis_auth_token)[=: ]\\s*[^\\s,}\"']+)"
+                expression = "(?i)(authorization[=: ]\\s*Bearer\\s+[^\\s,}\"']+)"
+                replace    = "[REDACTED_AUTHORIZATION]"
+              }
+            },
+            {
+              replace = {
+                expression = "(Bearer\\s+[^\\s,}\"']+)"
+                replace    = "Bearer [REDACTED]"
+              }
+            },
+            {
+              replace = {
+                expression = "(?i)((cookie|set-cookie|x-internal-token|password|passwd|token|secret|api[_-]?key|hf_token|db_password|redis_auth_token)[=: ]\\s*[^\\s,}\"']+)"
                 replace    = "[REDACTED_SENSITIVE_FIELD]"
               }
             },
@@ -634,12 +646,6 @@ resource "helm_release" "promtail" {
               replace = {
                 expression = "(https?://[^\\s,}\"']*(X-Amz-Signature|X-Amz-Credential|X-Amz-Security-Token)[^\\s,}\"']*)"
                 replace    = "[REDACTED_PRESIGNED_URL]"
-              }
-            },
-            {
-              replace = {
-                expression = "(Bearer\\s+[^\\s,}\"']+)"
-                replace    = "Bearer [REDACTED]"
               }
             }
           ]
