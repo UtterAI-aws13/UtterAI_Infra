@@ -30,6 +30,8 @@
 22. [Cilium (CNI + 네트워크 보안)](#22-cilium-cni--네트워크-보안)
 23. [Terraform 시크릿 관리 현황 및 고도화](#23-terraform-시크릿-관리-현황-및-고도화)
 
+> `app.utterai.org` CloudFront WAF v1 규칙 선택 ADR: [`cloudfront-waf-adr.md`](./cloudfront-waf-adr.md)
+
 ---
 
 ## 1. 환경 개요
