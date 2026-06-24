@@ -12,6 +12,7 @@ UtterAI 클라우드 인프라는 Dev와 Prod 두 환경으로 완전히 분리�
 ## 공유 문서
 
 - [Monitoring Runbook](./shared/monitoring-runbook.md)
+- [Grafana 핵심 지표 가이드](./shared/grafana-core-metrics-guide.md)
 - [Troubleshooting](./dev/troubleshooting/2026-06-16.md)
 - [EKS 아키텍처 흐름](./shared/eks-architecture-flow.md)
 - [K8s 매니페스트 배포 가이드](./shared/k8s-manifest-deploy.md)
