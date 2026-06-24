@@ -212,3 +212,6 @@ docs/dev/results/
 # Claude Code temp files
 C*AppData*
 ct_events.json
+
+# Terraform Lambda zip 빌드 산출물 (Terraform이 로컬에서 자동 생성)
+terraform/**/*.zip
