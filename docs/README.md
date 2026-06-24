@@ -49,24 +49,24 @@ UtterAI 클라우드 인프라는 Dev와 Prod 두 환경으로 완전히 분리�
 | 항목 | Dev | Prod |
 |---|---|---|
 | **AWS 계정** | Dev 전용 계정 | Prod 전용 계정 |
-| **도메인** | `dev.utterai.com` / `api.dev.utterai.com` | `utterai.com` / `api.utterai.com` |
+| **도메인** | `dev.utterai.com` / `api.dev.utterai.com` | `app.utterai.org` / `api.utterai.org` |
 | **리소스 Prefix** | `utterai-dev-` | `utterai-prod-` |
-| **VPC CIDR** | `10.10.0.0/16` | `10.0.0.0/16` |
-| **AZ 수** | 2개 | 3개 |
-| **EKS NodeGroup** | System/API/CPU Worker/GPU Worker (최소 사양) | System/API/CPU Worker/GPU Worker (운영 사양) |
-| **API 노드 타입** | `t3.medium` | `t3.xlarge` |
-| **CPU Worker 타입** | `t3.large` | `c5.2xlarge` |
-| **GPU Worker 타입** | `g4dn.xlarge` (평소 0대) | `g4dn.xlarge` |
-| **노드 스케일링** | Karpenter NodePool (CPU/GPU Worker) | Karpenter NodePool (CPU/GPU Worker) |
-| **KEDA minReplica** | 0 (비용 절감) | 1 |
-| **GPU Worker Spot** | 허용 (비용 절감) | 금지 (On-Demand only) |
-| **백엔드 Pod 수** | 1 (최대 2) | 3 (최대 10) |
+| **VPC CIDR** | `10.10.0.0/16` | `10.20.0.0/16` |
+| **AZ 수** | 2개 (2a, 2c) | 2개 (2a, 2c) |
+| **EKS NodeGroup** | System NodeGroup + Karpenter NodePool (CPU/GPU Worker) | System NodeGroup + Karpenter NodePool (API/CPU/GPU Worker) |
+| **API 노드 타입** | `t3.medium` | `t3.medium` (Karpenter `api` NodePool, MNG 비활성화) |
+| **CPU Worker 타입** | `t3.large` | `m5/m5a/m6i/m6a xlarge` (Spot + On-Demand) |
+| **GPU Worker 타입** | `g4dn.xlarge` (평소 0대) | `g4dn/g5 xlarge~2xlarge` (평소 0대) |
+| **노드 스케일링** | Karpenter NodePool (CPU/GPU Worker) | Karpenter NodePool (API/CPU/GPU/Batch Worker) |
+| **KEDA minReplica** | 0 (비용 절감) | cpu-worker 1, gpu-worker 0 |
+| **GPU Worker Spot** | 허용 (비용 절감) | 허용 (Spot + On-Demand) |
+| **백엔드 Pod 수** | 1 (최대 2) | min 1, max 4 (HPA) |
 | **Aurora 타입** | `db.t3.medium` | `db.r6g.large` |
-| **Aurora 구성** | Single-AZ, Writer 1개 | Multi-AZ, Writer 1 + Reader 1 |
+| **Aurora 구성** | Single-AZ, Writer 1개 | Single-AZ RDS PostgreSQL (Aurora 미전환, Multi-AZ 미적용) |
 | **Redis 타입** | `cache.t3.micro` | `cache.r6g.large` |
-| **Redis 구성** | 단일 노드 | Primary + Replica, Multi-AZ |
-| **S3 버전 관리** | 비활성화 | 활성화 |
-| **KMS 암호화** | S3 기본 암호화 | 서비스별 KMS Key |
+| **Redis 구성** | 단일 노드 | Primary + Replica 2노드 (automatic_failover/Multi-AZ 미설정) |
+| **S3 버전 관리** | 비활성화 | 미적용 |
+| **KMS 암호화** | S3 기본 암호화 | SSE-S3 (CMK 미전환) |
 | **WAF** | 없음 | 활성화 |
 | **DR (Tokyo)** | 없음 | Aurora Global DB + S3 CRR + Standby EKS |
 | **Bastion 접근** | 허용 | 금지 (SSM 경유) |
