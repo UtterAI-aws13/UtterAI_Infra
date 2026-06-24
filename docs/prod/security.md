@@ -1,6 +1,6 @@
 # UtterAI Prod 환경 — 보안 현황
 
-> 작성일: 2026-06-15 / 최종 업데이트: 2026-06-23
+> 작성일: 2026-06-15 / 최종 업데이트: 2026-06-24
 > **이 문서는 Prod 보안 항목의 실제 현황을 코드 기준으로 기록한다.**
 > Dev 보안 문서(`security-overview`, `security-gaps`, `security-hardening`)를 기반으로
 > Dev에서 허용한 것 중 Prod에서 강화해야 할 항목을 정리한다.
@@ -26,7 +26,7 @@
 
 | 보안 영역 | Dev 현재 상태 | Prod 실제 상태 |
 |----------|-------------|--------------|
-| **EKS API Endpoint** | Public (0.0.0.0/0) | ⚠️ 여전히 Public (`endpoint_public_access = true`) — `modules/eks/main.tf` |
+| **EKS API Endpoint** | Public (0.0.0.0/0) | ⚠️ 여전히 Public (`endpoint_public_access = true`) — VPN 구축 완료 (PR #289), `false` 적용 가능 상태. `modules/eks/main.tf:70` |
 | **EKS etcd KMS** | 미설정 | **미적용** — `encryption_config` 블록 없음 |
 | **EKS Node SG** | Control Plane SG만 허용 (수정 완료) | ✅ 동일 + Custom Networking용 cluster↔node SG 상호 허용 규칙 추가 |
 | **VPC NAT** | 1개 (공유) | 확인 필요 |
@@ -386,7 +386,7 @@ labels:
 
 | 순위 | 항목 | 작업 위치 | 주의사항 |
 |------|------|----------|---------|
-| 8 | EKS `endpoint_public_access = false` | Terraform — `modules/eks/main.tf:70` | 적용 즉시 퍼블릭 kubectl 차단. GitHub Actions가 VPC 내부에서 실행 중인지 사전 확인 필수. Bastion 또는 VPN 없으면 이후 접근 불가 |
+| 8 | EKS `endpoint_public_access = false` | Terraform — `modules/eks/main.tf:70` | VPN 구축 완료 (PR #289). GitHub Actions는 ArgoCD GitOps 구조라 EKS API 직접 호출 없음 — 영향 없음. 팀원 전체 `.ovpn` 배포 및 `kubectl get nodes` 확인 후 즉시 적용 가능. 상세: `eks-private-endpoint.md §8` |
 | 9 | VPC Flow Logs 활성화 | Terraform — `01-network/main.tf` 신규 | CloudWatch Logs 비용 발생 (트래픽량에 따라 월 수만~수십만원). 보존 기간 30일 권장 |
 | 10 | EKS etcd KMS 봉투 암호화 | Terraform — `modules/eks/main.tf` `encryption_config` 블록 추가 | 기존 클러스터 적용 시 클러스터 내 모든 Secret 전체 재암호화 발생. 신규 클러스터 생성 시 처음부터 포함하는 것이 안전 |
 | 11 | Redis tfstate 토큰 노출 해소 | Terraform — `modules/redis/main.tf` | Terraform 1.10+ `ephemeral` 리소스 필요. 현재 `random_password` 결과가 S3 tfstate에 평문 저장 중 |
