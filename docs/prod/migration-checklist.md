@@ -378,7 +378,7 @@ resource "aws_elasticache_replication_group" "this" {
 | `versioning` | 비활성화 | **활성화** (raw-audio, reports) |
 | 액세스 로깅 | 없음 | 활성화 |
 | 수명 주기 | raw-audio 365일 삭제 | raw-audio 90일→Glacier, 1년 삭제 |
-| CORS AllowedOrigins | CloudFront dev + localhost | `utterai.com`, `www.utterai.com` 만 |
+| CORS AllowedOrigins | CloudFront dev + localhost | `app.utterai.org`, `www.utterai.org` 만 |
 
 ---
 
@@ -544,8 +544,8 @@ metadata:
 | `podAntiAffinity` | 없음 | **추가** (노드 분산) |
 | `APP_ENV` | `dev` | `prod` |
 | `LOG_LEVEL` | `DEBUG` | **`INFO`** |
-| `FRONTEND_ORIGIN` | CloudFront dev 도메인 | `https://utterai.com` |
-| `CORS_ALLOW_ORIGINS` | CloudFront dev 도메인 | `https://utterai.com,https://www.utterai.com` |
+| `FRONTEND_ORIGIN` | CloudFront dev 도메인 | `https://app.utterai.org` |
+| `CORS_ALLOW_ORIGINS` | CloudFront dev 도메인 | `https://app.utterai.org,https://www.utterai.org` |
 | `DB_POOL_SIZE` | `5` | **`10`** |
 | `DB_MAX_OVERFLOW` | `10` | **`20`** |
 | `RAW_AUDIO_BUCKET` | `utterai-dev-raw-audio` | `utterai-prod-raw-audio` |

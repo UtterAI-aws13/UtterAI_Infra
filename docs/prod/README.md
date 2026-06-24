@@ -90,18 +90,18 @@ SQS 파이프라인:
 ## 2. 도메인 구성
 
 ```text
-프론트엔드:   https://utterai.com
-             https://www.utterai.com
-백엔드 API:   https://api.utterai.com
+프론트엔드:   https://app.utterai.org
+             https://www.utterai.org
+백엔드 API:   https://api.utterai.org
 ```
 
 ### Route 53 레코드
 
 | 레코드 | 타입 | 대상 |
 |---|---|---|
-| `utterai.com` | A (Alias) | CloudFront Distribution |
-| `www.utterai.com` | CNAME | `utterai.com` |
-| `api.utterai.com` | A (Alias) | ALB DNS |
+| `app.utterai.org` | A + AAAA (Alias) | CloudFront Distribution |
+| `www.utterai.org` | A + AAAA (Alias) | CloudFront Distribution |
+| `api.utterai.org` | A (Alias) | ALB DNS |
 
 ---
 
@@ -111,32 +111,29 @@ SQS 파이프라인:
 
 | 항목 | 값 |
 |---|---|
-| VPC CIDR | `10.0.0.0/16` |
+| VPC CIDR | `10.20.0.0/16` |
 | VPC 이름 | `utterai-prod-vpc` |
-| AZ 수 | 3개 (ap-northeast-2a, ap-northeast-2b, ap-northeast-2c) |
+| AZ 수 | 2개 (ap-northeast-2a, ap-northeast-2c) |
 
 ### 3.2 Subnet 구성
 
 | Subnet | CIDR | AZ | 용도 |
 |---|---|---|---|
-| Public Subnet A | `10.0.1.0/24` | ap-northeast-2a | ALB, NAT Gateway |
-| Public Subnet B | `10.0.2.0/24` | ap-northeast-2b | ALB, NAT Gateway |
-| Public Subnet C | `10.0.3.0/24` | ap-northeast-2c | ALB, NAT Gateway |
-| Private App Subnet A | `10.0.11.0/24` | ap-northeast-2a | EKS Pod |
-| Private App Subnet B | `10.0.12.0/24` | ap-northeast-2b | EKS Pod |
-| Private App Subnet C | `10.0.13.0/24` | ap-northeast-2c | EKS Pod |
-| Private Data Subnet A | `10.0.21.0/24` | ap-northeast-2a | Aurora, Redis |
-| Private Data Subnet B | `10.0.22.0/24` | ap-northeast-2b | Aurora, Redis |
-| Private Data Subnet C | `10.0.23.0/24` | ap-northeast-2c | Aurora, Redis |
+| Public Subnet A | `10.20.1.0/24` | ap-northeast-2a | ALB, NAT Gateway |
+| Public Subnet C | `10.20.2.0/24` | ap-northeast-2c | ALB |
+| Private App Subnet A | `10.20.11.0/24` | ap-northeast-2a | EKS Node/Pod |
+| Private App Subnet C | `10.20.12.0/24` | ap-northeast-2c | EKS Node/Pod |
+| Private Data Subnet A | `10.20.21.0/24` | ap-northeast-2a | RDS, Redis |
+| Private Data Subnet C | `10.20.22.0/24` | ap-northeast-2c | RDS, Redis |
 
-> Prod는 각 AZ마다 NAT Gateway 1개씩 배치 (3개) → AZ 장애 시에도 아웃바운드 유지
+> NAT Gateway는 ap-northeast-2a에 1개 배치. ap-northeast-2c Private 서브넷 아웃바운드도 2a NAT GW 경유.
 
 ### 3.3 보안 그룹 구성
 
 | 보안 그룹 | 허용 Inbound | 목적 |
 |---|---|---|
 | `sg-prod-alb` | 0.0.0.0/0 : 443 | ALB 외부 트래픽 수신 |
-| `sg-prod-backend` | sg-prod-alb : 8000 | ALB에서 백엔드 Pod로 |
+| `sg-prod-backend` | sg-prod-alb : 8080 | ALB에서 백엔드 Pod로 |
 | `sg-prod-aurora` | sg-prod-backend : 5432 | 백엔드에서 DB로 |
 | `sg-prod-redis` | sg-prod-backend : 6379 | 백엔드에서 Redis로 |
 
@@ -175,9 +172,9 @@ AWS WAF Rules:
 |---|---|
 | 클러스터 이름 | `utterai-prod-eks` |
 | Kubernetes 버전 | `1.31` |
-| Control Plane Endpoint | Private only (Public 접근 차단) |
+| Control Plane Endpoint | Public (VPN 준비 완료, Private-only 전환 예정) |
 
-> Prod에서는 Control Plane Public Endpoint를 차단하고 kubectl 접근은 VPN 또는 Systems Manager 경유
+> Client VPN (OpenVPN)이 구현되어 있어 VPN 경유 kubectl이 동작 중. `endpoint_public_access = false` 전환은 팀 전체 확인 후 진행 예정. 상세: [`docs/prod/eks-private-endpoint.md`](./eks-private-endpoint.md)
 
 ### 4.2 Namespace 구성
 
@@ -198,14 +195,14 @@ Dev와 동일한 Namespace 구조를 사용한다. 환경 분리는 Namespace가
 
 | NodeGroup | 관리 방식 | 인스턴스 타입 | 노드 수 | 용도 |
 |---|---|---|---:|---|
-| `prod-system-nodegroup` | EKS Managed NodeGroup | `t3.large` | 2 ~ 3 | CoreDNS, ALB Controller, Karpenter |
-| `prod-api-nodegroup` | EKS Managed NodeGroup + HPA | `t3.xlarge` | 2 ~ 5 | 백엔드 API Pod |
-| `cpu-worker-nodepool` | Karpenter NodePool + KEDA | `c5.2xlarge`, `c5.4xlarge` | 0 ~ 4 | AI CPU 처리 |
-| `gpu-worker-nodepool` | Karpenter NodePool + KEDA | `g4dn.xlarge`, `g4dn.2xlarge` | 0 ~ 3 | AI GPU 처리 |
+| `prod-system-nodegroup` | EKS Managed NodeGroup | `t3.medium` (On-Demand) | 2 ~ 4 | CoreDNS, ALB Controller, Karpenter |
+| `api` NodePool | Karpenter NodePool + HPA | `t3.medium` | 동적 | 백엔드 API Pod (MNG 비활성화) |
+| `cpu-worker` NodePool | Karpenter NodePool + KEDA | `m5/m5a/m6i/m6a xlarge` | 0 ~ 10 | AI CPU 처리 (Spot + On-Demand) |
+| `gpu` NodePool | Karpenter NodePool + KEDA | `g4dn/g5 xlarge~2xlarge` | 0 ~ 4 | AI GPU 처리 (Spot + On-Demand) |
 
-> System / API NodeGroup: On-Demand, 항상 실행
+> System NodeGroup: On-Demand, 상시 실행 (desired 2 / min 2 / max 4)
 >
-> CPU / GPU Worker: KEDA가 Pod 수 조정 → Karpenter가 노드 프로비저닝 (섹션 4.5, 4.6 참고)
+> API/CPU/GPU Worker: KEDA가 Pod 수 조정 → Karpenter가 노드 프로비저닝 (섹션 4.5, 4.6 참고)
 
 ### 4.4 HPA (Horizontal Pod Autoscaler)
 
@@ -216,21 +213,20 @@ metadata:
   name: backend-api-hpa
   namespace: utterai-api
 spec:
-  minReplicas: 3
-  maxReplicas: 10
+  minReplicas: 1
+  maxReplicas: 4
   metrics:
     - type: Resource
       resource:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: 60
-    - type: Resource
-      resource:
-        name: memory
-        target:
-          type: Utilization
           averageUtilization: 70
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
 ```
 
 ### 4.5 KEDA (Queue-based Autoscaler)
@@ -258,12 +254,27 @@ spec:
   scaleTargetRef:
     name: utterai-cpu-worker
   minReplicaCount: 1
-  maxReplicaCount: 4
+  maxReplicaCount: 10
+  cooldownPeriod: 300
   triggers:
     - type: aws-sqs-queue
+      authenticationRef:
+        name: keda-aws-pod-identity
+        kind: ClusterTriggerAuthentication
       metadata:
-        queueURL: https://sqs.ap-northeast-2.amazonaws.com/{ACCOUNT_ID}/utterai-prod-audio-preprocess-queue
+        queueURL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-prod-audio-preprocess-queue"
         queueLength: "5"
+        activationQueueLength: "0"
+        awsRegion: ap-northeast-2
+        identityOwner: operator
+    - type: aws-sqs-queue
+      authenticationRef:
+        name: keda-aws-pod-identity
+        kind: ClusterTriggerAuthentication
+      metadata:
+        queueURL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-prod-report-analysis-queue"
+        queueLength: "5"
+        activationQueueLength: "0"
         awsRegion: ap-northeast-2
         identityOwner: operator
 ```
@@ -280,12 +291,22 @@ spec:
   scaleTargetRef:
     name: utterai-ml-gpu-worker
   minReplicaCount: 0
-  maxReplicaCount: 3
+  maxReplicaCount: 4
+  cooldownPeriod: 600
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 600
   triggers:
     - type: aws-sqs-queue
+      authenticationRef:
+        name: keda-aws-pod-identity
+        kind: ClusterTriggerAuthentication
       metadata:
-        queueURL: https://sqs.ap-northeast-2.amazonaws.com/{ACCOUNT_ID}/utterai-prod-gpu-inference-queue
+        queueURL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-prod-gpu-inference-queue"
         queueLength: "1"
+        activationQueueLength: "0"
         awsRegion: ap-northeast-2
         identityOwner: operator
 ```
@@ -317,37 +338,41 @@ KEDA + Karpenter 전체 흐름:
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
-  name: cpu-worker-nodepool
+  name: cpu-worker
 spec:
   template:
     metadata:
       labels:
-        role: cpu-worker
+        role: worker
+        workload: cpu-worker
     spec:
       nodeClassRef:
         group: karpenter.k8s.aws
         kind: EC2NodeClass
-        name: cpu-worker-class
-      requirements:
-        - key: node.kubernetes.io/instance-type
-          operator: In
-          values: ["c5.2xlarge", "c5.4xlarge"]
-        - key: karpenter.sh/capacity-type
-          operator: In
-          values: ["on-demand"]
-        - key: topology.kubernetes.io/zone
-          operator: In
-          values: ["ap-northeast-2a", "ap-northeast-2b", "ap-northeast-2c"]
+        name: default
       taints:
         - key: dedicated
-          value: ai-cpu
+          value: worker
           effect: NoSchedule
+      requirements:
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["spot", "on-demand"]
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+        - key: karpenter.k8s.aws/instance-family
+          operator: In
+          values: ["m5", "m5a", "m6i", "m6a"]
+        - key: karpenter.k8s.aws/instance-size
+          operator: In
+          values: ["xlarge"]
   limits:
-    cpu: 64
-    memory: 256Gi
+    cpu: "32"
+    memory: "64Gi"
   disruption:
-    consolidationPolicy: WhenEmpty
-    consolidateAfter: 30s
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 5m
 ```
 
 **GPU Worker NodePool**
@@ -356,37 +381,44 @@ spec:
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
-  name: gpu-worker-nodepool
+  name: gpu
 spec:
   template:
     metadata:
       labels:
-        role: gpu-worker
+        role: gpu
+        workload: ai-gpu
     spec:
       nodeClassRef:
         group: karpenter.k8s.aws
         kind: EC2NodeClass
-        name: gpu-worker-class
-      requirements:
-        - key: node.kubernetes.io/instance-type
-          operator: In
-          values: ["g4dn.xlarge", "g4dn.2xlarge"]
-        - key: karpenter.sh/capacity-type
-          operator: In
-          values: ["on-demand"]
-        - key: topology.kubernetes.io/zone
-          operator: In
-          values: ["ap-northeast-2a", "ap-northeast-2b", "ap-northeast-2c"]
+        name: gpu
       taints:
         - key: dedicated
           value: ai-gpu
           effect: NoSchedule
+        - key: nvidia.com/gpu
+          value: "true"
+          effect: NoSchedule
+      requirements:
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["spot", "on-demand"]
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+        - key: karpenter.k8s.aws/instance-family
+          operator: In
+          values: ["g4dn", "g5"]
+        - key: karpenter.k8s.aws/instance-size
+          operator: In
+          values: ["xlarge", "2xlarge"]
   limits:
-    cpu: 64
-    memory: 256Gi
+    cpu: "32"
+    memory: "128Gi"
   disruption:
     consolidationPolicy: WhenEmpty
-    consolidateAfter: 30s
+    consolidateAfter: 10m
 ```
 
 > Karpenter 자체는 `prod-system-nodegroup`에 배포. Karpenter가 죽으면 Worker 노드 프로비저닝이 불가능하므로 System NodeGroup의 가용성이 전제되어야 한다
@@ -439,24 +471,24 @@ spec:
         - name: backend-api
           image: {ECR_URI}/utterai-backend:{git_sha}
           ports:
-            - containerPort: 8000
+            - containerPort: 8080
           resources:
             requests:
-              cpu: 500m
-              memory: 1Gi
+              cpu: 250m
+              memory: 512Mi
             limits:
               cpu: 1000m
-              memory: 2Gi
+              memory: 1Gi
           readinessProbe:
             httpGet:
               path: /health/ready
-              port: 8000
+              port: 8080
             initialDelaySeconds: 15
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /health/live
-              port: 8000
+              port: 8080
             initialDelaySeconds: 30
             periodSeconds: 20
 ```
@@ -638,8 +670,8 @@ Prod 추가 예정 (modules/s3에 변수 추가 필요):
     "AllowedHeaders": ["*"],
     "AllowedMethods": ["GET", "PUT", "POST"],
     "AllowedOrigins": [
-      "https://utterai.com",
-      "https://www.utterai.com"
+      "https://app.utterai.org",
+      "https://www.utterai.org"
     ],
     "ExposeHeaders": ["ETag"],
     "MaxAgeSeconds": 3000
@@ -671,17 +703,17 @@ Dev와 동일한 4단계 파이프라인 구조를 사용한다.
 ```text
 utterai-prod-audio-preprocess-queue:
 - 메시지 보존 기간: 4일
-- 가시성 타임아웃: 300초 (AI 분석 예상 최대 시간)
+- 가시성 타임아웃: 900초 (AI 분석 예상 최대 시간)
 - 최대 메시지 크기: 256KB
 - 암호화: AWS Managed Key (`aws/sqs`)
 - DLQ: utterai-prod-audio-preprocess-dlq (maxReceiveCount: 3)
 
 utterai-prod-gpu-inference-queue:
-- 가시성 타임아웃: 600초 (GPU 추론 소요 시간 반영)
-- DLQ: utterai-prod-gpu-inference-dlq (maxReceiveCount: 2)
+- 가시성 타임아웃: 1800초 (GPU 추론 소요 시간 반영)
+- DLQ: utterai-prod-gpu-inference-dlq (maxReceiveCount: 3)
 
 utterai-prod-report-analysis-queue:
-- 가시성 타임아웃: 300초
+- 가시성 타임아웃: 900초
 - DLQ: utterai-prod-report-analysis-dlq (maxReceiveCount: 3)
 
 utterai-prod-rag-ingest-queue:
@@ -714,8 +746,8 @@ utterai-prod-rag-ingest-queue:
 |---|---|
 | 클라이언트 이름 | `utterai-prod-web-client` |
 | 인증 흐름 | `USER_PASSWORD_AUTH`, `REFRESH_TOKEN_AUTH` |
-| Callback URL | `https://utterai.com/auth/callback` |
-| Logout URL | `https://utterai.com/logout` |
+| Callback URL | `https://app.utterai.org/auth/callback` |
+| Logout URL | `https://app.utterai.org/logout` |
 | 토큰 만료 | Access Token 1시간, Refresh Token 30일 |
 
 ---
@@ -1021,12 +1053,12 @@ Prometheus Alertmanager는 on-call routing과 중복 알림 정책이 확정된 
 ```text
 Origin: S3 utterai-prod-frontend (OAC 사용, 직접 접근 차단)
 Distribution: utterai-prod-frontend-cf
-도메인: utterai.com, www.utterai.com
-HTTPS: ACM 인증서 (us-east-1 발급 필수)
+도메인: app.utterai.org, www.utterai.org
+HTTPS: ACM 인증서 (us-east-1 발급 필수, *.utterai.org)
 캐시 정책: 정적 파일 1년 캐시, HTML은 캐시 없음
 ```
 
-백엔드 API 라우팅은 `api.utterai.com`을 ALB에 직접 연결하는 방식을 사용한다.
+백엔드 API 라우팅은 `api.utterai.org`를 ALB에 직접 연결하는 방식을 사용한다.
 
 ---
 
@@ -1166,7 +1198,7 @@ API_BASE_PATH=/api/v1
 LOG_LEVEL=INFO
 
 # CORS
-CORS_ALLOW_ORIGINS=https://utterai.com,https://www.utterai.com
+CORS_ALLOW_ORIGINS=https://app.utterai.org,https://www.utterai.org
 
 # Cognito
 COGNITO_REGION=ap-northeast-2
@@ -1175,7 +1207,7 @@ COGNITO_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxx
 COGNITO_JWKS_URL=https://cognito-idp.ap-northeast-2.amazonaws.com/ap-northeast-2_xxxxxxxx/.well-known/jwks.json
 
 # Aurora PostgreSQL
-DB_HOST=utterai-prod-aurora.cluster-xxxx.ap-northeast-2.rds.amazonaws.com
+DB_HOST=utterai-prod-rds.xxxx.ap-northeast-2.rds.amazonaws.com
 DB_PORT=5432
 DB_NAME=utterai
 DB_USER=utterai_app
@@ -1238,11 +1270,11 @@ RPO 목표: 1분 이내 (Aurora Global DB 복제 지연 기준)
 ### 18.3 Route 53 Failover
 
 ```text
-Primary Record: api.utterai.com → Seoul ALB (Health Check 연결)
-Secondary Record: api.utterai.com → Tokyo DR ALB (Failover)
+Primary Record: api.utterai.org → Seoul ALB (Health Check 연결)
+Secondary Record: api.utterai.org → Tokyo DR ALB (Failover)
 
 Health Check:
-- 대상: https://api.utterai.com/health/ready
+- 대상: https://api.utterai.org/health/ready
 - 간격: 30초
 - 실패 임계값: 3회 연속 실패 시 Failover 발동
 ```

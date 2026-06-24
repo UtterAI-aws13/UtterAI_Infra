@@ -255,6 +255,11 @@ resource "aws_iam_role_policy" "ai_ml_gpu" {
       },
       {
         Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = ["${var.reports_bucket_arn}/*"]
+      },
+      {
+        Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
         Resource = ["arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:${local.prefix}/*"]
       },
