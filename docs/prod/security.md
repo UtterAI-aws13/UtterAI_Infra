@@ -31,7 +31,7 @@
 | **EKS Node SG** | Control Plane SG만 허용 (수정 완료) | ✅ 동일 + Custom Networking용 cluster↔node SG 상호 허용 규칙 추가 |
 | **VPC NAT** | 1개 (공유) | 확인 필요 |
 | **VPC Flow Logs** | 미설정 | **미적용** — `01-network/main.tf`에 `aws_flow_log` 없음 |
-| **WAF** | 없음 | **미적용** — WebACL 미생성, `wafv2-acl-arn` annotation 없음 |
+| **WAF** | 없음 | **미적용** — WebACL 미생성. `app.utterai.org` CloudFront WAF v1 규칙 선택은 [`cloudfront-waf-adr.md`](./cloudfront-waf-adr.md) 참고 |
 | **RDS 종류** | Single Instance | Single Instance (Aurora 미전환 — 계획은 migration-checklist 참고) |
 | **RDS deletion_protection** | false | ✅ `deletion_protection = true` |
 | **RDS skip_final_snapshot** | true | ✅ `skip_final_snapshot = false` |
@@ -118,6 +118,7 @@ resource "aws_cloudwatch_log_group" "flow_logs" {
 
 `migration-checklist.md §1-B`에 ALB WAF 코드가 있다.
 CloudFront WAF는 `us-east-1`에 `scope = "CLOUDFRONT"`로 별도 WebACL 생성 필요.
+`app.utterai.org` CloudFront만 보호하는 v1 결정은 [`cloudfront-waf-adr.md`](./cloudfront-waf-adr.md)에 정리한다.
 
 ```hcl
 # CloudFront WAF (us-east-1 provider 필요)
