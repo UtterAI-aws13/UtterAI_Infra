@@ -10,8 +10,9 @@
 
 1. [현재 UtterAI 관찰 가능성 스택 — 현황 및 갭](#1-현재-utterai-관찰-가능성-스택--현황-및-갭)
 2. [고도화 방향 1 — 관찰 가능성 완성](#2-고도화-방향-1--관찰-가능성-완성)
-3. [고도화 방향 2 — AI 기반 장애 자동 분석](#3-고도화-방향-2--ai-기반-장애-자동-분석)
-4. [적용 우선순위 및 로드맵](#4-적용-우선순위-및-로드맵)
+3. [고도화 방향 3 — ADOT 전환 및 Auto-instrumentation](#3-고도화-방향-3--adot-전환-및-auto-instrumentation)
+4. [고도화 방향 2 — AI 기반 장애 자동 분석](#4-고도화-방향-2--ai-기반-장애-자동-분석)
+5. [적용 우선순위 및 로드맵](#5-적용-우선순위-및-로드맵)
 
 ---
 
@@ -623,9 +624,274 @@ UtterAI Service Overview 대시보드
 
 ---
 
-## 3. 고도화 방향 2 — AI 기반 장애 자동 분석
+## 3. 고도화 방향 3 — ADOT 전환 및 Auto-instrumentation
 
-### 3-1. 왜 필요한가 — UtterAI 현황
+### 3-1. ADOT이란 — 현재 vanilla OTel Collector와의 관계
+
+ADOT(AWS Distro for OpenTelemetry)은 vanilla OTel Collector의 **대체재**이지 별도 추가 컴포넌트가 아닙니다.
+
+```
+vanilla OTel Collector (현재)          ADOT (전환 후)
+─────────────────────────────          ────────────────────────────────────
+otel/opentelemetry-collector-contrib   public.ecr.aws/aws-observability/
+  이미지를 직접 Deployment으로 운영       aws-otel-collector 이미지
+                                       → EKS 애드온으로 AWS가 수명주기 관리
+                                          OR ADOT Operator Helm으로 CRD 방식 관리
+
+config.yaml → ConfigMap                config.yaml → OpenTelemetryCollector CRD
+(동일한 receivers/processors/exporters 문법 그대로 사용 가능)
+
+자동 계측 없음 (앱 코드에 OTel SDK 직접 추가 필요)
+                                       Instrumentation CRD → Pod 어노테이션
+                                         하나로 SDK 자동 주입 (코드 수정 없음)
+```
+
+**현재 `otel-collector.yaml`은 변경 없이 CRD spec으로 이관됩니다.** 백엔드(Tempo/Prometheus/Loki)도 그대로 유지됩니다.
+
+ADOT 전환으로 추가로 쓸 수 있는 것:
+
+| 기능 | vanilla OTel | ADOT |
+|---|---|---|
+| Tempo/Prometheus/Loki로 전송 | ✅ | ✅ (동일) |
+| X-Ray, CloudWatch로 전송 | ⚠️ 가능하나 미지원 컴포넌트 | ✅ AWS 공식 지원 |
+| Auto-instrumentation (코드 수정 없음) | ❌ | ✅ Instrumentation CRD |
+| AWS 관리형 수명주기 (EKS 애드온) | ❌ | ✅ |
+| Container Insights 통합 | ❌ | ✅ |
+
+### 3-2. 전환 방식 — ADOT Operator (권장)
+
+EKS 애드온 방식도 있지만, 현재 Terraform Helm 기반 스택과 일관성을 유지하는 **ADOT Operator Helm 방식**이 더 적합합니다.
+
+```
+현재                                   전환 후
+────────────────────────────────────   ──────────────────────────────────────
+k8s/platform/observability/base/       k8s/platform/observability/base/
+  otel-collector.yaml                    otel-collector-crd.yaml
+  (Deployment + ConfigMap + Service)     (OpenTelemetryCollector CRD)
+                                         instrumentation-python.yaml
+                                         (Instrumentation CRD)
+
+terraform/modules/eks-addons/main.tf   terraform/modules/eks-addons/main.tf
+  (없음)                                  + helm_release "adot_operator"
+```
+
+#### A. Terraform — ADOT Operator 설치
+
+**파일**: `terraform/modules/eks-addons/main.tf`에 추가
+
+```hcl
+# ── ADOT Operator ─────────────────────────────────────────────────────────────
+resource "helm_release" "adot_operator" {
+  name             = "opentelemetry-operator"
+  repository       = "https://open-telemetry.github.io/opentelemetry-helm-charts"
+  chart            = "opentelemetry-operator"
+  version          = "0.68.0"
+  namespace        = "utterai-observability"
+  create_namespace = false   # utterai-observability namespace는 기존에 존재
+  cleanup_on_fail  = true
+  wait             = true
+  wait_for_jobs    = true
+
+  depends_on = [helm_release.kube_prometheus_stack]
+
+  values = [
+    yamlencode({
+      manager = {
+        resources = {
+          requests = { cpu = "100m", memory = "128Mi" }
+          limits   = { cpu = "500m", memory = "256Mi" }
+        }
+      }
+      # cert-manager 없이 동작하도록 (현재 cert-manager 미사용)
+      admissionWebhooks = {
+        certManager = {
+          enabled = false
+        }
+        autoGenerateCert = {
+          enabled = true
+        }
+      }
+    })
+  ]
+}
+```
+
+#### B. OpenTelemetryCollector CRD — 기존 config 이관
+
+**파일**: `k8s/platform/observability/base/otel-collector-crd.yaml` (신규, 기존 otel-collector.yaml 대체)
+
+```yaml
+apiVersion: opentelemetry.io/v1alpha1
+kind: OpenTelemetryCollector
+metadata:
+  name: utterai
+  namespace: utterai-observability
+spec:
+  # sidecar / daemonset / statefulset / deployment 중 선택
+  # deployment: 현재 방식과 동일 (ClusterIP 서비스 자동 생성됨)
+  mode: deployment
+  replicas: 1
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+  # 기존 otel-collector.yaml의 config.yaml 내용을 그대로 이관
+  config: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+    processors:
+      batch: {}
+      memory_limiter:
+        check_interval: 1s
+        limit_mib: 256
+        spike_limit_mib: 64
+
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+
+    exporters:
+      otlp/tempo:
+        endpoint: tempo.monitoring.svc.cluster.local:4317
+        tls:
+          insecure: true
+      prometheus:
+        endpoint: 0.0.0.0:8889
+      loki:
+        endpoint: http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push
+        labels:
+          resource:
+            service.name: "service_name"
+            deployment.environment: "environment"
+            k8s.namespace.name: "namespace"
+            k8s.pod.name: "pod"
+
+    service:
+      extensions: [health_check]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [otlp/tempo]
+        metrics:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [prometheus]
+        logs:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [loki]    # 기존 debug → loki로 변경
+```
+
+CRD를 적용하면 ADOT Operator가 자동으로:
+- `utterai-collector` Deployment 생성
+- `utterai-collector` ClusterIP Service 생성 (포트 4317, 4318)
+- ServiceMonitor 생성 (prometheus exporter 자동 스크레이프)
+
+**기존 `otel-collector.yaml`에서 수동 관리하던 Deployment/Service/ServiceMonitor/ConfigMap은 삭제합니다.**
+
+앱의 `OTEL_EXPORTER_OTLP_ENDPOINT`는 Service 이름만 바뀌므로 ConfigMap에서 수정:
+
+```yaml
+# k8s/apps/backend/overlays/prod/patch-configmap.yaml
+OTEL_EXPORTER_OTLP_ENDPOINT: "http://utterai-collector.utterai-observability.svc.cluster.local:4318"
+```
+
+### 3-3. Auto-instrumentation — 핵심 기능
+
+ADOT의 가장 큰 차별점입니다. 현재 UtterAI BE는 `app/main.py`에서 OTel SDK를 직접 초기화하고 있는데, 이를 Operator가 자동 주입하도록 위임할 수 있습니다.
+
+**파일**: `k8s/platform/observability/base/instrumentation-python.yaml` (신규)
+
+```yaml
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: utterai-python
+  namespace: utterai-observability
+spec:
+  # 모든 앱이 사용할 기본 OTel 엔드포인트
+  exporter:
+    endpoint: http://utterai-collector.utterai-observability.svc.cluster.local:4318
+
+  propagators:
+    - tracecontext
+    - baggage
+    - b3
+
+  sampler:
+    type: parentbased_traceidratio
+    argument: "1.0"    # 100% 샘플링 (prod에서는 0.1~0.2 권장)
+
+  python:
+    env:
+      - name: OTEL_LOGS_EXPORTER
+        value: otlp
+      - name: OTEL_METRICS_EXPORTER
+        value: otlp
+      - name: OTEL_PYTHON_LOG_CORRELATION
+        value: "true"    # 로그에 trace_id 자동 삽입
+      - name: OTEL_PYTHON_LOG_FORMAT
+        value: "%(asctime)s %(levelname)s [%(name)s] [%(filename)s:%(lineno)d] [trace_id=%(otelTraceID)s span_id=%(otelSpanID)s] - %(message)s"
+```
+
+**Pod에 어노테이션 추가** (코드 수정 없이 자동 계측 활성화):
+
+```yaml
+# k8s/apps/backend/base/deployment-green.yaml
+spec:
+  template:
+    metadata:
+      annotations:
+        instrumentation.opentelemetry.io/inject-python: "utterai-observability/utterai-python"
+```
+
+어노테이션을 추가하면 Operator가 Pod 시작 시 Init Container를 자동 삽입하여:
+1. `opentelemetry-distro`, `opentelemetry-exporter-otlp` 패키지 자동 설치
+2. `OTEL_SERVICE_NAME`, `OTEL_EXPORTER_OTLP_ENDPOINT` 등 환경변수 자동 주입
+3. FastAPI 자동 계측 활성화 (`opentelemetry-instrumentation-fastapi` 포함)
+
+**결과**: 앱 `main.py`에서 직접 호출하던 OTel SDK 초기화 코드(`configure_opentelemetry()` 등)를 제거할 수 있습니다.
+
+### 3-4. 전환 절차 요약
+
+```
+1. Terraform: ADOT Operator Helm 추가 → terraform apply
+   (기존 앱/관찰 가능성 스택에 영향 없음, Operator만 설치됨)
+
+2. k8s: OpenTelemetryCollector CRD 적용 (ArgoCD sync)
+   → utterai-collector Deployment/Service 자동 생성
+
+3. 앱 ConfigMap의 OTEL_EXPORTER_OTLP_ENDPOINT 수정
+   (otel-collector → utterai-collector)
+
+4. k8s: 기존 otel-collector.yaml Deployment/Service/ConfigMap 삭제
+   (kustomization.yaml에서 제거)
+
+5. Instrumentation CRD 적용
+
+6. 앱 Deployment에 어노테이션 추가
+   → 다음 rollout restart 시 자동 계측 활성화
+```
+
+> **주의**: 3번에서 엔드포인트가 바뀌므로 ArgoCD sync + rollout restart가 함께 필요합니다.
+
+---
+
+## 4. 고도화 방향 2 — AI 기반 장애 자동 분석
+
+### 4-1. 왜 필요한가 — UtterAI 현황
 
 현재 장애 감지 → 대응 흐름:
 
@@ -649,7 +915,7 @@ kubectl logs <name> --previous ← 직전 1회만 보존, 2회 이전은 소멸
 | GPU SCP deny | Karpenter 로그 수동 확인 | NodeClaim Unknown 즉시 감지 → EC2 에러 메시지 자동 수집 → SCP ARN까지 알림 |
 | GPU OOMKilled | dmesg 접근 불가 | SSM으로 노드 레벨 수집 → 모델 메모리 사용량 + 배치 사이즈 변경 커밋 자동 연결 |
 
-### 3-2. DevOps Agent Operator 전체 아키텍처
+### 4-2. DevOps Agent Operator 전체 아키텍처
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -702,7 +968,7 @@ kubectl logs <name> --previous ← 직전 1회만 보존, 2회 이전은 소멸
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 3-3. Terraform 변경사항
+### 4-3. Terraform 변경사항
 
 #### A. S3 incidents 버킷 추가
 
@@ -877,7 +1143,7 @@ resource "aws_iam_role_policy_attachment" "ssm_core" {
 
 > **왜 필요한가**: SSM Agent가 EKS 노드에 기본 설치되어 있지만 SSM 서비스에 등록되려면 `AmazonSSMManagedInstanceCore` 정책이 노드 role에 붙어있어야 합니다. 이 정책 없이는 `ssm:SendCommand`가 "No instances found" 오류를 반환합니다.
 
-### 3-4. Secrets Manager — Webhook Secret 추가
+### 4-4. Secrets Manager — Webhook Secret 추가
 
 Operator가 DevOps Agent로 Webhook을 보낼 때 HMAC-SHA256 서명에 사용하는 secret을 Secrets Manager에 저장합니다.
 
@@ -916,7 +1182,7 @@ spec:
         property: hmac_secret
 ```
 
-### 3-5. K8s 매니페스트 전체 구성
+### 4-5. K8s 매니페스트 전체 구성
 
 **디렉토리 구조**:
 
@@ -1089,7 +1355,7 @@ patches:
         value: "utterai-prod-incidents"
 ```
 
-### 3-6. Runbook 작성 (DevOps Agent에 등록)
+### 4-6. Runbook 작성 (DevOps Agent에 등록)
 
 Agent Space → Runbooks에 마크다운으로 등록합니다.
 
@@ -1213,7 +1479,7 @@ Agent Space → Runbooks에 마크다운으로 등록합니다.
 
 ---
 
-## 4. 적용 우선순위 및 로드맵
+## 5. 적용 우선순위 및 로드맵
 
 ### Phase 1 — 즉시 적용 (1~3일, 인프라 변경 최소)
 
@@ -1231,11 +1497,15 @@ Agent Space → Runbooks에 마크다운으로 등록합니다.
 | 비즈니스 메트릭 계측 | `Utterai_BE/app/core/metrics.py` | 4h | 업로드 실패율, SQS 처리량 가시성 |
 | ServiceMonitor 추가 | `k8s/platform/observability/base/` | 2h | 앱 메트릭 Prometheus 자동 수집 |
 | Grafana 대시보드 코드화 | `k8s/platform/observability/base/grafana-dashboard-utterai.yaml` | 4h | 전체 서비스 상태 한눈에 파악 |
+| **ADOT Operator 설치** | `terraform/modules/eks-addons/main.tf` | 1h | OpenTelemetryCollector CRD 사용 기반 마련 |
+| **OTel Collector → CRD 방식 이관** | `k8s/platform/observability/base/otel-collector-crd.yaml` | 2h | AWS 관리형 수명주기, Operator 통합 |
+| **Instrumentation CRD 추가** | `k8s/platform/observability/base/instrumentation-python.yaml` | 1h | 앱 어노테이션 기반 Auto-instrumentation 준비 |
 
 ### Phase 3 — 중기 (1~2개월)
 
 | 항목 | 파일/작업 | 예상 공수 | 효과 |
 |---|---|---|---|
+| **Auto-instrumentation 어노테이션 적용** | `k8s/apps/backend/base/deployment-green.yaml` 외 | 2h | 앱 코드 OTel 초기화 제거, SDK 자동 주입 |
 | S3 incidents 버킷 추가 | `terraform/modules/s3/main.tf` | 1h | 장애 데이터 90일 보존 |
 | IRSA Operator Role 추가 | `terraform/modules/irsa/main.tf` | 2h | Operator AWS 권한 |
 | EKS Node SSM 정책 추가 | `terraform/modules/eks/main.tf` | 30m | 노드 레벨 로그 수집 |
@@ -1248,7 +1518,8 @@ Agent Space → Runbooks에 마크다운으로 등록합니다.
 
 | 항목 | 조건 |
 |---|---|
-| AWS 관리형 스택 전환 (AMP/AMG/X-Ray) | Loki/Tempo 운영 부담 증가 시 |
+| X-Ray 전환 (Tempo 대체) | ADOT 전환 완료 후, AWS 통합 트레이싱 필요 시 |
+| CloudWatch Logs 전환 (Loki 대체) | Loki S3 운영 비용 > CloudWatch 비용인 경우 |
 | DevOps Agent MCP 서버 연동 | 과거 인시던트 패턴 DB화 후 선제 대응 |
 | Proactive Prevention | 인시던트 누적 데이터 기반 예방 알림 |
 
@@ -1256,11 +1527,13 @@ Agent Space → Runbooks에 마크다운으로 등록합니다.
 
 ## 참고 — 현재 스택 vs 목표 스택
 
-| 역할 | 현재 | Phase 1~2 완료 후 | Phase 3 완료 후 |
-|---|---|---|---|
-| 로그 저장 | stdout → Loki (구조화 미흡) | OTel → Loki (구조화 JSON) | 동일 + 인시던트 S3 보존 |
-| 트레이스 | Tempo (Log 연결 없음) | Tempo + Log drill-down | 동일 |
-| 메트릭 | 기본 HTTP 메트릭만 | 비즈니스 메트릭 추가 | 동일 |
-| 알림 | 없음 | CrashLoopBackOff/OOMKilled 즉시 | 동일 |
-| 장애 분석 | 수동 30분~수 시간 | 수동 (단, 데이터 풍부) | AI 자동 분석 1~5분 |
-| 장애 데이터 보존 | Pod 삭제 시 소멸 | 소멸 (단, Loki 저장됨) | S3 90일 보존 |
+| 역할 | 현재 | Phase 1 완료 후 | Phase 2 완료 후 (ADOT 포함) | Phase 3 완료 후 |
+|---|---|---|---|---|
+| OTel 수집기 | vanilla OTel Collector (Deployment 직접 관리) | 동일 | ADOT Operator + CRD 방식 | 동일 |
+| 로그 저장 | stdout → Loki (구조화 미흡) | OTel → Loki (구조화 JSON) | 동일 | 동일 + 인시던트 S3 보존 |
+| 트레이스 | Tempo (Log 연결 없음) | Tempo + Log drill-down | 동일 | 동일 |
+| 메트릭 | 기본 HTTP 메트릭만 | 비즈니스 메트릭 추가 | 동일 | 동일 |
+| 자동 계측 | 앱 코드에 OTel SDK 직접 추가 | 동일 | Instrumentation CRD 준비 | 어노테이션 하나로 자동 주입 |
+| 알림 | 없음 | CrashLoopBackOff/OOMKilled 즉시 | 동일 | 동일 |
+| 장애 분석 | 수동 30분~수 시간 | 수동 (단, 데이터 풍부) | 동일 | AI 자동 분석 1~5분 |
+| 장애 데이터 보존 | Pod 삭제 시 소멸 | 소멸 (단, Loki 저장됨) | 동일 | S3 90일 보존 |
