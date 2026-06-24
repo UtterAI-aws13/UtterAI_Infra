@@ -10,9 +10,10 @@
 
 1. [현재 UtterAI 관찰 가능성 스택 — 현황 및 갭](#1-현재-utterai-관찰-가능성-스택--현황-및-갭)
 2. [고도화 방향 1 — 관찰 가능성 완성](#2-고도화-방향-1--관찰-가능성-완성)
-3. [고도화 방향 3 — ADOT 전환 및 Auto-instrumentation](#3-고도화-방향-3--adot-전환-및-auto-instrumentation)
-4. [고도화 방향 2 — AI 기반 장애 자동 분석](#4-고도화-방향-2--ai-기반-장애-자동-분석)
-5. [적용 우선순위 및 로드맵](#5-적용-우선순위-및-로드맵)
+3. [고도화 방향 2 — ADOT 전환 및 Auto-instrumentation](#3-고도화-방향-2--adot-전환-및-auto-instrumentation)
+4. [고도화 방향 3 — 데이터 흐름 모니터링 & VOC](#4-고도화-방향-3--데이터-흐름-모니터링--voc)
+5. [고도화 방향 4 — AI 기반 장애 자동 분석](#5-고도화-방향-4--ai-기반-장애-자동-분석)
+6. [적용 우선순위 및 로드맵](#6-적용-우선순위-및-로드맵)
 
 ---
 
@@ -624,7 +625,7 @@ UtterAI Service Overview 대시보드
 
 ---
 
-## 3. 고도화 방향 3 — ADOT 전환 및 Auto-instrumentation
+## 3. 고도화 방향 2 — ADOT 전환 및 Auto-instrumentation
 
 ### 3-1. ADOT이란 — 현재 vanilla OTel Collector와의 관계
 
@@ -889,7 +890,672 @@ spec:
 
 ---
 
-## 4. 고도화 방향 2 — AI 기반 장애 자동 분석
+## 4. 고도화 방향 3 — 데이터 흐름 모니터링 & VOC
+
+### 4-1. UtterAI 구조와 MSA 로그 산발 문제
+
+UtterAI는 완전한 MSA(Microservices Architecture)는 아니지만 **Worker별 독립 배포 구조**이기 때문에 MSA가 겪는 동일한 문제를 가집니다.
+
+**현재 실제 데이터 흐름:**
+
+```
+[사용자]
+  │ 음성 파일 업로드 요청
+  ▼
+[utterai-api]  utterai-prod-api 네임스페이스
+  │ presigned URL 반환 → 사용자가 S3에 직접 업로드
+  │ S3 업로드 완료 콜백 수신
+  │ → SQS audio-preprocess-queue 메시지 발송
+  ▼                      ↑ 여기서 trace 끊김 (비동기 경계)
+[utterai-cpu-worker]  utterai-ai-cpu 네임스페이스
+  │ SQS audio-preprocess-queue 소비
+  │ 음성 전처리 (노이즈 제거, 구간 분할 등)
+  │ → SQS gpu-inference-queue 메시지 발송
+  ▼                      ↑ 여기서 trace 또 끊김
+[utterai-ml-gpu-worker]  utterai-ai-gpu 네임스페이스
+  │ SQS gpu-inference-queue 소비
+  │ ML 추론 (STT, 분석)
+  │ → SQS report-analysis-queue 메시지 발송
+  │ → S3 결과 저장
+  ▼
+[DB/결과 반환]
+
+[utterai-batch-worker]  utterai-batch 네임스페이스 (별도 흐름)
+  RAG 문서 수집 → SQS rag-ingest-queue → 벡터 DB 적재
+```
+
+**MSA가 아니더라도 동일한 문제가 발생하는 이유:**
+
+| 특성 | 완전한 MSA | UtterAI 현재 |
+|---|---|---|
+| 서비스 간 통신 방식 | HTTP API 또는 메시지 큐 | **SQS** (비동기 큐) |
+| 배포 단위 분리 | 서비스별 독립 배포 | **Worker별 독립 배포** |
+| 네임스페이스 분리 | 서비스별 분리 | **utterai-ai-cpu / utterai-ai-gpu / utterai-batch** 분리 |
+| 로그 위치 | 서비스별 분산 | **각 Worker Pod에 분산** |
+| Trace 연속성 | 동기 호출 시 자동 전파 | **SQS 경계에서 자동 끊김** |
+
+**결론: 완전한 MSA와 동일한 문제 발생, 오히려 SQS 특성상 더 명시적인 처리 필요**
+
+---
+
+현재 VOC(사용자 불만) 대응 시 실제 발생하는 상황:
+
+```
+"제 녹음 분석이 안 나왔어요"
+  ↓
+kubectl logs -n utterai-prod-api <pod> | grep "user_id" → 해당 session 찾기 시도
+  ↓
+kubectl logs -n utterai-ai-cpu <pod> | grep "session_id" → 연결 안 됨 (다른 trace)
+  ↓
+kubectl logs -n utterai-ai-gpu <pod> | grep "session_id" → 연결 안 됨
+  ↓
+SQS 콘솔에서 DLQ 확인 → 메시지 이미 삭제됨 (가시성 타임아웃 후 소멸)
+  ↓
+원인 파악 불가
+```
+
+### 4-2. 해결 아키텍처 — session_id 기반 데이터 흐름 추적
+
+**핵심 원칙**: `session_id` + `user_id`를 모든 SQS 메시지 body와 모든 로그에 포함시키면 Elasticsearch에서 `session_id` 하나로 전체 흐름 조회 가능.
+
+```
+┌───────────────────────────────────────────────────────────────────┐
+│  앱 레이어 변경 (상관 ID 전파)                                      │
+│                                                                   │
+│  API → SQS 메시지에 session_id + user_id + traceparent 포함       │
+│  CPU Worker → SQS 메시지 수신 시 이 값들을 추출하여 로그에 삽입     │
+│  GPU Worker → 동일                                                 │
+└───────────────────────────────────────────────────────────────────┘
+                    │ 구조화 JSON 로그 (stdout)
+                    ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  로그 수집 레이어                                                   │
+│                                                                   │
+│  Fluent Bit DaemonSet                                             │
+│  ├── /var/log/containers/utterai-*.log 수집                       │
+│  ├── JSON 파싱 → session_id, user_id 필드 추출                    │
+│  ├── → Loki (기존, 인프라 모니터링용)                              │
+│  └── → AWS OpenSearch (신규, 데이터 흐름/VOC용)                   │
+└───────────────────────────────────────────────────────────────────┘
+                    │
+                    ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  AWS OpenSearch                                                    │
+│                                                                   │
+│  인덱스: utterai-sessions-{YYYY.MM}                               │
+│  ├── session_id: "xyz789"                                         │
+│  ├── user_id: "abc123"                                            │
+│  ├── service: "backend" / "cpu-worker" / "ml-gpu-worker"          │
+│  ├── event: "audio_uploaded" / "preprocess_started" / ...         │
+│  ├── status: "success" / "error" / "pending"                      │
+│  └── duration_ms, error_message, trace_id                         │
+│                                                                   │
+│  OpenSearch Dashboard                                             │
+│  ├── 세션 타임라인 뷰 (session_id 검색)                            │
+│  ├── 사용자 이력 뷰 (user_id 검색)                                 │
+│  ├── 에러 패턴 뷰 (어느 Worker에서 실패가 많은가)                   │
+│  └── 처리 시간 분포 (각 단계별 소요시간)                            │
+└───────────────────────────────────────────────────────────────────┘
+```
+
+### 4-3. 앱 코드 변경 — SQS 상관 ID 전파
+
+이 섹션은 **앱 레포(UtterAI_BE, UtterAI_AI)에서 수행할 변경사항**입니다. 인프라 변경보다 선행되어야 합니다.
+
+#### A. SQS 메시지 발송 시 상관 ID 포함 (BE API)
+
+```python
+# Utterai_BE/app/services/audio.py
+
+from opentelemetry import trace
+from opentelemetry.propagate import inject
+
+def dispatch_to_preprocess(self, session_id: str, user_id: str, s3_key: str) -> None:
+    # 현재 span의 trace context를 carrier로 추출 (W3C traceparent 형식)
+    carrier: dict[str, str] = {}
+    inject(carrier)
+
+    message_body = {
+        "session_id": session_id,
+        "user_id": user_id,
+        "s3_key": s3_key,
+        "enqueued_at": datetime.utcnow().isoformat(),
+        # OTel trace context — CPU Worker에서 span을 이어받을 때 사용
+        "traceparent": carrier.get("traceparent", ""),
+    }
+
+    self.sqs_client.send_message(
+        QueueUrl=settings.sqs_audio_preprocess_queue_url,
+        MessageBody=json.dumps(message_body),
+        # MessageAttributes에도 추가 (OTel auto-instrumentation 호환)
+        MessageAttributes={
+            "traceparent": {
+                "StringValue": carrier.get("traceparent", ""),
+                "DataType": "String",
+            }
+        },
+    )
+    logger.info(
+        "SQS 디스패치 완료",
+        extra={"session_id": session_id, "user_id": user_id, "queue": "audio-preprocess"},
+    )
+```
+
+#### B. SQS 메시지 수신 시 trace 이어받기 (CPU Worker)
+
+```python
+# UtterAI_AI/app/workers/cpu_worker.py
+
+from opentelemetry import trace
+from opentelemetry.propagate import extract
+
+tracer = trace.get_tracer("cpu-worker")
+
+def handle_message(message: dict) -> None:
+    body = json.loads(message["Body"])
+    session_id = body["session_id"]
+    user_id    = body["user_id"]
+    s3_key     = body["s3_key"]
+
+    # API에서 전달받은 trace context 복원
+    carrier = {"traceparent": body.get("traceparent", "")}
+    parent_ctx = extract(carrier)
+
+    with tracer.start_as_current_span(
+        "cpu_worker.preprocess",
+        context=parent_ctx,          # API trace의 child span으로 시작
+        kind=trace.SpanKind.CONSUMER,
+    ) as span:
+        span.set_attribute("session_id", session_id)
+        span.set_attribute("user_id", user_id)
+
+        logger.info(
+            "전처리 시작",
+            extra={"session_id": session_id, "user_id": user_id, "s3_key": s3_key},
+        )
+
+        try:
+            result = preprocess_audio(s3_key)
+
+            # GPU Worker로 연결 시 다시 trace context 주입
+            dispatch_to_gpu_inference(session_id, user_id, result)
+
+            logger.info(
+                "전처리 완료 → GPU 큐 디스패치",
+                extra={"session_id": session_id, "user_id": user_id, "duration_ms": ...},
+            )
+        except Exception as e:
+            span.record_exception(e)
+            logger.error(
+                "전처리 실패",
+                extra={"session_id": session_id, "user_id": user_id, "error": str(e)},
+            )
+            raise
+```
+
+GPU Worker도 동일한 패턴으로 CPU Worker의 traceparent를 이어받아 단일 trace로 연결됩니다.
+
+**변경 후 Tempo에서 보이는 trace 구조:**
+
+```
+utterai-api (span: handle_upload)
+  └── utterai-cpu-worker (span: cpu_worker.preprocess)   ← SQS 경계 넘어 연결됨
+        └── utterai-ml-gpu-worker (span: gpu_worker.inference)  ← 하나의 trace로 통합
+```
+
+### 4-4. Terraform — AWS OpenSearch 도메인
+
+**파일**: `terraform/modules/opensearch/main.tf` (신규 모듈)
+
+```hcl
+locals {
+  prefix = "${var.project_name}-${var.environment}"
+}
+
+resource "aws_opensearch_domain" "utterai" {
+  domain_name    = "${local.prefix}-opensearch"
+  engine_version = "OpenSearch_2.11"
+
+  cluster_config {
+    instance_type  = "t3.medium.search"
+    instance_count = 1
+    # 운영 안정성 필요 시: dedicated_master_enabled = true, instance_count = 3
+  }
+
+  ebs_options {
+    ebs_enabled = true
+    volume_size = 50     # 세션 로그 90일 보존 기준 (트래픽에 따라 조정)
+    volume_type = "gp3"
+    throughput  = 125
+  }
+
+  vpc_options {
+    subnet_ids         = [var.private_app_subnet_ids[0]]
+    security_group_ids = [aws_security_group.opensearch.id]
+  }
+
+  encrypt_at_rest {
+    enabled = true
+  }
+
+  node_to_node_encryption {
+    enabled = true
+  }
+
+  domain_endpoint_options {
+    enforce_https       = true
+    tls_security_policy = "Policy-Min-TLS-1-2-2019-07"
+  }
+
+  advanced_security_options {
+    enabled                        = true
+    anonymous_auth_enabled         = false
+    internal_user_database_enabled = false  # IAM 인증만 사용
+    master_user_options {
+      master_user_arn = var.opensearch_admin_role_arn  # 관리자 IAM Role
+    }
+  }
+
+  log_publishing_options {
+    log_type                 = "INDEX_SLOW_LOGS"
+    cloudwatch_log_group_arn = aws_cloudwatch_log_group.opensearch.arn
+  }
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+    Purpose     = "voc-data-flow-monitoring"
+  }
+}
+
+resource "aws_opensearch_domain_policy" "utterai" {
+  domain_name = aws_opensearch_domain.utterai.domain_name
+
+  access_policies = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect    = "Allow"
+        Principal = { AWS = var.fluent_bit_irsa_role_arn }
+        Action    = ["es:ESHttpPost", "es:ESHttpPut"]
+        Resource  = "${aws_opensearch_domain.utterai.arn}/*"
+      },
+      {
+        Effect    = "Allow"
+        Principal = { AWS = var.opensearch_admin_role_arn }
+        Action    = "es:*"
+        Resource  = "${aws_opensearch_domain.utterai.arn}/*"
+      }
+    ]
+  })
+}
+
+resource "aws_security_group" "opensearch" {
+  name        = "${local.prefix}-opensearch-sg"
+  description = "OpenSearch domain security group"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    description     = "HTTPS from EKS nodes"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    security_groups = [var.node_security_group_id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_cloudwatch_log_group" "opensearch" {
+  name              = "/aws/opensearch/${local.prefix}"
+  retention_in_days = 7
+}
+
+resource "aws_cloudwatch_log_resource_policy" "opensearch" {
+  policy_name = "${local.prefix}-opensearch-logs"
+
+  policy_document = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "es.amazonaws.com" }
+      Action    = ["logs:PutLogEvents", "logs:CreateLogStream"]
+      Resource  = "${aws_cloudwatch_log_group.opensearch.arn}:*"
+    }]
+  })
+}
+```
+
+**파일**: `terraform/modules/opensearch/outputs.tf`
+
+```hcl
+output "opensearch_endpoint" {
+  value = aws_opensearch_domain.utterai.endpoint
+}
+
+output "opensearch_domain_arn" {
+  value = aws_opensearch_domain.utterai.arn
+}
+```
+
+**파일**: `terraform/environments/prod/03-services/main.tf`에 모듈 추가
+
+```hcl
+module "opensearch" {
+  source = "../../../modules/opensearch"
+
+  project_name             = var.project_name
+  environment              = var.environment
+  vpc_id                   = data.terraform_remote_state.network.outputs.vpc_id
+  private_app_subnet_ids   = data.terraform_remote_state.network.outputs.private_app_subnet_ids
+  node_security_group_id   = data.terraform_remote_state.eks.outputs.node_security_group_id
+  fluent_bit_irsa_role_arn = module.irsa.fluent_bit_role_arn
+  opensearch_admin_role_arn = "arn:aws:iam::032886669461:role/utterai-prod-admin"
+}
+```
+
+### 4-5. Terraform — Fluent Bit IRSA Role
+
+**파일**: `terraform/modules/irsa/main.tf`에 추가
+
+```hcl
+# ── Fluent Bit IRSA (OpenSearch 로그 전송) ────────────────────────────────────
+
+resource "aws_iam_role" "fluent_bit" {
+  name = "${local.prefix}-fluent-bit-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = var.oidc_provider_arn }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${local.oidc_aud}" = "sts.amazonaws.com"
+          "${local.oidc_sub}" = "system:serviceaccount:utterai-observability:fluent-bit"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "fluent_bit" {
+  name = "${local.prefix}-fluent-bit-policy"
+  role = aws_iam_role.fluent_bit.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "OpenSearchWrite"
+        Effect   = "Allow"
+        Action   = ["es:ESHttpPost", "es:ESHttpPut", "es:ESHttpGet"]
+        Resource = "${var.opensearch_domain_arn}/*"
+      }
+    ]
+  })
+}
+
+output "fluent_bit_role_arn" {
+  value = aws_iam_role.fluent_bit.arn
+}
+```
+
+### 4-6. K8s — Fluent Bit DaemonSet (OpenSearch 전송)
+
+현재 Promtail(Loki용)은 그대로 유지하고, Fluent Bit을 **OpenSearch 전용**으로 추가합니다. 두 컴포넌트는 독립적으로 동작합니다.
+
+**파일**: `k8s/platform/observability/base/fluent-bit-opensearch.yaml` (신규)
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fluent-bit
+  namespace: utterai-observability
+  annotations:
+    eks.amazonaws.com/role-arn: PLACEHOLDER   # overlay에서 실제 ARN으로 교체
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluent-bit-opensearch-config
+  namespace: utterai-observability
+data:
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush         1
+        Log_Level     info
+        Parsers_File  parsers.conf
+
+    # utterai 앱 Pod 로그만 수집
+    [INPUT]
+        Name              tail
+        Tag               utterai.*
+        Path              /var/log/containers/utterai-*.log
+        Multiline.Parser  docker, cri
+        DB                /var/log/flb_utterai.db
+        Mem_Buf_Limit     10MB
+        Skip_Long_Lines   On
+        Refresh_Interval  5
+
+    # K8s 메타데이터 보강 (namespace, pod_name, container_name)
+    [FILTER]
+        Name                kubernetes
+        Match               utterai.*
+        Kube_URL            https://kubernetes.default.svc:443
+        Kube_CA_File        /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        Kube_Token_File     /var/run/secrets/kubernetes.io/serviceaccount/token
+        Merge_Log           On        # JSON 로그를 필드로 파싱
+        Keep_Log            Off
+        K8S-Logging.Parser  On
+        K8S-Logging.Exclude On
+        Labels              Off
+        Annotations         Off
+
+    # session_id가 있는 로그만 OpenSearch로 (데이터 흐름 로그만 선별)
+    [FILTER]
+        Name    grep
+        Match   utterai.*
+        Regex   session_id .+
+
+    # OpenSearch로 전송 (AWS SigV4 인증)
+    [OUTPUT]
+        Name              opensearch
+        Match             utterai.*
+        Host              ${OPENSEARCH_ENDPOINT}
+        Port              443
+        TLS               On
+        AWS_Auth          On
+        AWS_Region        ap-northeast-2
+        AWS_Service       es
+        Index             utterai-sessions
+        Logstash_Format   On
+        Logstash_Prefix   utterai-sessions
+        Logstash_DateFormat %Y.%m
+        Time_Key          timestamp
+        Time_Key_Format   %Y-%m-%dT%H:%M:%S.%L
+        Replace_Dots      On
+        Retry_Limit       3
+        Buffer_Size       5MB
+
+  parsers.conf: |
+    [PARSER]
+        Name        json
+        Format      json
+        Time_Key    time
+        Time_Format %Y-%m-%dT%H:%M:%S.%L
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluent-bit-opensearch
+  namespace: utterai-observability
+spec:
+  selector:
+    matchLabels:
+      app: fluent-bit-opensearch
+  template:
+    metadata:
+      labels:
+        app: fluent-bit-opensearch
+    spec:
+      serviceAccountName: fluent-bit
+      tolerations:
+        - operator: Exists    # 모든 노드에 스케줄 (GPU 노드 포함)
+      containers:
+        - name: fluent-bit
+          image: public.ecr.aws/aws-observability/aws-for-fluent-bit:stable
+          env:
+            - name: OPENSEARCH_ENDPOINT
+              value: PLACEHOLDER    # overlay에서 실제 엔드포인트로 교체
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          volumeMounts:
+            - name: varlog
+              mountPath: /var/log
+            - name: fluent-bit-config
+              mountPath: /fluent-bit/etc/
+      volumes:
+        - name: varlog
+          hostPath:
+            path: /var/log
+        - name: fluent-bit-config
+          configMap:
+            name: fluent-bit-opensearch-config
+```
+
+**파일**: `k8s/platform/observability/overlays/prod/patch-fluent-bit.yaml` (신규)
+
+```yaml
+- op: replace
+  path: /spec/template/spec/serviceAccountName
+  value: fluent-bit
+- op: replace
+  path: /spec/template/spec/containers/0/env/0/value
+  value: "search-utterai-prod-opensearch-xxxxxxx.ap-northeast-2.es.amazonaws.com"
+```
+
+### 4-7. OpenSearch 인덱스 설계 & 대시보드
+
+#### 인덱스 매핑
+
+OpenSearch에 인덱스 템플릿을 등록합니다 (최초 1회, curl 또는 OpenSearch Dashboard Dev Tools):
+
+```json
+PUT _index_template/utterai-sessions
+{
+  "index_patterns": ["utterai-sessions-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "index.lifecycle.name": "utterai-sessions-ilm"
+    },
+    "mappings": {
+      "properties": {
+        "timestamp":     { "type": "date" },
+        "session_id":    { "type": "keyword" },
+        "user_id":       { "type": "keyword" },
+        "trace_id":      { "type": "keyword" },
+        "service":       { "type": "keyword" },
+        "event":         { "type": "keyword" },
+        "status":        { "type": "keyword" },
+        "level":         { "type": "keyword" },
+        "message":       { "type": "text", "analyzer": "standard" },
+        "duration_ms":   { "type": "long" },
+        "error_message": { "type": "text" },
+        "s3_key":        { "type": "keyword" },
+        "queue":         { "type": "keyword" },
+        "kubernetes": {
+          "properties": {
+            "namespace_name": { "type": "keyword" },
+            "pod_name":       { "type": "keyword" }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+ILM 정책 (90일 보존):
+
+```json
+PUT _ilm/policy/utterai-sessions-ilm
+{
+  "policy": {
+    "phases": {
+      "hot":    { "actions": { "rollover": { "max_age": "30d", "max_size": "10gb" } } },
+      "delete": { "min_age": "90d", "actions": { "delete": {} } }
+    }
+  }
+}
+```
+
+#### OpenSearch Dashboard — 핵심 뷰 3종
+
+**① 세션 타임라인 뷰** (VOC 대응 시 가장 많이 사용)
+
+```
+검색: session_id: "xyz789"
+
+결과:
+timestamp            service          event                   status    duration_ms
+─────────────────────────────────────────────────────────────────────────────────
+2026-06-24 10:00:01  backend          audio_upload_requested  success   12ms
+2026-06-24 10:00:02  backend          sqs_dispatched          success   5ms
+2026-06-24 10:00:03  cpu-worker       preprocess_started      success   -
+2026-06-24 10:00:45  cpu-worker       preprocess_complete     success   42,000ms
+2026-06-24 10:00:46  cpu-worker       gpu_sqs_dispatched      success   8ms
+2026-06-24 10:00:47  ml-gpu-worker    inference_started       success   -
+2026-06-24 10:02:15  ml-gpu-worker    inference_complete      success   88,000ms
+2026-06-24 10:02:16  ml-gpu-worker    result_saved            success   120ms
+```
+
+**② 에러 패턴 분석 뷰**
+
+```
+집계: status: error, 기간: 최근 7일
+그룹: service 별 에러 수 + 대표 error_message
+→ 어느 Worker에서 실패가 집중되는지 파악
+```
+
+**③ 처리 시간 분포 뷰**
+
+```
+집계: event: inference_complete, duration_ms 분포
+P50 / P95 / P99 → GPU 추론 지연 분포 파악
+→ SLA 기준 설정 및 이상 감지
+```
+
+### 4-8. VOC 관리 단계별 로드맵
+
+| 단계 | 내용 | 구현 위치 |
+|---|---|---|
+| **즉시** | SQS 메시지에 session_id/user_id 추가 | UtterAI_BE + UtterAI_AI 앱 코드 |
+| **즉시** | Worker 로그에 session_id/user_id 항상 포함 | UtterAI_AI 앱 코드 |
+| **단기** | AWS OpenSearch 도메인 + Fluent Bit 파이프라인 | Terraform + K8s |
+| **단기** | SQS 경계 trace 연결 (traceparent 전파) | UtterAI_BE + UtterAI_AI 앱 코드 |
+| **중기** | OpenSearch Dashboard 3종 뷰 구성 | OpenSearch 콘솔 |
+| **중기** | 관리자 페이지 "세션 추적" 탭 | UtterAI_FE + UtterAI_BE (OpenSearch API 쿼리) |
+| **장기** | VOC 티켓 수신 → session_id 자동 연결 | 어드민 시스템 |
+| **장기** | 담당자 자동 배정 (에러 발생 Worker 기준) | 어드민 시스템 |
+
+---
+
+## 5. 고도화 방향 4 — AI 기반 장애 자동 분석
 
 ### 4-1. 왜 필요한가 — UtterAI 현황
 
@@ -1479,7 +2145,7 @@ Agent Space → Runbooks에 마크다운으로 등록합니다.
 
 ---
 
-## 5. 적용 우선순위 및 로드맵
+## 6. 적용 우선순위 및 로드맵
 
 ### Phase 1 — 즉시 적용 (1~3일, 인프라 변경 최소)
 
@@ -1497,43 +2163,53 @@ Agent Space → Runbooks에 마크다운으로 등록합니다.
 | 비즈니스 메트릭 계측 | `Utterai_BE/app/core/metrics.py` | 4h | 업로드 실패율, SQS 처리량 가시성 |
 | ServiceMonitor 추가 | `k8s/platform/observability/base/` | 2h | 앱 메트릭 Prometheus 자동 수집 |
 | Grafana 대시보드 코드화 | `k8s/platform/observability/base/grafana-dashboard-utterai.yaml` | 4h | 전체 서비스 상태 한눈에 파악 |
-| **ADOT Operator 설치** | `terraform/modules/eks-addons/main.tf` | 1h | OpenTelemetryCollector CRD 사용 기반 마련 |
-| **OTel Collector → CRD 방식 이관** | `k8s/platform/observability/base/otel-collector-crd.yaml` | 2h | AWS 관리형 수명주기, Operator 통합 |
-| **Instrumentation CRD 추가** | `k8s/platform/observability/base/instrumentation-python.yaml` | 1h | 앱 어노테이션 기반 Auto-instrumentation 준비 |
+| **ADOT Operator 설치** | `terraform/modules/eks-addons/main.tf` | 1h | OpenTelemetryCollector CRD 기반 마련 |
+| **OTel Collector → CRD 방식 이관** | `k8s/platform/observability/base/otel-collector-crd.yaml` | 2h | AWS 관리형 수명주기 |
+| **Instrumentation CRD 추가** | `k8s/platform/observability/base/instrumentation-python.yaml` | 1h | Auto-instrumentation 준비 |
+| **SQS 메시지에 session_id/user_id 추가** | `UtterAI_BE`, `UtterAI_AI` 앱 코드 | 4h | VOC 전체 흐름 추적의 기반 |
+| **Worker 로그 상관 ID 포함** | `UtterAI_AI` 앱 코드 | 2h | Elasticsearch 검색 가능 상태 |
 
 ### Phase 3 — 중기 (1~2개월)
 
 | 항목 | 파일/작업 | 예상 공수 | 효과 |
 |---|---|---|---|
-| **Auto-instrumentation 어노테이션 적용** | `k8s/apps/backend/base/deployment-green.yaml` 외 | 2h | 앱 코드 OTel 초기화 제거, SDK 자동 주입 |
-| S3 incidents 버킷 추가 | `terraform/modules/s3/main.tf` | 1h | 장애 데이터 90일 보존 |
-| IRSA Operator Role 추가 | `terraform/modules/irsa/main.tf` | 2h | Operator AWS 권한 |
+| **Auto-instrumentation 어노테이션 적용** | `k8s/apps/backend/base/`, `k8s/apps/ai-worker/base/` 배포 파일 | 2h | 앱 코드 OTel 초기화 제거, SDK 자동 주입 |
+| **SQS trace context 전파 (traceparent)** | `UtterAI_BE` + `UtterAI_AI` 앱 코드 | 4h | Tempo에서 API→CPU→GPU 하나의 trace로 연결 |
+| **AWS OpenSearch 도메인 생성** | `terraform/modules/opensearch/main.tf` (신규 모듈) | 3h | VOC 데이터 저장소 |
+| **Fluent Bit IRSA 추가** | `terraform/modules/irsa/main.tf` | 1h | Fluent Bit → OpenSearch 인증 |
+| **Fluent Bit DaemonSet 배포** | `k8s/platform/observability/base/fluent-bit-opensearch.yaml` | 2h | utterai 앱 로그 → OpenSearch 전송 시작 |
+| **OpenSearch 인덱스 템플릿 + ILM 설정** | OpenSearch Dashboard Dev Tools | 1h | session_id 필드 인덱싱, 90일 보존 |
+| **OpenSearch Dashboard 3종 뷰** | OpenSearch 콘솔 | 3h | 세션 타임라인 / 에러 패턴 / 처리시간 분포 |
+| S3 incidents 버킷 추가 | `terraform/modules/s3/main.tf` | 1h | DevOps Agent 장애 데이터 90일 보존 |
+| IRSA DevOps Agent Operator Role | `terraform/modules/irsa/main.tf` | 2h | Operator AWS 권한 |
 | EKS Node SSM 정책 추가 | `terraform/modules/eks/main.tf` | 30m | 노드 레벨 로그 수집 |
 | Webhook Secret 생성 | AWS Secrets Manager | 30m | DevOps Agent 연결 |
 | Operator K8s 매니페스트 | `k8s/platform/devops-agent-operator/` | 4h | 장애 자동 감지 시작 |
-| DevOps Agent Space 구성 | AWS 콘솔 | 2h | AI 분석 파이프라인 완성 |
-| Runbook 3종 등록 | DevOps Agent 콘솔 | 3h | 장애 유형별 자동 분석 |
+| DevOps Agent Space + Runbook 3종 | AWS 콘솔 | 5h | AI 자동 분석 완성 |
 
 ### Phase 4 — 장기 (필요 시 검토)
 
 | 항목 | 조건 |
 |---|---|
+| 관리자 페이지 세션 추적 탭 | OpenSearch Dashboard 운영 안정화 후, admin UI 직접 구축 필요 시 |
+| VOC 티켓 → session_id 자동 연결 | 사용자 신고 시스템 구축 후 |
 | X-Ray 전환 (Tempo 대체) | ADOT 전환 완료 후, AWS 통합 트레이싱 필요 시 |
 | CloudWatch Logs 전환 (Loki 대체) | Loki S3 운영 비용 > CloudWatch 비용인 경우 |
-| DevOps Agent MCP 서버 연동 | 과거 인시던트 패턴 DB화 후 선제 대응 |
-| Proactive Prevention | 인시던트 누적 데이터 기반 예방 알림 |
+| DevOps Agent MCP 서버 연동 | 인시던트 패턴 DB화 후 선제 대응 필요 시 |
 
 ---
 
 ## 참고 — 현재 스택 vs 목표 스택
 
-| 역할 | 현재 | Phase 1 완료 후 | Phase 2 완료 후 (ADOT 포함) | Phase 3 완료 후 |
+| 역할 | 현재 | Phase 1 | Phase 2 (ADOT + VOC 기반) | Phase 3 (VOC 완성 + DevOps Agent) |
 |---|---|---|---|---|
-| OTel 수집기 | vanilla OTel Collector (Deployment 직접 관리) | 동일 | ADOT Operator + CRD 방식 | 동일 |
-| 로그 저장 | stdout → Loki (구조화 미흡) | OTel → Loki (구조화 JSON) | 동일 | 동일 + 인시던트 S3 보존 |
-| 트레이스 | Tempo (Log 연결 없음) | Tempo + Log drill-down | 동일 | 동일 |
+| OTel 수집기 | vanilla OTel Collector | 동일 | ADOT Operator + CRD | 동일 |
+| 로그 저장 (인프라) | stdout → Loki (구조화 미흡) | OTel → Loki (구조화 JSON) | 동일 | 동일 |
+| 로그 저장 (데이터 흐름) | 없음 | 없음 | Fluent Bit → OpenSearch | 동일 + 인시던트 S3 보존 |
+| 트레이스 | Tempo (SQS 경계에서 끊김) | Tempo + Log drill-down | traceparent 전파 준비 | API→CPU→GPU 하나의 trace |
+| VOC 데이터 흐름 추적 | 불가 (수동 grep) | 불가 | session_id 로그 포함 | OpenSearch 세션 타임라인 |
 | 메트릭 | 기본 HTTP 메트릭만 | 비즈니스 메트릭 추가 | 동일 | 동일 |
-| 자동 계측 | 앱 코드에 OTel SDK 직접 추가 | 동일 | Instrumentation CRD 준비 | 어노테이션 하나로 자동 주입 |
-| 알림 | 없음 | CrashLoopBackOff/OOMKilled 즉시 | 동일 | 동일 |
-| 장애 분석 | 수동 30분~수 시간 | 수동 (단, 데이터 풍부) | 동일 | AI 자동 분석 1~5분 |
-| 장애 데이터 보존 | Pod 삭제 시 소멸 | 소멸 (단, Loki 저장됨) | 동일 | S3 90일 보존 |
+| 자동 계측 | 앱 코드 직접 작성 | 동일 | Instrumentation CRD 준비 | 어노테이션 자동 주입 |
+| 알림 | 없음 | CrashLoopBackOff/OOMKilled | 동일 | 동일 |
+| 장애 분석 | 수동 30분~수 시간 | 수동 (데이터 풍부) | 동일 | AI 자동 분석 1~5분 |
+| 장애 데이터 보존 | Pod 삭제 시 소멸 | Loki 저장됨 | 동일 | S3 90일 보존 |
