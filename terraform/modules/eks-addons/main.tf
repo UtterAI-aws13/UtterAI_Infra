@@ -337,6 +337,11 @@ resource "helm_release" "kubecost" {
       prometheus = {
         server = {
           enabled = false
+          global = {
+            external_labels = {
+              cluster_id = var.cluster_name
+            }
+          }
         }
       }
 
