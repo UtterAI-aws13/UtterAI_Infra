@@ -60,6 +60,8 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {}
+        - name: hf-cache
+          emptyDir: {}
       containers:
         - name: ml-gpu-worker
           env:
@@ -85,6 +87,8 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            - name: hf-cache
+              mountPath: /home/appuser/.cache
 ---
 apiVersion: apps/v1
 kind: Deployment
