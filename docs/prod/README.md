@@ -925,6 +925,12 @@ Prod 모니터링은 CloudWatch, Prometheus, Loki, Tempo의 역할을 분리한�
 Loki는 IRSA로 `utterai-prod-loki` S3 버킷에 접근하며, retention은 14일(`336h`)로 제한한다.
 분산 추적 데이터는 Tempo가 `utterai-prod-tempo` S3 버킷에 저장하며, retention은 3일(`72h`)로 제한한다.
 
+로그와 trace는 저장 전에 민감정보를 한 번 더 줄인다.
+
+- Promtail은 Loki 전송 전 `Authorization`, `Cookie`, password/token/secret 계열 값, AWS presigned URL을 redaction한다.
+- OpenTelemetry Collector는 Tempo/debug exporter 전송 전 trace/log attribute에서 header, full URL, S3 key, audio key, RAG key, queue URL 후보를 삭제한다.
+- Prometheus metric label에는 `email`, `user_id`, `session_id`, `job_id`, token, S3 key, presigned URL, request/response body를 넣지 않는다. Metric label은 `status`, `worker.type`, `stage`, route template처럼 낮은 cardinality 운영 값만 허용한다.
+
 | 저장소 | 보존 기간 | 암호화 |
 |---|---|---|
 | `utterai-prod-loki` | 14일 | S3 SSE-S3 |
