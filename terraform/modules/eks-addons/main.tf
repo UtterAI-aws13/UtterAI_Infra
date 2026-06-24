@@ -58,6 +58,12 @@ locals {
         memory = "256Mi"
       }
     }
+    # AlertmanagerConfig의 자동 namespace 매처 제약 해제
+    # 이 설정이 없으면 AlertmanagerConfig가 자신의 namespace 라벨과 일치하는
+    # 알림만 처리하므로, team=utterai 라벨 기반 라우팅이 동작하지 않음
+    alertmanagerConfigMatcherStrategy = {
+      type = "None"
+    }
   }
 }
 

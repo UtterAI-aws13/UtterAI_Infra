@@ -1,0 +1,135 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: utterai-alerts
+  namespace: utterai-observability
+  labels:
+    app: kube-prometheus-stack
+    release: kube-prometheus-stack
+spec:
+  groups:
+    # ── Pod 상태 이상 ──────────────────────────────────────────────────────────
+    - name: utterai.pod
+      rules:
+        - alert: UtterAIPodCrashLoopBackOff
+          expr: |
+            kube_pod_container_status_waiting_reason{
+              reason="CrashLoopBackOff",
+              namespace=~"utterai-.*"
+            } == 1
+          for: 2m
+          labels:
+            severity: critical
+            team: utterai
+          annotations:
+            summary: "Pod CrashLoopBackOff: {{ $labels.pod }}"
+            description: |
+              {{ $labels.namespace }}/{{ $labels.pod }} 컨테이너 {{ $labels.container }}가
+              CrashLoopBackOff 상태입니다.
+              kubectl logs {{ $labels.pod }} -n {{ $labels.namespace }} --previous
+
+        - alert: UtterAIPodPendingTooLong
+          expr: |
+            kube_pod_status_phase{
+              phase="Pending",
+              namespace=~"utterai-.*"
+            } == 1
+          for: 5m
+          labels:
+            severity: warning
+            team: utterai
+          annotations:
+            summary: "Pod Pending 5분 초과: {{ $labels.pod }}"
+            description: |
+              {{ $labels.namespace }}/{{ $labels.pod }} 이 5분 이상 Pending 상태입니다.
+              Karpenter 노드 프로비저닝 실패 또는 리소스 부족일 수 있습니다.
+              kubectl describe pod {{ $labels.pod }} -n {{ $labels.namespace }}
+
+        - alert: UtterAIGPUWorkerOOMKilled
+          expr: |
+            kube_pod_container_status_last_terminated_reason{
+              reason="OOMKilled",
+              namespace="utterai-ai-gpu"
+            } == 1
+          for: 0m
+          labels:
+            severity: critical
+            team: utterai
+          annotations:
+            summary: "GPU Worker OOMKilled: {{ $labels.pod }}"
+            description: |
+              {{ $labels.pod }} 컨테이너가 메모리 한계를 초과해 강제 종료됐습니다.
+              ml-gpu-worker-deployment.yaml의 memory limit 조정이 필요할 수 있습니다.
+
+    # ── API 서비스 품질 ────────────────────────────────────────────────────────
+    - name: utterai.api
+      rules:
+        - alert: UtterAIAPIHighErrorRate
+          expr: |
+            (
+              sum(rate(http_requests_total{
+                namespace="utterai-prod-api",
+                status=~"5.."
+              }[5m]))
+              /
+              sum(rate(http_requests_total{
+                namespace="utterai-prod-api"
+              }[5m]))
+            ) > 0.05
+          for: 3m
+          labels:
+            severity: critical
+            team: utterai
+          annotations:
+            summary: "BE API 5xx 에러율 5% 초과"
+            description: "최근 5분간 5xx 에러율이 {{ $value | humanizePercentage }}입니다."
+
+        - alert: UtterAIAPIHighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum(rate(http_request_duration_seconds_bucket{
+                namespace="utterai-prod-api"
+              }[5m])) by (le)
+            ) > 3
+          for: 5m
+          labels:
+            severity: warning
+            team: utterai
+          annotations:
+            summary: "BE API p95 응답시간 3초 초과"
+            description: "p95 응답시간이 {{ $value }}초입니다."
+
+    # ── SQS / 업로드 ──────────────────────────────────────────────────────────
+    - name: utterai.sqs
+      rules:
+        - alert: UtterAIGPUQueueDepthHigh
+          expr: |
+            aws_sqs_approximate_number_of_messages_visible_maximum{
+              queue_name="utterai-prod-gpu-inference-queue"
+            } > 20
+          for: 10m
+          labels:
+            severity: warning
+            team: utterai
+          annotations:
+            summary: "GPU 추론 큐 적체 ({{ $value }}개)"
+            description: |
+              GPU inference SQS 큐에 {{ $value }}개 메시지가 10분 이상 적체되어 있습니다.
+              GPU worker 스케일링 또는 Service Quota를 확인하세요.
+
+        - alert: UtterAIAudioUploadFailureRateHigh
+          expr: |
+            (
+              sum(increase(audio_upload_total{status="error"}[10m]))
+              /
+              sum(increase(audio_upload_total[10m]))
+            ) > 0.1
+          for: 5m
+          labels:
+            severity: critical
+            team: utterai
+          annotations:
+            summary: "음성 업로드 실패율 10% 초과"
+            description: |
+              presigned URL 생성 실패율이 {{ $value | humanizePercentage }}입니다.
+              S3 버킷 이름 환경변수 또는 IRSA 권한을 확인하세요.

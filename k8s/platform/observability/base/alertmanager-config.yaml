@@ -1,0 +1,32 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: utterai-slack
+  namespace: monitoring
+spec:
+  route:
+    receiver: slack-utterai
+    matchers:
+      - name: team
+        value: utterai
+    groupBy:
+      - alertname
+      - namespace
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 4h
+  receivers:
+    - name: slack-utterai
+      slackConfigs:
+        - apiURL:
+            name: alertmanager-slack-secret
+            key: webhook-url
+          channel: "#alerts-utterai"
+          title: "[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}"
+          text: |
+            {{ range .Alerts }}
+            *요약*: {{ .Annotations.summary }}
+            *내용*: {{ .Annotations.description }}
+            *심각도*: {{ .Labels.severity }}
+            {{ end }}
+          sendResolved: true
