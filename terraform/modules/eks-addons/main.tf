@@ -217,9 +217,9 @@ resource "helm_release" "kube_prometheus_stack" {
                 }
                 # Tempo span에서 Loki 로그로 1클릭 이동
                 tracesToLogs = {
-                  datasourceUid = "loki"
-                  tags          = ["service.name"]
-                  mappedTags    = [{ key = "service.name", value = "service_name" }]
+                  datasourceUid   = "loki"
+                  tags            = ["service.name"]
+                  mappedTags      = [{ key = "service.name", value = "service_name" }]
                   filterByTraceID = true
                   filterBySpanID  = false
                   lokiSearch      = true
