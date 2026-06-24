@@ -8,6 +8,7 @@
 > **2026-06-16 적용 완료**: NetworkPolicy (AWS VPC CNI native), PodDisruptionBudget  
 > **2026-06-22 적용 완료**: ALB ACM 인증서, ArgoCD admin bcrypt 비밀번호, PSA 레이블, SecurityContext 기본값 (allowPrivilegeEscalation/capabilities.drop/runAsNonRoot/seccompProfile), podAntiAffinity  
 > **2026-06-23 적용 완료**: readOnlyRootFilesystem (전 워크로드 + /tmp emptyDir 마운트), ai-api dead reference 제거, ECR imageTagMutability IMMUTABLE
+> **2026-06-24 적용 완료**: Promtail 로그 redaction, OpenTelemetry Collector trace/log attribute redaction, metric label 민감정보 금지 규칙 문서화
 
 ---
 
@@ -60,6 +61,7 @@
 | **podAntiAffinity** | 없음 | ✅ backend blue/green `requiredDuringSchedulingIgnoredDuringExecution` 적용 (`deployment-blue/green.yaml`, PR #262) |
 | **ArgoCD 인증** | Helm 기본 admin | ✅ bcrypt 비밀번호 주입 완료 |
 | **배포 방식** | 수동 스크립트 | ✅ Kustomize + ArgoCD GitOps |
+| **Observability 민감정보 마스킹** | 없음 | ✅ Promtail 로그 redaction + OTel Collector trace/log attribute 삭제 적용. Metric label 민감정보 금지 규칙 문서화 |
 | **Cognito MFA** | 없음 | **미적용** |
 | **CloudWatch 알람** | 없음 | **미적용** |
 | **VPC Endpoint** | S3/SQS/SM/ECR | ✅ 기존 4종 유지 (STS/KMS Interface 미추가) |
@@ -363,6 +365,7 @@ labels:
 | ai-api 게이트웨이 dead reference 제거 — ConfigMap, Namespace, AI_SERVICE_BASE_URL, allow-egress-ai-api NetworkPolicy | 2026-06-23 | `k8s/apps/ai-worker/base/configmap.yaml`, `k8s/apps/ai-worker/overlays/prod/namespace.yaml`, `k8s/apps/backend/base/configmap.yaml`, `k8s/apps/backend/overlays/prod/network-policy.yaml` |
 | `readOnlyRootFilesystem: true` — 전 워크로드 container 레벨 적용. `/tmp` emptyDir 마운트. cpu/gpu-worker `HF_HOME=/tmp/huggingface` 명시 | 2026-06-23 | `k8s/apps/backend/overlays/prod/patch-deployment.yaml`, `k8s/apps/ai-worker/overlays/prod/patch-deployment.yaml` |
 | ECR `image_tag_mutability = "IMMUTABLE"` — 모듈 variable 추가 (default IMMUTABLE). 기존 호출부 수정 불필요 | 2026-06-23 | `terraform/modules/ecr/variables.tf`, `terraform/modules/ecr/main.tf` |
+| Observability 민감정보 redaction — Promtail 로그 redaction + OTel Collector trace/log attribute 삭제 | 2026-06-24 | `terraform/modules/eks-addons/main.tf`, `k8s/platform/observability/base/otel-collector.yaml` |
 
 ---
 

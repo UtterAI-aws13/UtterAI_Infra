@@ -26,6 +26,28 @@ data:
         check_interval: 1s
         limit_mib: 256
         spike_limit_mib: 64
+      attributes/redact:
+        actions:
+          - key: http.request.header.authorization
+            action: delete
+          - key: http.request.header.cookie
+            action: delete
+          - key: http.response.header.set_cookie
+            action: delete
+          - key: http.url
+            action: delete
+          - key: url.full
+            action: delete
+          - key: aws.s3.key
+            action: delete
+          - key: audio.object_key
+            action: delete
+          - key: audio.key
+            action: delete
+          - key: rag.key
+            action: delete
+          - key: queue.name
+            action: delete
 
     extensions:
       health_check:
@@ -57,7 +79,7 @@ data:
       pipelines:
         traces:
           receivers: [otlp]
-          processors: [memory_limiter, batch]
+          processors: [memory_limiter, attributes/redact, batch]
           exporters: [otlp/tempo]
         metrics:
           receivers: [otlp]
@@ -65,7 +87,7 @@ data:
           exporters: [prometheus, debug]
         logs:
           receivers: [otlp]
-          processors: [memory_limiter, batch]
+          processors: [memory_limiter, attributes/redact, batch]
           exporters: [loki]
 ---
 apiVersion: apps/v1

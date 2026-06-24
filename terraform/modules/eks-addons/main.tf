@@ -625,6 +625,37 @@ resource "helm_release" "promtail" {
             url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
           }
         ]
+        snippets = {
+          pipelineStages = [
+            {
+              cri = {}
+            },
+            {
+              replace = {
+                expression = "(?i)(authorization[=: ]\\s*Bearer\\s+[^\\s,}\"']+)"
+                replace    = "[REDACTED_AUTHORIZATION]"
+              }
+            },
+            {
+              replace = {
+                expression = "(Bearer\\s+[^\\s,}\"']+)"
+                replace    = "Bearer [REDACTED]"
+              }
+            },
+            {
+              replace = {
+                expression = "(?i)((cookie|set-cookie|x-internal-token|password|passwd|token|secret|api[_-]?key|hf_token|db_password|redis_auth_token)[=: ]\\s*[^\\s,}\"']+)"
+                replace    = "[REDACTED_SENSITIVE_FIELD]"
+              }
+            },
+            {
+              replace = {
+                expression = "(https?://[^\\s,}\"']*(X-Amz-Signature|X-Amz-Credential|X-Amz-Security-Token)[^\\s,}\"']*)"
+                replace    = "[REDACTED_PRESIGNED_URL]"
+              }
+            }
+          ]
+        }
       }
       resources = {
         requests = {
