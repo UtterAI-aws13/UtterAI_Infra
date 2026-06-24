@@ -48,6 +48,10 @@ output "cloudfront_origin_alb_dns_name" {
   value = local.alb_dns_name
 }
 
+output "cloudfront_waf_web_acl_arn" {
+  value = var.cloudfront_waf_enabled ? aws_wafv2_web_acl.frontend_edge[0].arn : null
+}
+
 output "route53_hosted_zone_id" {
   value = var.route53_hosted_zone_id
 }

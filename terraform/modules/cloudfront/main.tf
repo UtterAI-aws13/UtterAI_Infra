@@ -64,6 +64,7 @@ resource "aws_cloudfront_distribution" "frontend" {
   default_root_object = "index.html"
   price_class         = "PriceClass_200"
   aliases             = var.aliases
+  web_acl_id          = var.web_acl_id
 
   origin {
     domain_name              = "${var.frontend_bucket_id}.s3.ap-northeast-2.amazonaws.com"

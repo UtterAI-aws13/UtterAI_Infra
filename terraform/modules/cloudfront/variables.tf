@@ -31,3 +31,9 @@ variable "acm_certificate_arn" {
   default     = ""
   description = "ACM certificate ARN in us-east-1 for CloudFront alternate domain names."
 }
+
+variable "web_acl_id" {
+  type        = string
+  default     = null
+  description = "AWS WAFv2 Web ACL ARN to associate with this CloudFront distribution."
+}

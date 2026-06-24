@@ -25,6 +25,18 @@ variable "cloudfront_acm_certificate_arn" {
   description = "Existing us-east-1 ACM certificate ARN for CloudFront. Leave empty to create and validate one with Route53."
 }
 
+variable "cloudfront_waf_enabled" {
+  type        = bool
+  default     = true
+  description = "Create and attach an AWS WAF Web ACL to the prod frontend CloudFront distribution."
+}
+
+variable "cloudfront_waf_rate_limit" {
+  type        = number
+  default     = 2000
+  description = "Maximum requests from a single IP in a five-minute window before the CloudFront WAF rate rule matches."
+}
+
 variable "route53_hosted_zone_id" {
   type        = string
   default     = ""

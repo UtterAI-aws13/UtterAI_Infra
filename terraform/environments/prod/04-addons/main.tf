@@ -152,6 +152,70 @@ resource "aws_acm_certificate_validation" "cloudfront" {
   validation_record_fqdns = [for record in aws_route53_record.cloudfront_certificate_validation : record.fqdn]
 }
 
+# ── CloudFront WAF ───────────────────────────────────────────────────────────
+
+resource "aws_wafv2_web_acl" "frontend_edge" {
+  count = var.cloudfront_waf_enabled ? 1 : 0
+
+  provider = aws.us_east_1
+  name     = "${var.project_name}-${var.environment}-frontend-edge-waf"
+  scope    = "CLOUDFRONT"
+
+  default_action {
+    allow {}
+  }
+
+  rule {
+    name     = "AWSManagedRulesCommonRuleSet"
+    priority = 10
+
+    override_action {
+      count {}
+    }
+
+    statement {
+      managed_rule_group_statement {
+        name        = "AWSManagedRulesCommonRuleSet"
+        vendor_name = "AWS"
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "AWSManagedRulesCommonRuleSet"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  rule {
+    name     = "RateLimitByIP"
+    priority = 20
+
+    action {
+      count {}
+    }
+
+    statement {
+      rate_based_statement {
+        aggregate_key_type = "IP"
+        limit              = var.cloudfront_waf_rate_limit
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "RateLimitByIP"
+      sampled_requests_enabled   = true
+    }
+  }
+
+  visibility_config {
+    cloudwatch_metrics_enabled = true
+    metric_name                = "FrontendEdgeWAF"
+    sampled_requests_enabled   = true
+  }
+}
+
 # ── CloudFront ────────────────────────────────────────────────────────────────
 
 module "cloudfront" {
@@ -164,6 +228,7 @@ module "cloudfront" {
   alb_dns_name        = local.alb_dns_name
   aliases             = local.cloudfront_custom_domain_enabled ? var.cloudfront_aliases : []
   acm_certificate_arn = local.cloudfront_custom_domain_enabled ? local.cloudfront_certificate_arn : ""
+  web_acl_id          = var.cloudfront_waf_enabled ? aws_wafv2_web_acl.frontend_edge[0].arn : null
 }
 
 resource "aws_route53_record" "cloudfront_alias_a" {
