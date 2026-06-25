@@ -22,6 +22,16 @@ on:
         description: "선택 입력입니다. 비워두면 GitHub Variables의 ECR_BACKEND_REPOSITORY를 사용합니다."
         required: false
         type: string
+      auto_promote:
+        description: "prod blue-green에서 새 image를 반영한 color로 Service를 바로 전환합니다."
+        required: false
+        type: boolean
+        default: false
+      scale_down_previous:
+        description: "auto_promote 후 이전 active color를 scale-down하고 HPA를 prune 대상으로 제거합니다."
+        required: false
+        type: boolean
+        default: false
 
   repository_dispatch:
     types:
@@ -43,6 +53,9 @@ jobs:
       INPUT_IMAGE_TAG: ${{ github.event.inputs.image_tag || github.event.client_payload.image_tag }}
       INPUT_ECR_REGISTRY: ${{ github.event.inputs.ecr_registry || github.event.client_payload.ecr_registry }}
       INPUT_ECR_REPOSITORY: ${{ github.event.inputs.ecr_repository || github.event.client_payload.ecr_repository }}
+      INPUT_AUTO_PROMOTE: ${{ github.event.inputs.auto_promote || github.event.client_payload.auto_promote || '' }}
+      INPUT_SCALE_DOWN_PREVIOUS: ${{ github.event.inputs.scale_down_previous || github.event.client_payload.scale_down_previous || '' }}
+      INPUT_EVENT_NAME: ${{ github.event_name }}
       DEFAULT_ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
       DEFAULT_ECR_REPOSITORY: ${{ vars.ECR_BACKEND_REPOSITORY }}
 
@@ -54,6 +67,8 @@ jobs:
           IMAGE_TAG="$INPUT_IMAGE_TAG"
           ECR_REGISTRY="${INPUT_ECR_REGISTRY:-$DEFAULT_ECR_REGISTRY}"
           ECR_REPOSITORY="${INPUT_ECR_REPOSITORY:-$DEFAULT_ECR_REPOSITORY}"
+          AUTO_PROMOTE="$INPUT_AUTO_PROMOTE"
+          SCALE_DOWN_PREVIOUS="$INPUT_SCALE_DOWN_PREVIOUS"
 
           sanitize_single_line() {
             printf '%s' "$1" | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'
@@ -63,6 +78,24 @@ jobs:
           IMAGE_TAG="$(sanitize_single_line "$IMAGE_TAG")"
           ECR_REGISTRY="$(sanitize_single_line "$ECR_REGISTRY")"
           ECR_REPOSITORY="$(sanitize_single_line "$ECR_REPOSITORY")"
+          AUTO_PROMOTE="$(sanitize_single_line "$AUTO_PROMOTE")"
+          SCALE_DOWN_PREVIOUS="$(sanitize_single_line "$SCALE_DOWN_PREVIOUS")"
+
+          if [ -z "$AUTO_PROMOTE" ]; then
+            if [ "$INPUT_EVENT_NAME" = "repository_dispatch" ] && [ "$TARGET_ENV" = "prod" ]; then
+              AUTO_PROMOTE="true"
+            else
+              AUTO_PROMOTE="false"
+            fi
+          fi
+
+          if [ -z "$SCALE_DOWN_PREVIOUS" ]; then
+            if [ "$INPUT_EVENT_NAME" = "repository_dispatch" ] && [ "$TARGET_ENV" = "prod" ]; then
+              SCALE_DOWN_PREVIOUS="true"
+            else
+              SCALE_DOWN_PREVIOUS="false"
+            fi
+          fi
 
           if [ "$TARGET_ENV" = "dev" ]; then
             TARGET_BRANCH="main"
@@ -107,6 +140,26 @@ jobs:
             exit 1
           fi
 
+          if [ "$AUTO_PROMOTE" != "true" ] && [ "$AUTO_PROMOTE" != "false" ]; then
+            echo "auto_promote는 true 또는 false만 허용합니다."
+            exit 1
+          fi
+
+          if [ "$SCALE_DOWN_PREVIOUS" != "true" ] && [ "$SCALE_DOWN_PREVIOUS" != "false" ]; then
+            echo "scale_down_previous는 true 또는 false만 허용합니다."
+            exit 1
+          fi
+
+          if [ "$TARGET_ENV" != "prod" ] && [ "$AUTO_PROMOTE" = "true" ]; then
+            echo "auto_promote는 prod blue-green 환경에서만 사용할 수 있습니다."
+            exit 1
+          fi
+
+          if [ "$AUTO_PROMOTE" != "true" ] && [ "$SCALE_DOWN_PREVIOUS" = "true" ]; then
+            echo "scale_down_previous는 auto_promote=true일 때만 사용할 수 있습니다."
+            exit 1
+          fi
+
           {
             echo "target_env=$TARGET_ENV"
             echo "target_branch=$TARGET_BRANCH"
@@ -115,6 +168,8 @@ jobs:
             echo "ecr_registry=$ECR_REGISTRY"
             echo "ecr_repository=$ECR_REPOSITORY"
             echo "deploy_strategy=$DEPLOY_STRATEGY"
+            echo "auto_promote=$AUTO_PROMOTE"
+            echo "scale_down_previous=$SCALE_DOWN_PREVIOUS"
           } >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub App token
@@ -242,12 +297,265 @@ jobs:
             grep -A3 "name: utterai-backend-$TARGET_COLOR" "$KUSTOMIZATION_FILE"
           fi
 
+      - name: Update blue-green runtime state
+        if: ${{ steps.meta.outputs.deploy_strategy == 'blue-green' }}
+        env:
+          OVERLAY_PATH: ${{ steps.meta.outputs.overlay_path }}
+          AUTO_PROMOTE: ${{ steps.meta.outputs.auto_promote }}
+          SCALE_DOWN_PREVIOUS: ${{ steps.meta.outputs.scale_down_previous }}
+          ACTIVE_COLOR: ${{ steps.update_image.outputs.active_color }}
+          TARGET_COLOR: ${{ steps.update_image.outputs.target_color }}
+        run: |
+          ACTIVE_SERVICE_PATCH="$OVERLAY_PATH/patch-active-service.yaml"
+          KUSTOMIZATION_FILE="$OVERLAY_PATH/kustomization.yaml"
+          PATCH_DEPLOYMENT_FILE="$OVERLAY_PATH/patch-deployment.yaml"
+          PATCH_HPA_FILE="$OVERLAY_PATH/patch-hpa.yaml"
+
+          for file in "$ACTIVE_SERVICE_PATCH" "$KUSTOMIZATION_FILE" "$PATCH_DEPLOYMENT_FILE" "$PATCH_HPA_FILE"; do
+            if [ ! -f "$file" ]; then
+              echo "$file 파일을 찾을 수 없습니다."
+              exit 1
+            fi
+          done
+
+          export ACTIVE_SERVICE_PATCH KUSTOMIZATION_FILE PATCH_DEPLOYMENT_FILE PATCH_HPA_FILE
+          export AUTO_PROMOTE SCALE_DOWN_PREVIOUS ACTIVE_COLOR TARGET_COLOR
+
+          ruby -ryaml -e '
+            active_color = ENV.fetch("ACTIVE_COLOR")
+            target_color = ENV.fetch("TARGET_COLOR")
+            auto_promote = ENV.fetch("AUTO_PROMOTE") == "true"
+            scale_down_previous = ENV.fetch("SCALE_DOWN_PREVIOUS") == "true"
+
+            kustomization_file = ENV.fetch("KUSTOMIZATION_FILE")
+            patch_deployment_file = ENV.fetch("PATCH_DEPLOYMENT_FILE")
+            patch_hpa_file = ENV.fetch("PATCH_HPA_FILE")
+            active_service_patch = ENV.fetch("ACTIVE_SERVICE_PATCH")
+
+            colors = ["blue", "green"]
+            unless colors.include?(active_color) && colors.include?(target_color)
+              warn "blue-green color 값이 올바르지 않습니다. active=#{active_color}, target=#{target_color}"
+              exit 1
+            end
+
+            kustomization = YAML.load_file(kustomization_file)
+            resources = kustomization.fetch("resources")
+            patches = kustomization.fetch("patches", [])
+
+            deployment_docs = YAML.load_stream(File.read(patch_deployment_file)).compact
+            hpa_docs = YAML.load_stream(File.read(patch_hpa_file)).compact
+
+            ensure_resource = lambda do |file_name|
+              resources << file_name unless resources.include?(file_name)
+            end
+
+            remove_resource = lambda do |file_name|
+              resources.delete(file_name)
+            end
+
+            ensure_hpa_patch = lambda do
+              unless patches.any? { |patch| patch.is_a?(Hash) && patch["path"] == "patch-hpa.yaml" }
+                patches << { "path" => "patch-hpa.yaml" }
+              end
+            end
+
+            remove_hpa_patch_if_empty = lambda do
+              if hpa_docs.empty?
+                patches.reject! { |patch| patch.is_a?(Hash) && patch["path"] == "patch-hpa.yaml" }
+              end
+            end
+
+            set_patch_replicas = lambda do |color, replicas|
+              deployment_name = "utterai-api-#{color}"
+              doc = deployment_docs.find do |item|
+                item.is_a?(Hash) &&
+                  item["kind"] == "Deployment" &&
+                  item.dig("metadata", "name") == deployment_name
+              end
+
+              unless doc
+                warn "#{deployment_name} patch를 #{patch_deployment_file}에서 찾을 수 없습니다."
+                exit 1
+              end
+
+              doc["spec"] ||= {}
+              doc["spec"]["replicas"] = replicas
+            end
+
+            ensure_hpa_doc = lambda do |color|
+              hpa_name = "utterai-api-#{color}-hpa"
+              exists = hpa_docs.any? do |item|
+                item.is_a?(Hash) &&
+                  item["kind"] == "HorizontalPodAutoscaler" &&
+                  item.dig("metadata", "name") == hpa_name
+              end
+
+              unless exists
+                hpa_docs << {
+                  "apiVersion" => "autoscaling/v2",
+                  "kind" => "HorizontalPodAutoscaler",
+                  "metadata" => {
+                    "name" => hpa_name,
+                  },
+                  "spec" => {
+                    "minReplicas" => 2,
+                    "maxReplicas" => 4,
+                  },
+                }
+              end
+            end
+
+            remove_hpa_doc = lambda do |color|
+              hpa_name = "utterai-api-#{color}-hpa"
+              hpa_docs.reject! do |item|
+                item.is_a?(Hash) &&
+                  item["kind"] == "HorizontalPodAutoscaler" &&
+                  item.dig("metadata", "name") == hpa_name
+              end
+            end
+
+            # 새 image를 받은 inactive color는 바로 검증 가능해야 하므로 항상 restore 상태로 둡니다.
+            ensure_resource.call("hpa-#{target_color}.yaml")
+            ensure_hpa_patch.call
+            ensure_hpa_doc.call(target_color)
+            set_patch_replicas.call(target_color, 2)
+
+            if auto_promote
+              service = YAML.load_file(active_service_patch)
+              service["spec"] ||= {}
+              service["spec"]["selector"] ||= {}
+              service["spec"]["selector"]["color"] = target_color
+              File.write(active_service_patch, YAML.dump(service))
+
+              if scale_down_previous
+                set_patch_replicas.call(active_color, 0)
+                remove_resource.call("hpa-#{active_color}.yaml")
+                remove_hpa_doc.call(active_color)
+                remove_hpa_patch_if_empty.call
+              end
+            end
+
+            kustomization["resources"] = resources
+            kustomization["patches"] = patches
+            File.write(kustomization_file, YAML.dump(kustomization))
+
+            File.open(patch_deployment_file, "w") do |file|
+              deployment_docs.each { |doc| file.write(YAML.dump(doc)) }
+            end
+
+            File.open(patch_hpa_file, "w") do |file|
+              hpa_docs.each { |doc| file.write(YAML.dump(doc)) }
+            end
+          '
+
+          echo "Auto promote: $AUTO_PROMOTE"
+          echo "Scale down previous: $SCALE_DOWN_PREVIOUS"
+          echo "Previous active color: $ACTIVE_COLOR"
+          echo "Deploy target color: $TARGET_COLOR"
+
       - name: Validate Kustomize render
         env:
           OVERLAY_PATH: ${{ steps.meta.outputs.overlay_path }}
+          DEPLOY_STRATEGY: ${{ steps.meta.outputs.deploy_strategy }}
+          AUTO_PROMOTE: ${{ steps.meta.outputs.auto_promote }}
+          SCALE_DOWN_PREVIOUS: ${{ steps.meta.outputs.scale_down_previous }}
+          ACTIVE_COLOR: ${{ steps.update_image.outputs.active_color }}
+          TARGET_COLOR: ${{ steps.update_image.outputs.target_color }}
         run: |
           kubectl kustomize "$OVERLAY_PATH" > /tmp/backend-rendered.yaml
           grep "image:" /tmp/backend-rendered.yaml
+
+          ruby -ryaml -e '
+            docs = YAML.load_stream(File.read("/tmp/backend-rendered.yaml")).compact
+            strategy = ENV.fetch("DEPLOY_STRATEGY")
+
+            if strategy != "blue-green"
+              exit 0
+            end
+
+            auto_promote = ENV.fetch("AUTO_PROMOTE") == "true"
+            scale_down_previous = ENV.fetch("SCALE_DOWN_PREVIOUS") == "true"
+            active_color = ENV.fetch("ACTIVE_COLOR")
+            target_color = ENV.fetch("TARGET_COLOR")
+
+            target_deployment = docs.find do |doc|
+              doc.is_a?(Hash) &&
+                doc["kind"] == "Deployment" &&
+                doc.dig("metadata", "name") == "utterai-api-#{target_color}"
+            end
+
+            unless target_deployment
+              warn "utterai-api-#{target_color} 렌더링 결과를 찾을 수 없습니다."
+              exit 1
+            end
+
+            unless target_deployment.dig("spec", "replicas") == 2
+              warn "utterai-api-#{target_color} replicas가 2가 아닙니다. actual=#{target_deployment.dig("spec", "replicas").inspect}"
+              exit 1
+            end
+
+            target_hpa = docs.find do |doc|
+              doc.is_a?(Hash) &&
+                doc["kind"] == "HorizontalPodAutoscaler" &&
+                doc.dig("metadata", "name") == "utterai-api-#{target_color}-hpa"
+            end
+
+            unless target_hpa
+              warn "utterai-api-#{target_color}-hpa 렌더링 결과를 찾을 수 없습니다."
+              exit 1
+            end
+
+            service = docs.find do |doc|
+              doc.is_a?(Hash) &&
+                doc["kind"] == "Service" &&
+                doc.dig("metadata", "name") == "utterai-api-service"
+            end
+
+            unless service
+              warn "utterai-api-service 렌더링 결과를 찾을 수 없습니다."
+              exit 1
+            end
+
+            expected_service_color = auto_promote ? target_color : active_color
+            actual_service_color = service.dig("spec", "selector", "color")
+
+            unless actual_service_color == expected_service_color
+              warn "Service selector color가 예상과 다릅니다. expected=#{expected_service_color}, actual=#{actual_service_color}"
+              exit 1
+            end
+
+            if auto_promote && scale_down_previous
+              previous_deployment = docs.find do |doc|
+                doc.is_a?(Hash) &&
+                  doc["kind"] == "Deployment" &&
+                  doc.dig("metadata", "name") == "utterai-api-#{active_color}"
+              end
+
+              unless previous_deployment
+                warn "utterai-api-#{active_color} 렌더링 결과를 찾을 수 없습니다."
+                exit 1
+              end
+
+              unless previous_deployment.dig("spec", "replicas") == 0
+                warn "utterai-api-#{active_color} replicas가 0이 아닙니다. actual=#{previous_deployment.dig("spec", "replicas").inspect}"
+                exit 1
+              end
+
+              previous_hpa = docs.find do |doc|
+                doc.is_a?(Hash) &&
+                  doc["kind"] == "HorizontalPodAutoscaler" &&
+                  doc.dig("metadata", "name") == "utterai-api-#{active_color}-hpa"
+              end
+
+              if previous_hpa
+                warn "utterai-api-#{active_color}-hpa가 아직 렌더링되고 있습니다. scale-down 시에는 prune 대상이 되도록 제거되어야 합니다."
+                exit 1
+              end
+            end
+
+            puts "target color restored: #{target_color}"
+            puts "service color: #{actual_service_color}"
+          '
 
       - name: Create GitOps update pull request
         env:
@@ -258,6 +566,8 @@ jobs:
           ACTIVE_COLOR: ${{ steps.update_image.outputs.active_color }}
           TARGET_COLOR: ${{ steps.update_image.outputs.target_color }}
           BOOTSTRAP: ${{ steps.update_image.outputs.bootstrap }}
+          AUTO_PROMOTE: ${{ steps.meta.outputs.auto_promote }}
+          SCALE_DOWN_PREVIOUS: ${{ steps.meta.outputs.scale_down_previous }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           UPDATE_BRANCH="ci/backend-${TARGET_ENV}-${DEPLOY_STRATEGY}-${IMAGE_TAG}-${GITHUB_RUN_ID}"
@@ -288,10 +598,17 @@ jobs:
           - 현재 active color: \`$ACTIVE_COLOR\`
           - 배포 대상 color: \`$TARGET_COLOR\`
           - image tag: \`$IMAGE_TAG\`
+          - auto promote: \`$AUTO_PROMOTE\`
+          - scale down previous: \`$SCALE_DOWN_PREVIOUS\`
 
           dev 환경은 단일 backend Deployment image tag를 갱신해 Kubernetes RollingUpdate로 배포합니다.
-          prod 환경은 active Service를 전환하지 않고 inactive color image tag만 갱신합니다.
-          prod에서는 Argo CD sync 후 \`$TARGET_COLOR\` Pod를 검증하고, promote workflow로 Service selector를 전환해야 합니다.")"
+          prod 환경은 inactive color image tag를 갱신하고 해당 color를 검증 가능하도록 restore합니다.
+          \`auto_promote=true\`이면 active Service selector까지 \`$TARGET_COLOR\`로 전환합니다.
+          \`scale_down_previous=true\`이면 이전 active color Deployment replicas를 0으로 낮추고 HPA를 Git manifest에서 제거해 Argo CD prune 대상이 되게 합니다.
+
+          주의:
+          - \`scale_down_previous=true\`로 생성된 PR이 merge된 뒤에는 Argo CD sync 시 prune 옵션으로 제거 대상 HPA가 삭제되는지 확인해야 합니다.
+          - 개발 편의용 자동 전환이므로 prod 운영 안정화 후에는 검증 단계를 분리하는 정책을 다시 검토해야 합니다.")"
 
           echo "Created PR: $PR_URL"
 
