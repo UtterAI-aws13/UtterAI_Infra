@@ -97,6 +97,11 @@ data:
           insecure: true
       prometheus:
         endpoint: 0.0.0.0:8889
+      # Data Prepper로 trace를 전달. Data Prepper가 OTLP → OpenSearch JSON으로 변환한다.
+      otlp/data-prepper:
+        endpoint: data-prepper.utterai-observability.svc.cluster.local:21890
+        tls:
+          insecure: true
       loki:
         endpoint: http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push
         default_labels_enabled:
@@ -109,7 +114,7 @@ data:
         traces:
           receivers: [otlp]
           processors: [memory_limiter, attributes/redact, batch]
-          exporters: [otlp/tempo, servicegraph, spanmetrics]
+          exporters: [otlp/tempo, servicegraph, spanmetrics, otlp/data-prepper]
         metrics:
           receivers: [otlp]
           processors: [memory_limiter, batch]
