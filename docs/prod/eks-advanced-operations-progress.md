@@ -87,7 +87,7 @@ Service Graph (Node Graph) 활성화. BE→CPU→GPU 서비스 간 호출 관계
 
 | 항목 | 파일 | 상태 |
 |---|---|---|
-| servicegraph connector + metrics/servicegraph 파이프라인 추가 | `k8s/platform/observability/base/otel-collector.yaml` | 🔄 |
+| servicegraph connector + metrics/servicegraph 파이프라인 추가 | `k8s/platform/observability/base/otel-collector.yaml` | ✅ |
 
 ```
 Grafana → Explore → Tempo → Service Graph 탭
@@ -96,7 +96,7 @@ Grafana → Explore → Tempo → Service Graph 탭
 
 | 항목 | 파일 | 상태 |
 |---|---|---|
-| Tempo 데이터소스 serviceMap + nodeGraph + tracesToLogs 설정 | `terraform/modules/eks-addons/main.tf` | 🔄 |
+| Tempo 데이터소스 serviceMap + nodeGraph + tracesToLogs 설정 | `terraform/modules/eks-addons/main.tf` | ✅ |
 
 > Terraform 변경 후 `terraform apply` 필요 (eks-addons 모듈).
 
@@ -117,7 +117,7 @@ ConfigMap으로 대시보드를 코드화하여 ArgoCD 관리. 재현 가능한 
 
 | 항목 | 파일 | 상태 |
 |---|---|---|
-| UtterAI Service Overview 대시보드 (4개 Row) | `k8s/platform/observability/base/grafana-dashboard-utterai.yaml` (신규) | 🔄 |
+| UtterAI Service Overview 대시보드 (4개 Row) | `k8s/platform/observability/base/grafana-dashboard-utterai.yaml` (신규) | ✅ |
 
 ```
 Row 1: API Health       — TPS, p50/p95/p99 응답시간, 5xx 에러율, Pod 수
@@ -188,6 +188,8 @@ session_id 기반으로 BE → CPU Worker → GPU Worker 전체 처리 흐름을
 | [BE #80](https://github.com/UtterAI-aws13/UtterAI_BE/pull/80) | UtterAI_BE | Phase 1 앱 — 구조화 로그, 비즈니스 메트릭, SQS traceparent | ✅ 머지 (2026-06-24) |
 | [AI #61](https://github.com/UtterAI-aws13/UtterAI_AI/pull/61) | UtterAI_AI | Phase 1 앱 — SpanKind.CONSUMER, session/job 속성 | ✅ 머지 (2026-06-24) |
 | [Infra #306](https://github.com/UtterAI-aws13/UtterAI_Infra/pull/306) | UtterAI_Infra | Phase 1 인프라 — OTel→Loki, Alertmanager 룰 | ✅ 머지 (2026-06-24) |
+| [Infra #308](https://github.com/UtterAI-aws13/UtterAI_Infra/pull/308) | UtterAI_Infra | Phase 2 방향 수정 — ADOT 제거, Slack 비활성화 | ✅ 머지 (2026-06-24) |
+| [Infra #309](https://github.com/UtterAI-aws13/UtterAI_Infra/pull/309) | UtterAI_Infra | Phase 2 — servicegraph connector, Grafana 대시보드, Tempo 연결 | ✅ 머지 (2026-06-25) |
 
 ---
 
