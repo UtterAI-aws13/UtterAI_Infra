@@ -1,0 +1,333 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: utterai-pipeline-monitor-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/name: utterai-pipeline-monitor-dashboard
+    app.kubernetes.io/part-of: utterai
+data:
+  utterai-pipeline-monitor.json: |
+    {
+      "title": "UtterAI 파이프라인 모니터",
+      "uid": "utterai-pipeline-monitor",
+      "editable": true,
+      "graphTooltip": 1,
+      "refresh": "30s",
+      "time": { "from": "now-1h", "to": "now" },
+      "templating": {
+        "list": [
+          {
+            "name": "service",
+            "type": "custom",
+            "query": "backend,cpu-worker,gpu-worker",
+            "current": { "text": "All", "value": ["$__all"] },
+            "includeAll": true,
+            "multi": true,
+            "label": "Service",
+            "hide": 0
+          }
+        ]
+      },
+      "panels": [
+        {
+          "type": "row",
+          "title": "서비스 에러 현황",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+          "id": 1,
+          "collapsed": false
+        },
+        {
+          "type": "stat",
+          "title": "Backend 에러율",
+          "id": 2,
+          "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 1 },
+                  { "color": "red", "value": 5 }
+                ]
+              },
+              "mappings": [{ "type": "value", "options": { "NaN": { "text": "0%", "index": 0 } } }]
+            }
+          },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" },
+          "targets": [{
+            "expr": "100 * sum(rate(pipeline_calls_total{service_name=\"backend\",status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum(rate(pipeline_calls_total{service_name=\"backend\"}[5m]))",
+            "legendFormat": "backend",
+            "refId": "A"
+          }]
+        },
+        {
+          "type": "stat",
+          "title": "CPU Worker 에러율",
+          "id": 3,
+          "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 1 },
+                  { "color": "red", "value": 5 }
+                ]
+              },
+              "mappings": [{ "type": "value", "options": { "NaN": { "text": "0%", "index": 0 } } }]
+            }
+          },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" },
+          "targets": [{
+            "expr": "100 * sum(rate(pipeline_calls_total{service_name=\"cpu-worker\",status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum(rate(pipeline_calls_total{service_name=\"cpu-worker\"}[5m]))",
+            "legendFormat": "cpu-worker",
+            "refId": "A"
+          }]
+        },
+        {
+          "type": "stat",
+          "title": "GPU Worker 에러율",
+          "id": 4,
+          "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 1 },
+                  { "color": "red", "value": 5 }
+                ]
+              },
+              "mappings": [{ "type": "value", "options": { "NaN": { "text": "0%", "index": 0 } } }]
+            }
+          },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" },
+          "targets": [{
+            "expr": "100 * sum(rate(pipeline_calls_total{service_name=~\"gpu-worker|ml-gpu-worker\",status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum(rate(pipeline_calls_total{service_name=~\"gpu-worker|ml-gpu-worker\"}[5m]))",
+            "legendFormat": "gpu-worker",
+            "refId": "A"
+          }]
+        },
+        {
+          "type": "stat",
+          "title": "Backend 처리량",
+          "id": 5,
+          "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": { "defaults": { "unit": "reqps", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } } },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "textMode": "auto" },
+          "targets": [{
+            "expr": "sum(rate(pipeline_calls_total{service_name=\"backend\"}[5m]))",
+            "refId": "A"
+          }]
+        },
+        {
+          "type": "stat",
+          "title": "CPU Worker 처리량",
+          "id": 6,
+          "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": { "defaults": { "unit": "reqps", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } } },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "textMode": "auto" },
+          "targets": [{
+            "expr": "sum(rate(pipeline_calls_total{service_name=\"cpu-worker\"}[5m]))",
+            "refId": "A"
+          }]
+        },
+        {
+          "type": "stat",
+          "title": "GPU Worker 처리량",
+          "id": 7,
+          "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": { "defaults": { "unit": "reqps", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } } },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "textMode": "auto" },
+          "targets": [{
+            "expr": "sum(rate(pipeline_calls_total{service_name=~\"gpu-worker|ml-gpu-worker\"}[5m]))",
+            "refId": "A"
+          }]
+        },
+        {
+          "type": "row",
+          "title": "에러율 & 처리 지연 트렌드",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+          "id": 10,
+          "collapsed": false
+        },
+        {
+          "type": "timeseries",
+          "title": "서비스별 에러율",
+          "id": 11,
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "custom": { "lineWidth": 2 },
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 5 }] }
+            }
+          },
+          "options": {
+            "tooltip": { "mode": "multi" },
+            "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] }
+          },
+          "targets": [{
+            "expr": "100 * sum by (service_name) (rate(pipeline_calls_total{service_name=~\"backend|cpu-worker|gpu-worker|ml-gpu-worker\",status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum by (service_name) (rate(pipeline_calls_total{service_name=~\"backend|cpu-worker|gpu-worker|ml-gpu-worker\"}[5m]))",
+            "legendFormat": "{{service_name}}",
+            "refId": "A"
+          }],
+          "links": [{
+            "title": "Tempo에서 에러 트레이스 보기",
+            "url": "/explore?orgId=1&datasource=tempo&queries=[{\"query\":\"{status=error,resource.service.name=\\\"${__series.name}\\\"}\"}]&range=${__url_time_range}"
+          }]
+        },
+        {
+          "type": "timeseries",
+          "title": "서비스별 p99 처리 지연",
+          "id": 12,
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ms",
+              "custom": { "lineWidth": 2 },
+              "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 5000 }, { "color": "red", "value": 30000 }] }
+            }
+          },
+          "options": {
+            "tooltip": { "mode": "multi" },
+            "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] }
+          },
+          "targets": [{
+            "expr": "histogram_quantile(0.99, sum by (service_name, le) (rate(pipeline_duration_milliseconds_bucket{service_name=~\"backend|cpu-worker|gpu-worker|ml-gpu-worker\"}[5m])))",
+            "legendFormat": "{{service_name}} p99",
+            "refId": "A"
+          }, {
+            "expr": "histogram_quantile(0.50, sum by (service_name, le) (rate(pipeline_duration_milliseconds_bucket{service_name=~\"backend|cpu-worker|gpu-worker|ml-gpu-worker\"}[5m])))",
+            "legendFormat": "{{service_name}} p50",
+            "refId": "B"
+          }]
+        },
+        {
+          "type": "row",
+          "title": "Span 단위 분석 (어느 작업이 느리거나 실패하는가)",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+          "id": 20,
+          "collapsed": false
+        },
+        {
+          "type": "table",
+          "title": "에러 발생 Span Top 10",
+          "id": 21,
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": { "custom": { "align": "auto" } },
+            "overrides": [
+              { "matcher": { "id": "byName", "options": "에러율" }, "properties": [{ "id": "unit", "value": "percent" }, { "id": "custom.displayMode", "value": "color-background" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] } }] }
+            ]
+          },
+          "options": { "sortBy": [{ "displayName": "에러율", "desc": true }] },
+          "transformations": [
+            { "id": "merge", "options": {} },
+            { "id": "organize", "options": { "renameByName": { "service_name": "서비스", "span_name": "작업", "Value #A": "에러율" } } }
+          ],
+          "targets": [{
+            "expr": "topk(10, 100 * sum by (service_name, span_name) (rate(pipeline_calls_total{status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum by (service_name, span_name) (rate(pipeline_calls_total[5m])))",
+            "legendFormat": "{{service_name}} / {{span_name}}",
+            "refId": "A",
+            "instant": true,
+            "format": "table"
+          }]
+        },
+        {
+          "type": "table",
+          "title": "느린 Span Top 10 (p99 기준)",
+          "id": 22,
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": {
+            "defaults": { "unit": "ms", "custom": { "align": "auto" } },
+            "overrides": [
+              { "matcher": { "id": "byName", "options": "p99 지연" }, "properties": [{ "id": "unit", "value": "ms" }, { "id": "custom.displayMode", "value": "color-background" }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 5000 }, { "color": "red", "value": 30000 }] } }] }
+            ]
+          },
+          "options": { "sortBy": [{ "displayName": "p99 지연", "desc": true }] },
+          "transformations": [
+            { "id": "merge", "options": {} },
+            { "id": "organize", "options": { "renameByName": { "service_name": "서비스", "span_name": "작업", "Value #A": "p99 지연" } } }
+          ],
+          "targets": [{
+            "expr": "topk(10, histogram_quantile(0.99, sum by (service_name, span_name, le) (rate(pipeline_duration_milliseconds_bucket[5m]))))",
+            "legendFormat": "{{service_name}} / {{span_name}}",
+            "refId": "A",
+            "instant": true,
+            "format": "table"
+          }]
+        },
+        {
+          "type": "row",
+          "title": "에러 로그 (클릭하면 Tempo 트레이스로 이동)",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+          "id": 30,
+          "collapsed": false
+        },
+        {
+          "type": "logs",
+          "title": "에러 로그 — backend / cpu-worker / gpu-worker",
+          "id": 31,
+          "gridPos": { "h": 10, "w": 24, "x": 0, "y": 24 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "fieldConfig": { "defaults": {}, "overrides": [] },
+          "options": {
+            "dedupStrategy": "none",
+            "enableLogDetails": true,
+            "prettifyLogMessage": false,
+            "showCommonLabels": false,
+            "showLabels": true,
+            "showTime": true,
+            "sortOrder": "Descending",
+            "wrapLogMessage": false
+          },
+          "targets": [{
+            "expr": "{environment=\"prod\", service_name=~\"backend|cpu-worker|gpu-worker|ml-gpu-worker\"} |= \"ERROR\"",
+            "legendFormat": "",
+            "refId": "A",
+            "maxLines": 100
+          }]
+        },
+        {
+          "type": "row",
+          "title": "트레이스 검색 (Tempo)",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 34 },
+          "id": 40,
+          "collapsed": false
+        },
+        {
+          "type": "traces",
+          "title": "에러 트레이스 목록",
+          "id": 41,
+          "gridPos": { "h": 10, "w": 24, "x": 0, "y": 35 },
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "fieldConfig": { "defaults": {}, "overrides": [] },
+          "options": {},
+          "targets": [{
+            "queryType": "traceql",
+            "query": "{status=error}",
+            "limit": 20,
+            "refId": "A"
+          }]
+        }
+      ]
+    }
