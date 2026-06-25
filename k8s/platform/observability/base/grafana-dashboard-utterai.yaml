@@ -1,0 +1,411 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: utterai-service-overview-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/name: utterai-service-overview-dashboard
+    app.kubernetes.io/part-of: utterai
+data:
+  utterai-service-overview.json: |
+    {
+      "title": "UtterAI Service Overview",
+      "uid": "utterai-service-overview",
+      "editable": true,
+      "graphTooltip": 1,
+      "refresh": "30s",
+      "time": { "from": "now-1h", "to": "now" },
+      "templating": {
+        "list": [
+          {
+            "name": "datasource",
+            "type": "datasource",
+            "query": "prometheus",
+            "current": {},
+            "hide": 0,
+            "label": "Prometheus"
+          },
+          {
+            "name": "namespace",
+            "type": "query",
+            "datasource": { "type": "prometheus", "uid": "${datasource}" },
+            "query": "label_values(kube_pod_info{namespace=~\"utterai-.*\"}, namespace)",
+            "multi": true,
+            "includeAll": true,
+            "current": {},
+            "hide": 0,
+            "label": "Namespace"
+          }
+        ]
+      },
+      "panels": [
+        {
+          "type": "row",
+          "title": "API Health",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+          "collapsed": false,
+          "id": 1
+        },
+        {
+          "type": "timeseries",
+          "title": "Request Rate (by HTTP status)",
+          "id": 2,
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": {
+            "defaults": { "unit": "reqps", "custom": { "lineWidth": 2 } },
+            "overrides": [
+              { "matcher": { "id": "byRegexp", "options": ".*5.." }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+              { "matcher": { "id": "byRegexp", "options": ".*4.." }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
+              { "matcher": { "id": "byRegexp", "options": ".*2.." }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] }
+            ]
+          },
+          "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom" } },
+          "targets": [
+            {
+              "expr": "sum by (http_status_code) (rate(http_server_request_duration_seconds_count{service_name=\"backend\"}[5m]))",
+              "legendFormat": "{{http_status_code}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Response Time (p50 / p95 / p99)",
+          "id": 3,
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "s" } },
+          "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom" } },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"backend\"}[5m])))",
+              "legendFormat": "p50",
+              "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"backend\"}[5m])))",
+              "legendFormat": "p95",
+              "refId": "B"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"backend\"}[5m])))",
+              "legendFormat": "p99",
+              "refId": "C"
+            }
+          ]
+        },
+        {
+          "type": "stat",
+          "title": "5xx Error Rate",
+          "id": 4,
+          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 9 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "green" }, { "value": 0.01, "color": "orange" }, { "value": 0.05, "color": "red" }] },
+              "mappings": []
+            }
+          },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+          "targets": [
+            {
+              "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=\"backend\",http_status_code=~\"5..\"}[5m])) / sum(rate(http_server_request_duration_seconds_count{service_name=\"backend\"}[5m]))",
+              "legendFormat": "5xx Rate",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "type": "stat",
+          "title": "BE API Pods",
+          "id": 5,
+          "gridPos": { "h": 4, "w": 6, "x": 6, "y": 9 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "red" }, { "value": 1, "color": "green" }] }
+            }
+          },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+          "targets": [
+            {
+              "expr": "count(kube_pod_status_phase{namespace=\"utterai-prod-api\", phase=\"Running\"} == 1)",
+              "legendFormat": "Running Pods",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "type": "stat",
+          "title": "CPU Worker Pods",
+          "id": 6,
+          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 9 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "yellow" }, { "value": 1, "color": "green" }] }
+            }
+          },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+          "targets": [
+            {
+              "expr": "count(kube_pod_status_phase{namespace=\"utterai-ai-cpu\", phase=\"Running\"} == 1)",
+              "legendFormat": "Running Pods",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "type": "stat",
+          "title": "GPU Worker Pods",
+          "id": 7,
+          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 9 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "yellow" }, { "value": 1, "color": "green" }] }
+            }
+          },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+          "targets": [
+            {
+              "expr": "count(kube_pod_status_phase{namespace=\"utterai-ai-gpu\", phase=\"Running\"} == 1)",
+              "legendFormat": "Running Pods",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "type": "row",
+          "title": "Audio Pipeline",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 },
+          "collapsed": false,
+          "id": 10
+        },
+        {
+          "type": "timeseries",
+          "title": "Audio Presign — Success vs Error",
+          "id": 11,
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": {
+            "defaults": { "unit": "reqps" },
+            "overrides": [
+              { "matcher": { "id": "byName", "options": "error" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+              { "matcher": { "id": "byName", "options": "success" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] }
+            ]
+          },
+          "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom" } },
+          "targets": [
+            {
+              "expr": "sum by (status) (rate(audio_upload_total[5m]))",
+              "legendFormat": "{{status}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Audio Presign Duration (p95)",
+          "id": 12,
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "s" } },
+          "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(audio_upload_presign_duration_seconds_bucket[5m])))",
+              "legendFormat": "p95 presign duration",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "SQS Dispatch — by Queue & Status",
+          "id": 13,
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 22 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "reqps" } },
+          "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom" } },
+          "targets": [
+            {
+              "expr": "sum by (queue, status) (rate(sqs_dispatch_total[5m]))",
+              "legendFormat": "{{queue}} / {{status}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Session Status Transitions",
+          "id": 14,
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 22 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short" } },
+          "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom" } },
+          "targets": [
+            {
+              "expr": "sum by (from_status, to_status) (increase(session_status_transition_total[5m]))",
+              "legendFormat": "{{from_status}} → {{to_status}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "type": "row",
+          "title": "GPU Inference",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 30 },
+          "collapsed": false,
+          "id": 20
+        },
+        {
+          "type": "timeseries",
+          "title": "GPU Inference Queue Wait (p50 / p95)",
+          "id": 21,
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 31 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "s" } },
+          "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum by (le) (rate(gpu_inference_queue_wait_seconds_bucket[5m])))",
+              "legendFormat": "p50",
+              "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum by (le) (rate(gpu_inference_queue_wait_seconds_bucket[5m])))",
+              "legendFormat": "p95",
+              "refId": "B"
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "OOMKilled Events",
+          "id": 22,
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 31 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": { "drawStyle": "bars", "fillOpacity": 80 }
+            },
+            "overrides": [
+              { "matcher": { "id": "byName", "options": "utterai-ai-gpu" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }
+            ]
+          },
+          "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom" } },
+          "targets": [
+            {
+              "expr": "sum by (namespace) (increase(kube_pod_container_status_last_terminated_reason{reason=\"OOMKilled\", namespace=~\"utterai-.*\"}[10m]))",
+              "legendFormat": "{{namespace}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "type": "row",
+          "title": "Infrastructure",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 39 },
+          "collapsed": false,
+          "id": 30
+        },
+        {
+          "type": "timeseries",
+          "title": "Node CPU Usage",
+          "id": 31,
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "percentunit", "max": 1 } },
+          "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom" } },
+          "targets": [
+            {
+              "expr": "1 - avg by (node) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))",
+              "legendFormat": "{{node}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Node Memory Usage",
+          "id": 32,
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "percentunit", "max": 1 } },
+          "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom" } },
+          "targets": [
+            {
+              "expr": "1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)",
+              "legendFormat": "{{instance}}",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "type": "stat",
+          "title": "CrashLoopBackOff Pods",
+          "id": 33,
+          "gridPos": { "h": 4, "w": 12, "x": 0, "y": 48 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "green" }, { "value": 1, "color": "red" }] }
+            }
+          },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+          "targets": [
+            {
+              "expr": "sum(kube_pod_container_status_waiting_reason{reason=\"CrashLoopBackOff\", namespace=~\"utterai-.*\"}) or vector(0)",
+              "legendFormat": "CrashLoopBackOff",
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "type": "stat",
+          "title": "Pending Pods (> 5m)",
+          "id": 34,
+          "gridPos": { "h": 4, "w": 12, "x": 12, "y": 48 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "green" }, { "value": 1, "color": "orange" }] }
+            }
+          },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+          "targets": [
+            {
+              "expr": "sum(kube_pod_status_phase{phase=\"Pending\", namespace=~\"utterai-.*\"}) or vector(0)",
+              "legendFormat": "Pending",
+              "refId": "A"
+            }
+          ]
+        }
+      ],
+      "schemaVersion": 38,
+      "version": 1,
+      "links": [
+        {
+          "title": "Tempo Traces",
+          "type": "link",
+          "url": "/explore?orgId=1&left={\"datasource\":\"tempo\",\"queries\":[{\"queryType\":\"nativeSearch\"}]}",
+          "targetBlank": true
+        },
+        {
+          "title": "Loki Logs",
+          "type": "link",
+          "url": "/explore?orgId=1&left={\"datasource\":\"loki\",\"queries\":[{\"expr\":\"{namespace=\\\"utterai-prod-api\\\"}\"}]}",
+          "targetBlank": true
+        }
+      ]
+    }
