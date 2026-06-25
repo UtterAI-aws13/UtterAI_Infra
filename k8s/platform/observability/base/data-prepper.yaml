@@ -7,11 +7,11 @@ data:
   # OTel Collector에서 OTLP gRPC로 받은 trace를 두 파이프라인으로 분기한다.
   #
   # raw-trace-pipeline:
-  #   스팬 원본을 otel-v1-apm-span-* 인덱스에 저장.
-  #   Trace 상세 뷰(어느 단계에서 얼마나 걸렸는지)에 사용.
+  #   otel_trace_raw 프로세서(Data Prepper 2.x)가 스팬을 변환해 otel-v1-apm-span-* 인덱스에 저장.
+  #   Trace 상세 뷰에 사용.
   #
   # service-map-pipeline:
-  #   service_map_stateful 프로세서가 180초 윈도우 내 스팬의 부모-자식 관계를 분석해
+  #   service_map 프로세서(Data Prepper 2.x)가 180초 윈도우 내 스팬의 부모-자식 관계를 분석해
   #   서비스 간 호출 토폴로지를 otel-v1-apm-service-map 인덱스에 저장.
   #   SQS 비동기 구조도 trace propagation이 연결되어 있으면 관계를 추출할 수 있다.
   pipelines.yaml: |
@@ -20,8 +20,6 @@ data:
         otel_trace_source:
           port: 21890
           ssl: false
-      processor:
-        - otel_traces_raw:
       sink:
         - pipeline:
             name: raw-trace-pipeline
@@ -32,6 +30,8 @@ data:
       source:
         pipeline:
           name: entry-pipeline
+      processor:
+        - otel_trace_raw:
       sink:
         - opensearch:
             hosts: ["http://opensearch.utterai-observability.svc.cluster.local:9200"]
@@ -43,7 +43,7 @@ data:
         pipeline:
           name: entry-pipeline
       processor:
-        - service_map_stateful:
+        - service_map:
             window_duration: 180
       sink:
         - opensearch:
