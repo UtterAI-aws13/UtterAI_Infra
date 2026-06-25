@@ -50,12 +50,23 @@ data:
             action: delete
 
     connectors:
+      spanmetrics:
+        histogram:
+          explicit:
+            buckets: [0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0]
+        dimensions:
+          - name: service.name
+          - name: span.kind
+          - name: http.status_code
+        exemplars:
+          enabled: true
+        namespace: pipeline
       servicegraph:
         latency_histogram_buckets: [0.001, 0.002, 0.006, 0.01, 0.1, 0.25, 0.5, 1.0, 2.5]
         dimensions:
           - service.name
         store:
-          ttl: 2s
+          ttl: 300s
           max_items: 1000
 
     extensions:
@@ -89,13 +100,17 @@ data:
         traces:
           receivers: [otlp]
           processors: [memory_limiter, attributes/redact, batch]
-          exporters: [otlp/tempo, servicegraph]
+          exporters: [otlp/tempo, servicegraph, spanmetrics]
         metrics:
           receivers: [otlp]
           processors: [memory_limiter, batch]
           exporters: [prometheus, debug]
         metrics/servicegraph:
           receivers: [servicegraph]
+          processors: [batch]
+          exporters: [prometheus]
+        metrics/spanmetrics:
+          receivers: [spanmetrics]
           processors: [batch]
           exporters: [prometheus]
         logs:
