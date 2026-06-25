@@ -87,7 +87,7 @@ spec:
               containerPort: 4900
           volumeMounts:
             - name: config
-              mountPath: /usr/share/data-prepper/pipelines.yaml
+              mountPath: /usr/share/data-prepper/pipelines/pipelines.yaml
               subPath: pipelines.yaml
               readOnly: true
             - name: config
