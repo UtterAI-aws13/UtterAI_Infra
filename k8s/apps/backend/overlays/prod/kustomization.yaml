@@ -15,7 +15,7 @@ resources:
 images:
 - name: utterai-backend-blue
   newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend'
-  newTag: prod-e4068ea
+  newTag: prod-a5c5ffe
 - name: utterai-backend-green
   newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend'
   newTag: prod-93d95d1
