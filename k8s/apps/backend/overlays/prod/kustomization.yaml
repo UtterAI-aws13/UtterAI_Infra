@@ -7,7 +7,6 @@ resources:
 - "../../base"
 - deployment-blue.yaml
 - deployment-green.yaml
-- hpa-green.yaml
 - service-blue.yaml
 - service-green.yaml
 - network-policy.yaml

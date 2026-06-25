@@ -46,7 +46,7 @@ kind: Deployment
 metadata:
   name: utterai-api-green
 spec:
-  replicas: 2
+  replicas: 0
   strategy:
     rollingUpdate:
       maxSurge: 0
