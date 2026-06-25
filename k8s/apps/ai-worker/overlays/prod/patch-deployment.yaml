@@ -29,6 +29,8 @@ spec:
               value: utterai-prod-reports
             - name: S3_BUCKET_AUDIO
               value: utterai-prod-raw-audio
+            - name: S3_BUCKET_TRANSCRIPT
+              value: utterai-prod-transcripts
             - name: LOG_LEVEL
               value: INFO
             - name: OTEL_RESOURCE_ATTRIBUTES
