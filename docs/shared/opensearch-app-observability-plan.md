@@ -23,6 +23,104 @@ spanmetrics connector + Grafana "UtterAI 파이프라인 모니터" 대시보드
 
 ---
 
+## 컴포넌트 상세 설명
+
+### OpenSearch란?
+
+Elasticsearch를 fork한 오픈소스 검색/분석 엔진이다. 핵심은 **인덱스(Index)** 단위로 JSON 문서를 저장하고 빠르게 검색/집계할 수 있다는 점이다.
+
+우리가 쓰는 방식은 검색엔진 기능보다 **시계열 데이터 저장소**로서의 역할이다. trace 데이터(스팬들)를 JSON으로 저장해두고, 나중에 UI가 "이 서비스의 최근 1시간 에러 trace 목록 줘" 같은 쿼리를 날리면 빠르게 응답하는 구조다.
+
+```
+OpenSearch 내부 인덱스 구조 (Data Prepper가 자동 생성)
+├── otel-v1-apm-span-YYYY.MM.DD    ← 개별 스팬 (어떤 작업을 했는지)
+└── otel-v1-apm-service-map        ← 서비스 간 연결 관계 (Service Map용)
+```
+
+Prometheus는 숫자 메트릭만 저장하지만, OpenSearch는 스팬 전체를 JSON으로 저장해서 "이 trace_id의 모든 스팬", "backend 서비스에서 발생한 에러 스팬" 같은 쿼리가 가능하다.
+
+---
+
+### Data Prepper는 왜 필요한가?
+
+앱이 OTel Collector로 보내는 trace 데이터 형식은 **OTLP (OpenTelemetry Protocol)** 이다. OpenSearch는 OTLP를 직접 이해하지 못한다. 둘 사이의 **변환기**가 Data Prepper다.
+
+```
+앱 → OTel Collector (OTLP 수집)
+         │
+         ▼ OTLP gRPC
+     Data Prepper
+         │ otel_traces_raw 프로세서: OTLP 스팬 → OpenSearch JSON 변환
+         │ service_map_stateful 프로세서: 스팬 분석 → 서비스 간 연결 관계 생성
+         │
+         ▼ REST API
+     OpenSearch
+         ├── otel-v1-apm-span-*       (스팬 원본)
+         └── otel-v1-apm-service-map  (토폴로지)
+```
+
+Data Prepper 내부 파이프라인 2개:
+
+**raw-trace-pipeline**: 스팬을 그대로 변환해서 저장. Trace 상세 뷰에 사용.
+
+**service-map-pipeline**: 스팬들을 분석해서 "A 서비스가 B 서비스를 호출했다"는 관계를 추출. `service_map_stateful` 프로세서가 180초 윈도우 안에 들어오는 스팬들을 보면서 부모-자식 관계를 집계한다. SQS 비동기 구조에서도 trace propagation이 연결돼 있으면 관계를 잡아낼 수 있다. Grafana servicegraph와의 차이: Grafana는 실시간 매칭(TTL 내)이지만 Data Prepper는 저장된 데이터를 집계해서 만든다.
+
+---
+
+### trace는 어디서 오는가?
+
+앱들이 이미 OTel SDK를 통해 OTel Collector로 trace를 보내고 있다. **앱 코드 변경 없이** OTel Collector에서 Data Prepper로 분기하는 것만 추가한다.
+
+```
+현재 흐름:
+backend / cpu-worker / gpu-worker
+  └─ OTLP HTTP → otel-collector:4318
+                      ├── traces  → Tempo (Grafana 드릴다운)
+                      ├── metrics → Prometheus (spanmetrics)
+                      └── logs    → Loki
+
+추가 후 흐름:
+backend / cpu-worker / gpu-worker
+  └─ OTLP HTTP → otel-collector:4318
+                      ├── traces  → Tempo          (기존 유지)
+                      ├── traces  → Data Prepper   (신규 분기)
+                      ├── metrics → Prometheus     (기존 유지)
+                      └── logs    → Loki           (기존 유지)
+```
+
+OTel Collector config에 exporter 하나 추가하는 것만으로 동일한 trace 데이터가 두 곳에 동시에 전달된다.
+
+---
+
+### 전체 흐름 요약
+
+```
+[ 앱 ]
+  backend / cpu-worker / gpu-worker
+  (OTel SDK 심어져 있음 — 코드 변경 없음)
+       │ OTLP HTTP (:4318)
+       ▼
+[ OTel Collector ]
+       │
+       ├─────────────────────────────────────┐
+       │ OTLP gRPC (:21890)                  │ OTLP gRPC (:4317)
+       ▼                                     ▼
+[ Data Prepper ]                         [ Tempo ]
+  raw-trace-pipeline                     Grafana 드릴다운
+  service-map-pipeline
+       │ REST API
+       ▼
+[ OpenSearch ]
+  otel-v1-apm-span-*        ← 스팬 원본
+  otel-v1-apm-service-map   ← 서비스 토폴로지
+       │ REST API
+       ▼
+[ Observability UI ]  ← Step 3~4 구현 예정
+  Service Map / Trace 상세 / 에러 통계
+```
+
+---
+
 ## Phase 2 목표
 
 VOC 전용 커스텀 UI를 새로 개발한다. OpenSearch를 데이터 저장소로 사용하고, React + TypeScript로 목적에 맞게 설계된 UI를 제공한다.
