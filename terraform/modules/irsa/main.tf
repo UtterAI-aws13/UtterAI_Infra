@@ -190,6 +190,11 @@ resource "aws_iam_role_policy" "ai_cpu" {
       },
       {
         Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = ["${var.transcripts_bucket_arn}/*"]
+      },
+      {
+        Effect   = "Allow"
         Action   = ["s3:PutObject"]
         Resource = ["${var.reports_bucket_arn}/*"]
       },
