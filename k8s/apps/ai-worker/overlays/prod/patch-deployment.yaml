@@ -75,6 +75,8 @@ spec:
               value: utterai-prod-raw-audio
             - name: S3_BUCKET_REPORT
               value: utterai-prod-reports
+            - name: S3_BUCKET_TRANSCRIPT
+              value: utterai-prod-transcripts
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: deployment.environment=prod,team=utterai
             - name: HF_HOME
