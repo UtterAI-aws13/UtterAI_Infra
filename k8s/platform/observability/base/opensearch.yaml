@@ -1,0 +1,196 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opensearch-config
+  namespace: utterai-observability
+data:
+  opensearch.yml: |
+    cluster.name: utterai-observability
+    network.host: 0.0.0.0
+    discovery.type: single-node
+    plugins.security.disabled: true
+  opensearch-dashboards.yml: |
+    server.host: "0.0.0.0"
+    opensearch.hosts: ["http://opensearch.utterai-observability.svc.cluster.local:9200"]
+    opensearch.ssl.verificationMode: none
+    opensearch_security.disabled: true
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: opensearch
+  namespace: utterai-observability
+  labels:
+    app: opensearch
+    app.kubernetes.io/name: opensearch
+    app.kubernetes.io/part-of: utterai
+spec:
+  serviceName: opensearch
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opensearch
+  template:
+    metadata:
+      labels:
+        app: opensearch
+        app.kubernetes.io/name: opensearch
+        app.kubernetes.io/part-of: utterai
+    spec:
+      nodeSelector:
+        karpenter.sh/nodepool: platform
+      initContainers:
+        - name: sysctl
+          image: busybox:1.36
+          command: ["sysctl", "-w", "vm.max_map_count=262144"]
+          securityContext:
+            privileged: true
+      containers:
+        - name: opensearch
+          image: opensearchproject/opensearch:2.13.0
+          env:
+            - name: OPENSEARCH_JAVA_OPTS
+              value: "-Xms1g -Xmx1g"
+            - name: DISABLE_SECURITY_PLUGIN
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 9200
+            - name: transport
+              containerPort: 9300
+          volumeMounts:
+            - name: config
+              mountPath: /usr/share/opensearch/config/opensearch.yml
+              subPath: opensearch.yml
+              readOnly: true
+            - name: data
+              mountPath: /usr/share/opensearch/data
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "2Gi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+          readinessProbe:
+            httpGet:
+              path: /_cluster/health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 5
+          livenessProbe:
+            httpGet:
+              path: /_cluster/health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            failureThreshold: 5
+      volumes:
+        - name: config
+          configMap:
+            name: opensearch-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: gp2
+        resources:
+          requests:
+            storage: 20Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opensearch
+  namespace: utterai-observability
+  labels:
+    app: opensearch
+    app.kubernetes.io/name: opensearch
+    app.kubernetes.io/part-of: utterai
+spec:
+  type: ClusterIP
+  selector:
+    app: opensearch
+  ports:
+    - name: http
+      port: 9200
+      targetPort: http
+    - name: transport
+      port: 9300
+      targetPort: transport
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opensearch-dashboards
+  namespace: utterai-observability
+  labels:
+    app: opensearch-dashboards
+    app.kubernetes.io/name: opensearch-dashboards
+    app.kubernetes.io/part-of: utterai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opensearch-dashboards
+  template:
+    metadata:
+      labels:
+        app: opensearch-dashboards
+        app.kubernetes.io/name: opensearch-dashboards
+        app.kubernetes.io/part-of: utterai
+    spec:
+      nodeSelector:
+        karpenter.sh/nodepool: platform
+      containers:
+        - name: opensearch-dashboards
+          image: opensearchproject/opensearch-dashboards:2.13.0
+          env:
+            - name: DISABLE_SECURITY_DASHBOARDS_PLUGIN
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 5601
+          volumeMounts:
+            - name: config
+              mountPath: /usr/share/opensearch-dashboards/config/opensearch_dashboards.yml
+              subPath: opensearch-dashboards.yml
+              readOnly: true
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /api/status
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 5
+      volumes:
+        - name: config
+          configMap:
+            name: opensearch-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opensearch-dashboards
+  namespace: utterai-observability
+  labels:
+    app: opensearch-dashboards
+    app.kubernetes.io/name: opensearch-dashboards
+    app.kubernetes.io/part-of: utterai
+spec:
+  type: ClusterIP
+  selector:
+    app: opensearch-dashboards
+  ports:
+    - name: http
+      port: 5601
+      targetPort: http
