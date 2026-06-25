@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/name: utterai-api
     app.kubernetes.io/part-of: utterai
 spec:
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app: utterai-api
@@ -41,11 +41,11 @@ spec:
       affinity:
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchLabels:
-                  app: utterai-api
-                  color: blue
-              topologyKey: kubernetes.io/hostname
+          - labelSelector:
+              matchLabels:
+                app: utterai-api
+                color: blue
+            topologyKey: kubernetes.io/hostname
       initContainers:
       - name: db-migrate
         image: utterai-backend-blue:prod-placeholder
