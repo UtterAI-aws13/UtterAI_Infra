@@ -4,6 +4,8 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - otel-collector.yaml
+  - opensearch.yaml
+  - data-prepper.yaml
   - grafana-dashboard-ca-karpenter.yaml
   - grafana-dashboard-utterai.yaml
   - grafana-dashboard-pipeline.yaml

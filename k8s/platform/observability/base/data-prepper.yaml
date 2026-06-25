@@ -1,0 +1,139 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: data-prepper-config
+  namespace: utterai-observability
+data:
+  # OTel Collector에서 OTLP gRPC로 받은 trace를 두 파이프라인으로 분기한다.
+  #
+  # raw-trace-pipeline:
+  #   스팬 원본을 otel-v1-apm-span-* 인덱스에 저장.
+  #   Trace 상세 뷰(어느 단계에서 얼마나 걸렸는지)에 사용.
+  #
+  # service-map-pipeline:
+  #   service_map_stateful 프로세서가 180초 윈도우 내 스팬의 부모-자식 관계를 분석해
+  #   서비스 간 호출 토폴로지를 otel-v1-apm-service-map 인덱스에 저장.
+  #   SQS 비동기 구조도 trace propagation이 연결되어 있으면 관계를 추출할 수 있다.
+  pipelines.yaml: |
+    entry-pipeline:
+      source:
+        otel_trace_source:
+          port: 21890
+          ssl: false
+      processor:
+        - otel_traces_raw:
+      sink:
+        - pipeline:
+            name: raw-trace-pipeline
+        - pipeline:
+            name: service-map-pipeline
+
+    raw-trace-pipeline:
+      source:
+        pipeline:
+          name: entry-pipeline
+      sink:
+        - opensearch:
+            hosts: ["http://opensearch.utterai-observability.svc.cluster.local:9200"]
+            insecure: true
+            index_type: trace-analytics-raw
+
+    service-map-pipeline:
+      source:
+        pipeline:
+          name: entry-pipeline
+      processor:
+        - service_map_stateful:
+            window_duration: 180
+      sink:
+        - opensearch:
+            hosts: ["http://opensearch.utterai-observability.svc.cluster.local:9200"]
+            insecure: true
+            index_type: trace-analytics-service-map
+
+  data-prepper-config.yaml: |
+    ssl: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-prepper
+  namespace: utterai-observability
+  labels:
+    app: data-prepper
+    app.kubernetes.io/name: data-prepper
+    app.kubernetes.io/part-of: utterai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: data-prepper
+  template:
+    metadata:
+      labels:
+        app: data-prepper
+        app.kubernetes.io/name: data-prepper
+        app.kubernetes.io/part-of: utterai
+    spec:
+      nodeSelector:
+        karpenter.sh/nodepool: platform
+      containers:
+        - name: data-prepper
+          image: opensearchproject/data-prepper:2.8.0
+          ports:
+            - name: otel-traces
+              containerPort: 21890
+            - name: health
+              containerPort: 4900
+          volumeMounts:
+            - name: config
+              mountPath: /usr/share/data-prepper/pipelines.yaml
+              subPath: pipelines.yaml
+              readOnly: true
+            - name: config
+              mountPath: /usr/share/data-prepper/config/data-prepper-config.yaml
+              subPath: data-prepper-config.yaml
+              readOnly: true
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /list
+              port: health
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 5
+          livenessProbe:
+            httpGet:
+              path: /list
+              port: health
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            failureThreshold: 5
+      volumes:
+        - name: config
+          configMap:
+            name: data-prepper-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: data-prepper
+  namespace: utterai-observability
+  labels:
+    app: data-prepper
+    app.kubernetes.io/name: data-prepper
+    app.kubernetes.io/part-of: utterai
+spec:
+  type: ClusterIP
+  selector:
+    app: data-prepper
+  ports:
+    - name: otel-traces
+      port: 21890
+      targetPort: otel-traces
