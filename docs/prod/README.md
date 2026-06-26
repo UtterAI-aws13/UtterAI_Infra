@@ -999,13 +999,16 @@ CloudWatch 대시보드 `utterai-prod-overview`:
 - EKS Node CPU / Memory
 ```
 
-### 12.4 OpenTelemetry / Grafana
+### 12.4 OpenTelemetry / Grafana / OpenSearch
 
 ```text
 Collector: OpenTelemetry Collector (EKS 내 Deployment, utterai-observability namespace)
-Trace backend: Tempo (monitoring namespace, S3 backend: utterai-prod-tempo)
+Trace backend 1: Tempo (monitoring namespace, S3 backend: utterai-prod-tempo)
+Trace backend 2: Data Prepper -> OpenSearch (StatefulSet, utterai-observability namespace, VOC용)
 Sampling: 운영 중 10%, 에러 100%
 ```
+
+상세 수집 및 SQS 스팬 전파 계약에 대한 내용은 [opensearch-data-prepper.md](../../../UtterAI_Docs/adr/observability/opensearch-data-prepper.md)를 참고하세요.
 
 ### 12.5 Prometheus
 
@@ -1052,14 +1055,18 @@ Prometheus Alertmanager는 on-call routing과 중복 알림 정책이 확정된 
 ## 13. CloudFront 구성
 
 ```text
-Origin: S3 utterai-prod-frontend (OAC 사용, 직접 접근 차단)
+Origin 1 (Frontend): S3 utterai-prod-frontend (OAC 사용, 직접 접근 차단)
+Origin 2 (Backend): ALB (Application Load Balancer Ingress)
 Distribution: utterai-prod-frontend-cf
-도메인: app.utterai.org, www.utterai.org
-HTTPS: ACM 인증서 (us-east-1 발급 필수, *.utterai.org)
-캐시 정책: 정적 파일 1년 캐시, HTML은 캐시 없음
+도메인: utterai.org, www.utterai.org, app.utterai.org
+HTTPS: ACM 인증서 (us-east-1 발급 필수)
+보안: AWS WAF WebACL 연동 (CommonRuleSet, KnownBadInputs, Rate-Limit 2,000/5분)
+캐시 정책:
+  - / (프론트엔드): 정적 파일 캐시, HTML은 캐시 없음
+  - /api/* (백엔드 API): 캐시 비활성화 (Bypass, TTL=0), 인증 헤더 및 쿠키 포워딩
 ```
 
-백엔드 API 라우팅은 `api.utterai.org`를 ALB에 직접 연결하는 방식을 사용한다.
+백엔드 API 라우팅은 CloudFront의 경로 기반 라우팅을 사용해 `/api/*` 요청을 백엔드 ALB로 전달하는 방식을 사용합니다. 이를 통해 CORS 문제를 해소하고 에지 보안을 단일화했습니다. 상세 내용은 [edge-cloudfront-waf-acm.md](../../../UtterAI_Docs/adr/network/edge-cloudfront-waf-acm.md)를 참고하세요.
 
 ---
 
