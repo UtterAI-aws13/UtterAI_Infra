@@ -60,6 +60,7 @@ VoC 발생 시: Grafana → Service Graph에서 문제 서비스 확인 → Temp
 | OTel Collector logs pipeline → Loki 연결 | `k8s/platform/observability/base/otel-collector.yaml` | ✅ | [Infra #306](https://github.com/UtterAI-aws13/UtterAI_Infra/pull/306) |
 | Alertmanager 룰 5종 (PrometheusRule) | `k8s/platform/observability/base/alert-rules-utterai.yaml` | ✅ | [Infra #306](https://github.com/UtterAI-aws13/UtterAI_Infra/pull/306) |
 | alertmanagerConfigMatcherStrategy=None | `terraform/modules/eks-addons/main.tf` | ✅ | [Infra #306](https://github.com/UtterAI-aws13/UtterAI_Infra/pull/306) |
+| Discord 알림 연동 | `k8s/platform/observability/base/alertmanager-discord-config.yaml` | 진행 | `#monitoring-alerts` webhook을 Secrets Manager로 주입 필요 |
 | Slack 알림 연동 | — | ➖ | Slack 미사용 — kustomization에서 비활성화 |
 | Grafana Loki Derived Field 설정 (Loki→Tempo 1클릭) | Grafana UI 수동 | 🖱️ | — |
 
