@@ -31,6 +31,7 @@
 23. [Terraform 시크릿 관리 현황 및 고도화](#23-terraform-시크릿-관리-현황-및-고도화)
 
 > `app.utterai.org` CloudFront WAF v1 규칙 선택 ADR: [`cloudfront-waf-adr.md`](./cloudfront-waf-adr.md)
+> Observability 민감정보 redaction 운영 가이드: [`observability-redaction.md`](./observability-redaction.md)
 
 ---
 

@@ -1,8 +1,8 @@
 # ADR: app.utterai.org CloudFront WAF v1 규칙 선택
 
-> 상태: 제안  
-> 대상: `app.utterai.org` CloudFront distribution  
-> 범위: 프론트엔드 CloudFront에만 WAF 연결. ALB/API WAF는 이번 결정 범위에서 제외.
+> 상태: 결정 및 구현 완료 (Implemented) - [edge-cloudfront-waf-acm.md](../../../UtterAI_Docs/adr/network/edge-cloudfront-waf-acm.md) 참고
+> 대상: `app.utterai.org` CloudFront distribution
+> 범위: Route53 -> CloudFront + WAF + ACM 통합 구조 구현 완료. ALB/API WAF는 CF WAF로 통합 차단.
 
 ---
 
