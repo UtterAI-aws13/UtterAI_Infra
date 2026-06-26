@@ -1,0 +1,32 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: utterai-discord
+  namespace: monitoring
+spec:
+  route:
+    receiver: discord-utterai
+    matchers:
+      - name: team
+        value: utterai
+    groupBy:
+      - alertname
+      - namespace
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 4h
+  receivers:
+    - name: discord-utterai
+      discordConfigs:
+        - apiURL:
+            name: alertmanager-discord-secret
+            key: webhook-url
+          title: "[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}"
+          message: |
+            {{ range .Alerts }}
+            요약: {{ .Annotations.summary }}
+            내용: {{ .Annotations.description }}
+            심각도: {{ .Labels.severity }}
+            namespace: {{ .Labels.namespace }}
+            {{ end }}
+          sendResolved: true

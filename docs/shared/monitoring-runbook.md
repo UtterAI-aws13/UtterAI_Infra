@@ -340,54 +340,44 @@ diagnostics.enabled = false
 | 네트워크 비용 | `networkCosts.enabled=true` | DaemonSet 리소스 추가 |
 | 예측 | `forecasting.enabled=true` | 모델링 Pod 리소스 추가 |
 
-## Alertmanager / Slack 알림 확인
+## Alertmanager / Discord 알림 확인
 
-Alertmanager는 Prometheus alert를 받아 Slack으로 전달한다. Dev 기준 Slack webhook URL은 Git에 기록하지 않고 AWS Secrets Manager에만 저장한다.
+Alertmanager는 Prometheus alert를 받아 Discord `#monitoring-alerts` 채널로 전달한다. Discord webhook URL은 Git에 기록하지 않고 AWS Secrets Manager에만 저장한다.
 
 현재 흐름:
 
 ```text
 AWS Secrets Manager
   -> External Secrets Operator
-  -> Kubernetes Secret: monitoring/alertmanager-slack-webhook
-  -> Alertmanager Secret mount
-  -> Slack receiver
+  -> Kubernetes Secret: monitoring/alertmanager-discord-secret
+  -> AlertmanagerConfig: monitoring/utterai-discord
+  -> Discord receiver: discord-utterai
 ```
 
-### Terraform 적용
+### Discord webhook Secret 주입
 
-Slack 알림을 켠 상태로 `04-addons`를 적용한다.
+Discord webhook은 `#monitoring-alerts` 채널에서 생성한다. URL은 Secrets Manager에만 넣는다.
 
 ```bash
-cd ~/utter-ai/UtterAI_Infra
-terraform -chdir=terraform/environments/dev/04-addons plan \
-  -var='alertmanager_slack_enabled=true'
-terraform -chdir=terraform/environments/dev/04-addons apply \
-  -var='alertmanager_slack_enabled=true'
+aws secretsmanager create-secret \
+  --name "utterai-prod/alertmanager-discord" \
+  --secret-string '{"webhook_url":"<DISCORD_WEBHOOK_URL>"}' \
+  --region ap-northeast-2
 ```
 
-반복 적용 시 `-var`를 빼먹지 않도록 로컬에 `terraform.tfvars`를 둘 수 있다. 이 파일은 Git에 커밋하지 않는다.
-
-```bash
-cp terraform/environments/dev/04-addons/terraform.tfvars.example \
-  terraform/environments/dev/04-addons/terraform.tfvars
-```
-
-### Slack webhook Secret 주입
-
-`terraform output`으로 Secrets Manager 이름을 확인한다.
-
-```bash
-terraform -chdir=terraform/environments/dev/04-addons output \
-  alertmanager_slack_secret_manager_name
-```
-
-Slack webhook URL은 Secrets Manager에만 넣는다.
+이미 secret이 있다면 값을 갱신한다.
 
 ```bash
 aws secretsmanager put-secret-value \
-  --secret-id utterai-dev/alertmanager-slack-webhook \
-  --secret-string '<SLACK_WEBHOOK_URL>'
+  --secret-id "utterai-prod/alertmanager-discord" \
+  --secret-string '{"webhook_url":"<DISCORD_WEBHOOK_URL>"}' \
+  --region ap-northeast-2
+```
+
+### Manifest 적용
+
+```bash
+kubectl apply -k k8s/platform/observability/base
 ```
 
 ### 동작 확인
@@ -395,8 +385,9 @@ aws secretsmanager put-secret-value \
 ExternalSecret과 Kubernetes Secret 동기화를 확인한다.
 
 ```bash
-kubectl get externalsecret -n monitoring alertmanager-slack-webhook
-kubectl get secret -n monitoring alertmanager-slack-webhook
+kubectl get externalsecret -n monitoring alertmanager-discord-secret
+kubectl get secret -n monitoring alertmanager-discord-secret
+kubectl get alertmanagerconfig -n monitoring utterai-discord
 ```
 
 Alertmanager reconciliation 상태를 확인한다.
@@ -423,9 +414,9 @@ kubectl get secret -n monitoring alertmanager-utterai-monitoring-alertmanager \
 정상 설정에는 아래 내용이 보여야 한다.
 
 ```text
-receiver: slack
+receiver: discord-utterai
 receivers:
-- name: slack
+- name: discord-utterai
 - name: "null"
 routes:
 - receiver: "null"

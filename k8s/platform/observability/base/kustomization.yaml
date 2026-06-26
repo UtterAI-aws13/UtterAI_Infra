@@ -10,5 +10,7 @@ resources:
   - grafana-dashboard-utterai.yaml
   - grafana-dashboard-pipeline.yaml
   - alert-rules-utterai.yaml
+  - alertmanager-discord-secret.yaml
+  - alertmanager-discord-config.yaml
   # alertmanager-slack-secret.yaml — Slack 미사용으로 비활성화
   # alertmanager-config.yaml       — Slack 미사용으로 비활성화
