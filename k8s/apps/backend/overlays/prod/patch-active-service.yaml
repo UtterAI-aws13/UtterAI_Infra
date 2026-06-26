@@ -6,4 +6,4 @@ metadata:
 spec:
   selector:
     app: utterai-api
-    color: green
+    color: blue
