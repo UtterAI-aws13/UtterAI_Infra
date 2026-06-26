@@ -9,7 +9,9 @@
 1. [환경 개요](#1-환경-개요)
 2. [도메인 구성](#2-도메인-구성)
 3. [네트워크 구성](#3-네트워크-구성)
+   - 3.1 VPC / 3.2 서브넷 / 3.3 게이트웨이 및 라우팅 테이블 / 3.4 ALB / 3.5 Custom Networking / 3.6 VPC Endpoint / 3.7 Client VPN
 4. [EKS 클러스터 구성](#4-eks-클러스터-구성)
+   - 4.1 기본 설정 / 4.2 Addons / 4.3 Namespace / 4.4 NodeGroup·NodePool / 4.5 Blue/Green 배포 / 4.6 KEDA / 4.7 Karpenter / 4.8 SQS 파이프라인 / 4.9 IRSA
 5. [PostgreSQL 구성 및 Aurora 전환 계획](#5-postgresql-구성-및-aurora-전환-계획)
 6. [ElastiCache Redis 구성](#6-elasticache-redis-구성)
 7. [S3 버킷 구성](#7-s3-버킷-구성)
@@ -72,16 +74,48 @@ Prod 환경은 실제 사용자에게 서비스를 제공하는 운영 환경이
 ### 1.4 아키텍처 요약
 
 ```
-User → Route 53 → CloudFront → ALB Ingress → EKS
-                                               ├── API Pod          (api NodePool, MNG + HPA)
-                                               ├── AI API Pod       (ai-api NodePool, 내부 전용)
-                                               ├── CPU AI Worker    (ai-cpu NodePool, KEDA)
-                                               ├── GPU AI Worker    (ai-gpu NodePool, KEDA)
-                                               └── Batch Worker     (batch NodePool, KEDA)
+[사용자]
+  │
+  ▼
+Route 53 (utterai.org)
+  ├── app.utterai.org  → CloudFront → S3 (utterai-prod-frontend)   # 프론트엔드
+  └── api.utterai.org  → CloudFront → ALB (ap-northeast-2)         # 백엔드 API
+                                         │
+                             [Public Subnet: 10.20.1/2.0/24]
+                                         │  AWS Load Balancer Controller가 생성
+                                         ▼
+                             ALB (HTTPS 443 → HTTP 8080)
+                                         │
+                             [Private App Subnet: 10.20.11/12.0/24]
+                                         │
+                              Ingress → utterai-api-active Service
+                                         │
+                              ┌──────────┴──────────┐
+                              ▼                     ▼
+                       utterai-api-blue       utterai-api-green
+                       (Blue Deployment)     (Green Deployment)
+                              │
+                              ▼
+                       Backend API Pod
+                              │
+                  ┌───────────┼───────────┐
+                  ▼           ▼           ▼
+                SQS         RDS         Redis
+          (audio-preprocess / (PostgreSQL)  (Cache)
+           gpu-inference /
+           report-analysis /
+           rag-ingest)
+                  │
+      ┌───────────┼───────────┐
+      ▼           ▼           ▼
+  cpu-worker  gpu-worker  batch-worker
+  (KEDA 스케일) (KEDA 스케일) (KEDA 스케일)
+      │           │           │
+      └─── Karpenter ─────────┘
+           (Spot/On-Demand 노드 동적 프로비저닝)
 
-SQS 파이프라인:
-  audio-preprocess-queue → gpu-inference-queue → report-analysis-queue
-  rag-ingest-queue (RAG 문서 ingest 전용)
+Pod IP: 100.64.0.0/16 (Secondary CIDR, Custom Networking)
+노드 IP: 10.20.11.0/24, 10.20.12.0/24 (Primary CIDR)
 ```
 
 > Dev vs Prod 환경 상세 비교: [`docs/README.md`](../README.md)
@@ -112,56 +146,158 @@ SQS 파이프라인:
 
 | 항목 | 값 |
 |---|---|
-| VPC CIDR | `10.20.0.0/16` |
+| VPC CIDR (Primary) | `10.20.0.0/16` |
+| VPC CIDR (Secondary, Pod 전용) | `100.64.0.0/16` |
 | VPC 이름 | `utterai-prod-vpc` |
-| AZ 수 | 2개 (ap-northeast-2a, ap-northeast-2c) |
+| AZ | 2개 — ap-northeast-2a, ap-northeast-2c |
 
-### 3.2 Subnet 구성
+VPC에 Secondary CIDR(`100.64.0.0/16`)을 추가하고, EKS Custom Networking으로 Pod IP를 이 대역에서 할당한다. 노드 IP(`10.20.x.x`)와 Pod IP(`100.64.x.x`)가 분리되어 Primary 서브넷의 IP 고갈을 방지한다.
 
-| Subnet | CIDR | AZ | 용도 |
+### 3.2 서브넷 구성
+
+| 서브넷 | CIDR | AZ | 용도 |
 |---|---|---|---|
-| Public Subnet A | `10.20.1.0/24` | ap-northeast-2a | ALB, NAT Gateway |
-| Public Subnet C | `10.20.2.0/24` | ap-northeast-2c | ALB |
-| Private App Subnet A | `10.20.11.0/24` | ap-northeast-2a | EKS Node/Pod |
-| Private App Subnet C | `10.20.12.0/24` | ap-northeast-2c | EKS Node/Pod |
-| Private Data Subnet A | `10.20.21.0/24` | ap-northeast-2a | RDS, Redis |
-| Private Data Subnet C | `10.20.22.0/24` | ap-northeast-2c | RDS, Redis |
+| Public A | `10.20.1.0/24` | 2a | ALB 노드, NAT Gateway |
+| Public C | `10.20.2.0/24` | 2c | ALB 노드 |
+| Private App A | `10.20.11.0/24` | 2a | EKS 워커 노드 |
+| Private App C | `10.20.12.0/24` | 2c | EKS 워커 노드 |
+| Private Data A | `10.20.21.0/24` | 2a | RDS, Redis |
+| Private Data C | `10.20.22.0/24` | 2c | RDS, Redis |
+| Pod A (Secondary) | `100.64.0.0/17` | 2a | EKS Pod ENI (Custom Networking) |
+| Pod C (Secondary) | `100.64.128.0/17` | 2c | EKS Pod ENI (Custom Networking) |
 
-> NAT Gateway는 ap-northeast-2a에 1개 배치. ap-northeast-2c Private 서브넷 아웃바운드도 2a NAT GW 경유.
+### 3.3 게이트웨이 및 라우팅 테이블
 
-### 3.3 보안 그룹 구성
+```
+[인터넷]
+    │
+    ├─── Internet Gateway (utterai-prod-igw)
+    │         │
+    │         └──▶ Public RT (public-rt)
+    │                  ├── 0.0.0.0/0 → IGW         ← 인터넷 직접 통신
+    │                  ├── Public Subnet A (10.20.1.0/24)
+    │                  └── Public Subnet C (10.20.2.0/24)
+    │
+    │    [NAT Gateway] (ap-northeast-2a Public Subnet에 배치, EIP 1개)
+    │         │
+    └─────────└──▶ Private App RT (private-app-rt)
+                       ├── 0.0.0.0/0 → NAT Gateway  ← 아웃바운드만 허용, 인바운드 불가
+                       ├── Private App Subnet A (10.20.11.0/24)
+                       ├── Private App Subnet C (10.20.12.0/24)
+                       ├── Pod Subnet A (100.64.0.0/17)    ← Pod 서브넷도 동일 RT 공유
+                       └── Pod Subnet C (100.64.128.0/17)
 
-| 보안 그룹 | 허용 Inbound | 목적 |
-|---|---|---|
-| `sg-prod-alb` | 0.0.0.0/0 : 443 | ALB 외부 트래픽 수신 |
-| `sg-prod-backend` | sg-prod-alb : 8080 | ALB에서 백엔드 Pod로 |
-| `sg-prod-aurora` | sg-prod-backend : 5432 | 백엔드에서 DB로 |
-| `sg-prod-redis` | sg-prod-backend : 6379 | 백엔드에서 Redis로 |
-
-> Prod에서는 Bastion 직접 접근 불허. DB 작업은 EKS Job 또는 AWS Systems Manager Session Manager 경유
-
-### 3.4 WAF 구성
-
-```text
-AWS WAF Rules:
-- AWS Managed Rules Common (OWASP Top 10 기본 차단)
-- AWS Managed Rules Known Bad Inputs
-- Rate-based Rule: IP당 5분에 2000 req 초과 시 차단
-- Geo-restriction: 필요 시 서비스 대상 국가만 허용
+                   Private Data RT (private-data-rt)
+                       ├── (기본 로컬 라우팅만)        ← 인터넷 경로 없음, 완전 격리
+                       ├── Private Data Subnet A (10.20.21.0/24)
+                       └── Private Data Subnet C (10.20.22.0/24)
 ```
 
-### 3.5 VPC Endpoint
+**핵심 연결 정리**
 
-| 서비스 | Endpoint 타입 |
-|---|---|
-| S3 | Gateway |
-| SQS | Interface |
-| Secrets Manager | Interface |
-| CloudWatch Logs | Interface |
-| ECR API | Interface |
-| ECR Docker | Interface |
-| STS | Interface |
-| KMS | Interface |
+| 서브넷 종류 | 인터넷 인바운드 | 인터넷 아웃바운드 | 경로 |
+|---|---|---|---|
+| Public | 허용 (IGW) | 허용 (IGW) | IGW 직접 |
+| Private App (노드/Pod) | 불가 | 허용 | NAT Gateway (2a 단일) 경유 |
+| Private Data (RDS/Redis) | 불가 | 불가 | 없음 (VPC 내부 통신만) |
+| Pod (Secondary CIDR) | 불가 | 허용 | Private App RT 공유 → NAT Gateway |
+
+> NAT Gateway는 ap-northeast-2a에 1개만 운영. 2c의 Private App/Pod 서브넷 아웃바운드도 2a NAT GW를 경유한다. 비용 절감 목적이며, 2a NAT GW 장애 시 2c 노드의 인터넷 아웃바운드가 중단되는 단일 장애점이다.
+
+### 3.4 ALB 동작 방식
+
+```
+[인터넷 사용자]
+      │ HTTPS 443
+      ▼
+[ALB] ← Public Subnet (10.20.1.0/24, 10.20.2.0/24) 에 위치
+  │   AWS Load Balancer Controller가 Ingress 오브젝트를 감지해 ALB를 생성/관리
+  │   ACM 인증서 (api.utterai.org, ap-northeast-2) TLS 종료
+  │
+  │ HTTP 8080 (TLS 종료 후 평문)
+  ▼
+[Target Group] ← Private App Subnet 의 Pod IP (100.64.x.x) 직접 등록
+      │          ALB → Pod 직접 라우팅 (NodePort 거치지 않음, IP 모드)
+      ▼
+[Backend API Pod] (utterai-prod-api namespace)
+```
+
+**Blue/Green 트래픽 전환 구조**
+
+```
+ALB
+ └── Ingress
+      └── utterai-api-active Service  ← selector가 blue 또는 green으로 전환
+               ├── utterai-api-blue Service → Blue Pod (color=blue)
+               └── utterai-api-green Service → Green Pod (color=green)
+
+배포 시: active Service의 selector를 blue→green(또는 반대)으로 변경
+         GitHub Actions workflow(backend-bluegreen-promote.yaml)가 자동화
+```
+
+### 3.5 EKS Custom Networking (Pod Secondary CIDR)
+
+EKS vpc-cni 애드온이 Custom Networking 모드로 동작한다. 노드의 Primary ENI는 `10.20.x.x` 대역을 사용하고, Pod용 Secondary ENI는 `100.64.x.x` 대역 서브넷에서 IP를 할당받는다.
+
+```
+노드 (Primary ENI): 10.20.11.5  ← Private App Subnet
+Pod  (Secondary ENI): 100.64.0.15 ← Pod Subnet (동일 노드, 다른 서브넷)
+
+ENIConfig: AZ별로 생성 (ap-northeast-2a → 100.64.0.0/17, ap-northeast-2c → 100.64.128.0/17)
+vpc-cni 환경변수:
+  AWS_VPC_K8S_CNI_CUSTOM_NETWORK_CFG=true
+  ENI_CONFIG_LABEL_DEF=topology.kubernetes.io/zone
+  ENABLE_PREFIX_DELEGATION=true   ← /28 prefix 단위로 할당해 IP 효율 극대화
+  WARM_PREFIX_TARGET=1
+```
+
+### 3.6 VPC Endpoint (프라이빗 AWS 서비스 통신)
+
+Pod/노드가 AWS 서비스에 접근할 때 NAT Gateway를 거치지 않고 VPC 내부에서 직접 통신한다.
+
+| 서비스 | 타입 | 용도 |
+|---|---|---|
+| S3 | Gateway | Loki/Tempo/Kubecost 로그·트레이스 저장, 이미지 레이어 Pull |
+| SQS | Interface | 워커 Pod의 큐 메시지 수신/발신 |
+| Secrets Manager | Interface | ESO의 Secret 동기화 |
+| ECR API | Interface | 이미지 메타데이터 조회 |
+| ECR DKR | Interface | 이미지 레이어 Pull |
+
+> Interface Endpoint는 Private App Subnet에 생성. SG는 VPC CIDR + Pod CIDR (100.64.0.0/16) 443 포트만 허용.
+
+### 3.7 Client VPN
+
+관리자가 Private 서브넷 리소스(RDS, Redis, EKS API Private Endpoint)에 접근하기 위한 OpenVPN 기반 Client VPN Endpoint가 구성되어 있다.
+
+```
+Client VPN:
+  - 클라이언트 CIDR: 172.16.0.0/22
+  - 인증: 인증서 기반 (mutual TLS)
+  - Split Tunnel: 활성화 (VPC 대역만 VPN 경유, 나머지 로컬 인터넷 직접)
+  - 연결 대상: Private App Subnet A (10.20.11.0/24)
+  - 허용 대상: VPC 전체 (10.20.0.0/16)
+```
+
+### 3.8 보안 그룹 구성
+
+| 보안 그룹 | 주요 Inbound | 목적 |
+|---|---|---|
+| EKS Node SG | 노드↔노드 All, Control Plane→노드 443/10250 | 워커 노드 통신 |
+| EKS Cluster SG | AWS 관리 (EKS 자동 생성) | Control Plane ↔ 노드 |
+| VPC Endpoint SG | VPC CIDR + Pod CIDR → 443 | Interface Endpoint 접근 |
+| VPN SG | VPN 클라이언트 → All Egress | Client VPN |
+
+> Prod에서는 Bastion 직접 접근 불허. RDS/Redis 작업은 EKS Job 또는 Client VPN + kubectl exec 경유.
+
+### 3.9 WAF 구성
+
+CloudFront 앞단에 WAFv2 WebACL이 적용된다 (scope: CLOUDFRONT, us-east-1).
+
+```text
+규칙 1 (priority 10): AWSManagedRulesCommonRuleSet — OWASP Top 10 기본 차단
+규칙 2 (priority 20): RateLimitByIP — IP당 요청 수 초과 시 제한
+  (cloudfront_waf_rate_limit 변수로 조정, 기본값은 terraform.tfvars 확인)
+```
 
 ---
 
@@ -173,363 +309,188 @@ AWS WAF Rules:
 |---|---|
 | 클러스터 이름 | `utterai-prod-eks` |
 | Kubernetes 버전 | `1.31` |
-| Control Plane Endpoint | Public (VPN 준비 완료, Private-only 전환 예정) |
+| Control Plane Endpoint | Public + Private 모두 활성 |
+| 인증 모드 | `API_AND_CONFIG_MAP` |
 
-> Client VPN (OpenVPN)이 구현되어 있어 VPN 경유 kubectl이 동작 중. `endpoint_public_access = false` 전환은 팀 전체 확인 후 진행 예정. 상세: [`docs/prod/eks-private-endpoint.md`](./eks-private-endpoint.md)
+> Control Plane은 현재 Public Endpoint 활성 상태. Client VPN이 구성되어 VPN 경유 kubectl 접근 가능. Private-only 전환 상세: [`docs/prod/eks-private-endpoint.md`](./eks-private-endpoint.md)
 
-### 4.2 Namespace 구성
+### 4.2 EKS Addons
 
-Dev와 동일한 Namespace 구조를 사용한다. 환경 분리는 Namespace가 아닌 AWS 계정 수준에서 이루어진다.
+EKS Managed Addon으로 관리되며, Terraform `modules/eks`에서 선언한다.
 
-| Namespace | 용도 |
-|---|---|
-| `utterai-api` | 외부 트래픽을 받는 백엔드 REST API |
-| `utterai-ai-api` | 클러스터 내부 전용 AI 처리 API |
-| `utterai-ai-cpu` | CPU 기반 음성 전처리 워커 |
-| `utterai-ai-gpu` | GPU 기반 ML/LLM 추론 워커 |
-| `utterai-batch` | RAG 문서 ingest 배치 워커 |
-| `utterai-observability` | OpenTelemetry Collector 등 모니터링 스택 |
+| Addon | 버전 | 주요 설정 |
+|---|---|---|
+| `vpc-cni` | v1.18.1-eksbuild.1 | Custom Networking ON, Prefix Delegation ON, NetworkPolicy ON |
+| `coredns` | EKS 기본 | system 노드 Ready 이후 배포 |
+| `kube-proxy` | EKS 기본 | — |
+| `aws-ebs-csi-driver` | EKS 기본 | IRSA: ebs-csi-role |
 
-### 4.3 NodeGroup 구성
+### 4.3 Namespace 구성
 
-안정적인 워크로드(System, API)는 EKS Managed NodeGroup으로, 동적 워크로드(CPU/GPU Worker)는 Karpenter NodePool로 관리하는 **하이브리드 구조**를 사용한다.
+| Namespace | 용도 | 노드 배치 |
+|---|---|---|
+| `kube-system` | CoreDNS, kube-proxy, vpc-cni, ebs-csi, nvidia-device-plugin | system 노드 |
+| `ingress-system` | AWS Load Balancer Controller | system 노드 |
+| `argocd` | GitOps 배포 (GitHub → EKS) | system 노드 |
+| `external-secrets` | External Secrets Operator | system 노드 |
+| `karpenter` | Karpenter Controller (노드 프로비저닝) | system 노드 |
+| `keda` | KEDA Operator + Metrics Adapter | system 노드 |
+| `monitoring` | Prometheus, Grafana, Alertmanager, Loki, Promtail, Tempo, Kubecost, OTel Collector, OpenSearch, Data Prepper | system 노드 |
+| `utterai-prod-api` | Backend API (Blue/Green 배포) | api 노드 |
+| `utterai-ai-cpu` | CPU 기반 음성 전처리 + 리포트 분석 워커 | cpu-worker 노드 (Spot) |
+| `utterai-ai-batch` | RAG 문서 ingest 배치 워커 | batch-worker 노드 (Spot) |
+| `utterai-ai-gpu` | GPU 기반 ML 추론 워커 | gpu 노드 (Spot) |
 
-| NodeGroup | 관리 방식 | 인스턴스 타입 | 노드 수 | 용도 |
-|---|---|---|---:|---|
-| `prod-system-nodegroup` | EKS Managed NodeGroup | `t3.medium` (On-Demand) | 2 ~ 4 | CoreDNS, ALB Controller, Karpenter |
-| `api` NodePool | Karpenter NodePool + HPA | `t3.medium` | 동적 | 백엔드 API Pod (MNG 비활성화) |
-| `cpu-worker` NodePool | Karpenter NodePool + KEDA | `m5/m5a/m6i/m6a xlarge` | 0 ~ 10 | AI CPU 처리 (Spot + On-Demand) |
-| `gpu` NodePool | Karpenter NodePool + KEDA | `g4dn/g5 xlarge~2xlarge` | 0 ~ 4 | AI GPU 처리 (Spot + On-Demand) |
+### 4.4 NodeGroup / NodePool 구성
 
-> System NodeGroup: On-Demand, 상시 실행 (desired 2 / min 2 / max 4)
+**Managed NodeGroup (고정 상시 운영)**
+
+| NodeGroup | 인스턴스 | Capacity | taint | 용도 |
+|---|---|---|---|---|
+| `utterai-prod-system` | 가변 (Terraform 변수) | ON_DEMAND | `CriticalAddonsOnly=true:NoSchedule` | 플랫폼 컴포넌트 전용 |
+| `utterai-prod-api` | 가변 (Terraform 변수) | ON_DEMAND | `dedicated=api:NoSchedule` | Backend API (Karpenter 이전 레거시) |
+| `utterai-prod-worker` | 가변 (Terraform 변수) | ON_DEMAND | — | AI Worker CPU (Karpenter 이전 레거시) |
+| `utterai-prod-gpu` | g4dn/g5 | ON_DEMAND | `dedicated=ai-gpu:NoSchedule`, `nvidia.com/gpu=true:NoSchedule` | GPU 추론 (AL2023 NVIDIA AMI) |
+
+**Karpenter NodePool (동적 프로비저닝)**
+
+| NodePool | 인스턴스 패밀리 | Capacity | taint | 상한 |
+|---|---|---|---|---|
+| `platform` | t3/t3a medium/large | ON_DEMAND | — | cpu 16, mem 32Gi |
+| `system` | t3/t3a medium/large | ON_DEMAND | `CriticalAddonsOnly=true:NoSchedule` | cpu 16, mem 32Gi |
+| `api` | t3 medium | ON_DEMAND + Spot | `dedicated=api:NoSchedule` | cpu 32, mem 64Gi |
+| `cpu-worker` | m5/m5a/m6i/m6a xlarge | **Spot 우선** | `dedicated=worker:NoSchedule` | cpu 32, mem 64Gi |
+| `batch-worker` | c5/c6i/c6a/m5/m6i large·xlarge | **Spot 우선** | `dedicated=worker:NoSchedule` | cpu 32, mem 64Gi |
+| `gpu` | g4dn/g5 xlarge·2xlarge | **Spot 우선** | `dedicated=ai-gpu:NoSchedule`, `nvidia.com/gpu=true:NoSchedule` | cpu 32, mem 128Gi |
+
+### 4.5 Backend API — Blue/Green 배포
+
+```
+GitHub Actions (backend-bluegreen-promote.yaml)
+  │
+  ├── 1. 새 이미지를 Blue(또는 Green) Deployment에 적용
+  ├── 2. 해당 색상 Pod가 모두 Ready 될 때까지 대기
+  ├── 3. utterai-api-active Service의 selector를 Blue↔Green으로 전환
+  └── 4. 이전 색상 Deployment는 scale-down (backend-bluegreen-scale-down.yaml)
+
+배포 무결성:
+  - topologySpreadConstraints: AZ 간 Pod 분산 (maxSkew=1)
+  - podAntiAffinity: 동일 노드에 같은 색상 Pod 배치 금지
+  - PodDisruptionBudget: minAvailable=1 (항상 최소 1개 유지)
+  - initContainer: alembic upgrade head (DB 마이그레이션 자동 수행)
+  - readinessProbe: /health/ready 성공 시에만 트래픽 수신
+```
+
+### 4.6 KEDA — SQS 기반 Pod 오토스케일링
+
+KEDA Operator가 SQS 메시지 수를 폴링하여 Worker Deployment의 replica 수를 조정한다. KEDA 자체는 IRSA로 SQS 메시지 수를 조회하고, 실제 SQS 소비는 각 워커 Pod의 IRSA로 처리한다.
+
+```
+SQS 큐 메시지 증가
+  └──▶ KEDA Operator (keda namespace, IRSA: keda-role → SQS GetQueueAttributes)
+          └──▶ ScaledObject → Deployment replica 수 증가
+                  └──▶ 새 Pod Pending (노드 부족)
+                          └──▶ Karpenter가 감지 → EC2 기동 (섹션 4.7)
+```
+
+**ScaledObject 매핑 — 실제 설정**
+
+| ScaledObject | Namespace | 대상 Deployment | 트리거 큐 | queueLength | min/max |
+|---|---|---|---|---|---|
+| `utterai-cpu-worker-scaledobject` | `utterai-ai-cpu` | `utterai-cpu-worker` | audio-preprocess-queue | 5 | 1 / 10 |
+| `utterai-cpu-worker-scaledobject` | `utterai-ai-cpu` | `utterai-cpu-worker` | report-analysis-queue | 5 | 1 / 10 |
+| `utterai-batch-worker-scaledobject` | `utterai-ai-batch` | `utterai-batch-worker` | rag-ingest-queue | 가변 | 0 / N |
+| `utterai-ml-gpu-worker-scaledobject` | `utterai-ai-gpu` | `utterai-ml-gpu-worker` | gpu-inference-queue | 가변 | 0 / N |
+
+> `queueLength=5`: 큐에 메시지 5개당 Pod 1개 스케일. CPU Worker는 항상 최소 1개 유지(minReplicaCount=1). GPU Worker는 큐가 비면 0으로 수렴(비용 절감).
 >
-> API/CPU/GPU Worker: KEDA가 Pod 수 조정 → Karpenter가 노드 프로비저닝 (섹션 4.5, 4.6 참고)
+> `cooldownPeriod`: CPU Worker 300초, GPU Worker 600초 (scaleDown 안정화 포함).
 
-### 4.4 HPA (Horizontal Pod Autoscaler)
+### 4.7 Karpenter — 노드 오토스케일링
 
-```yaml
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: backend-api-hpa
-  namespace: utterai-api
-spec:
-  minReplicas: 1
-  maxReplicas: 4
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 70
-  behavior:
-    scaleUp:
-      stabilizationWindowSeconds: 60
-    scaleDown:
-      stabilizationWindowSeconds: 300
+Karpenter는 `Pending` Pod의 리소스 요청과 taint/toleration을 분석해 적합한 NodePool에서 EC2를 프로비저닝한다.
+
+```
+[스케일 아웃]
+  Pod Pending (노드 부족)
+    └──▶ Karpenter Controller (karpenter namespace, IRSA: karpenter-role → EC2/IAM/SQS)
+            └──▶ NodePool 매칭 (taint, resource request 기준)
+                    └──▶ EC2 런치 (~60초)
+                            └──▶ 노드 Ready → Pod 스케줄링
+
+[스케일 인]
+  노드가 비거나 활용률 저하
+    └──▶ Karpenter Disruption (consolidationPolicy 기준)
+            ├── cpu-worker/api: WhenEmptyOrUnderutilized, 5~30초 후 종료
+            └── gpu: WhenEmpty, 10분 후 종료 (GPU 작업 안정성 고려)
+
+[Spot 인터럽션 처리]
+  EC2 Spot 인터럽션 발생
+    └──▶ EventBridge (EC2 Spot Interruption Warning / Instance State-change)
+            └──▶ SQS 인터럽션 큐 (utterai-prod-eks, 보존 300초)
+                    └──▶ Karpenter Controller
+                            └──▶ 해당 노드 Cordon + Drain
+                                    └──▶ SQS 가시성 타임아웃으로 미완료 메시지 자동 재처리
 ```
 
-### 4.5 KEDA (Queue-based Autoscaler)
+### 4.8 SQS 처리 파이프라인 전체 흐름
 
-KEDA는 SQS 큐 메시지 수를 기반으로 Worker Pod를 자동 스케일링한다.
-
-```text
-동작 방식:
-1. 분석 요청이 audio-preprocess-queue에 쌓임
-2. KEDA가 큐 메시지 수를 감지 → CPU Worker Pod 수 증가
-3. CPU Worker가 전처리 후 gpu-inference-queue로 전달
-4. KEDA가 gpu-inference-queue 감지 → GPU Worker Pod 수 증가
-5. 큐가 비워지면 Pod 수 자동 감소 → Karpenter가 노드 종료
 ```
+[사용자 - 음성 업로드]
+  └──▶ Backend API
+          └──▶ S3 raw-audio 업로드
+          └──▶ audio-preprocess-queue 메시지 전송
+                  └──▶ KEDA 감지 → cpu-worker Pod 스케일
+                          └──▶ cpu-worker (utterai-ai-cpu)
+                                  ├── S3 raw-audio 다운로드
+                                  ├── 전처리 수행
+                                  └──▶ gpu-inference-queue 메시지 전송
+                                          └──▶ KEDA 감지 → gpu-worker Pod 스케일
+                                                  └──▶ gpu-worker (utterai-ai-gpu)
+                                                          ├── 화자분리 + ASR
+                                                          └──▶ report-analysis-queue 메시지 전송
+                                                                  └──▶ cpu-worker
+                                                                          ├── Bedrock 리포트 생성
+                                                                          └──▶ S3 reports 저장
 
-**CPU Worker ScaledObject**
-
-```yaml
-apiVersion: keda.sh/v1alpha1
-kind: ScaledObject
-metadata:
-  name: cpu-worker-scaledobject
-  namespace: utterai-ai-cpu
-spec:
-  scaleTargetRef:
-    name: utterai-cpu-worker
-  minReplicaCount: 1
-  maxReplicaCount: 10
-  cooldownPeriod: 300
-  triggers:
-    - type: aws-sqs-queue
-      authenticationRef:
-        name: keda-aws-pod-identity
-        kind: ClusterTriggerAuthentication
-      metadata:
-        queueURL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-prod-audio-preprocess-queue"
-        queueLength: "5"
-        activationQueueLength: "0"
-        awsRegion: ap-northeast-2
-        identityOwner: operator
-    - type: aws-sqs-queue
-      authenticationRef:
-        name: keda-aws-pod-identity
-        kind: ClusterTriggerAuthentication
-      metadata:
-        queueURL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-prod-report-analysis-queue"
-        queueLength: "5"
-        activationQueueLength: "0"
-        awsRegion: ap-northeast-2
-        identityOwner: operator
+[논문 수집 - Lambda, 월 1회]
+  EventBridge cron(0 0 1 * ? *)
+    └──▶ Lambda (utterai-prod-collect-papers, Python 3.12)
+            ├── Bedrock 호출 (논문 분류)
+            ├── S3 rag-ingest 저장
+            └──▶ rag-ingest-queue
+                    └──▶ KEDA 감지 → batch-worker Pod 스케일
+                            └──▶ batch-worker (utterai-ai-batch)
+                                    └── RAG ingest 처리
 ```
-
-**GPU Worker ScaledObject**
-
-```yaml
-apiVersion: keda.sh/v1alpha1
-kind: ScaledObject
-metadata:
-  name: gpu-worker-scaledobject
-  namespace: utterai-ai-gpu
-spec:
-  scaleTargetRef:
-    name: utterai-ml-gpu-worker
-  minReplicaCount: 0
-  maxReplicaCount: 4
-  cooldownPeriod: 600
-  advanced:
-    horizontalPodAutoscalerConfig:
-      behavior:
-        scaleDown:
-          stabilizationWindowSeconds: 600
-  triggers:
-    - type: aws-sqs-queue
-      authenticationRef:
-        name: keda-aws-pod-identity
-        kind: ClusterTriggerAuthentication
-      metadata:
-        queueURL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-prod-gpu-inference-queue"
-        queueLength: "1"
-        activationQueueLength: "0"
-        awsRegion: ap-northeast-2
-        identityOwner: operator
-```
-
-> `queueLength` 값은 큐 메시지 1개당 Pod 1개를 의미. GPU 워커는 1개 작업에 메모리 점유가 크므로 1로 설정
-
-### 4.6 Karpenter (Node Provisioner)
-
-Karpenter는 KEDA가 생성한 `Pending` Pod를 감지해 EC2를 자동 프로비저닝한다.
-
-```text
-KEDA + Karpenter 전체 흐름:
-
-[SQS 메시지 증가]
-  → KEDA: Worker Pod replicas 증가
-  → 새 Pod가 Pending (노드 부족)
-  → Karpenter: Pod 리소스 요청 확인 → EC2 기동 (~60초)
-  → Pod가 새 노드에 스케줄링 → 분석 시작
-
-[SQS 큐 소진]
-  → KEDA: Worker Pod replicas 0으로 감소
-  → 노드가 빈 상태
-  → Karpenter: 30초 후 EC2 종료 → 과금 중단
-```
-
-**CPU Worker NodePool**
-
-```yaml
-apiVersion: karpenter.sh/v1
-kind: NodePool
-metadata:
-  name: cpu-worker
-spec:
-  template:
-    metadata:
-      labels:
-        role: worker
-        workload: cpu-worker
-    spec:
-      nodeClassRef:
-        group: karpenter.k8s.aws
-        kind: EC2NodeClass
-        name: default
-      taints:
-        - key: dedicated
-          value: worker
-          effect: NoSchedule
-      requirements:
-        - key: karpenter.sh/capacity-type
-          operator: In
-          values: ["spot", "on-demand"]
-        - key: kubernetes.io/arch
-          operator: In
-          values: ["amd64"]
-        - key: karpenter.k8s.aws/instance-family
-          operator: In
-          values: ["m5", "m5a", "m6i", "m6a"]
-        - key: karpenter.k8s.aws/instance-size
-          operator: In
-          values: ["xlarge"]
-  limits:
-    cpu: "32"
-    memory: "64Gi"
-  disruption:
-    consolidationPolicy: WhenEmptyOrUnderutilized
-    consolidateAfter: 5m
-```
-
-**GPU Worker NodePool**
-
-```yaml
-apiVersion: karpenter.sh/v1
-kind: NodePool
-metadata:
-  name: gpu
-spec:
-  template:
-    metadata:
-      labels:
-        role: gpu
-        workload: ai-gpu
-    spec:
-      nodeClassRef:
-        group: karpenter.k8s.aws
-        kind: EC2NodeClass
-        name: gpu
-      taints:
-        - key: dedicated
-          value: ai-gpu
-          effect: NoSchedule
-        - key: nvidia.com/gpu
-          value: "true"
-          effect: NoSchedule
-      requirements:
-        - key: karpenter.sh/capacity-type
-          operator: In
-          values: ["spot", "on-demand"]
-        - key: kubernetes.io/arch
-          operator: In
-          values: ["amd64"]
-        - key: karpenter.k8s.aws/instance-family
-          operator: In
-          values: ["g4dn", "g5"]
-        - key: karpenter.k8s.aws/instance-size
-          operator: In
-          values: ["xlarge", "2xlarge"]
-  limits:
-    cpu: "32"
-    memory: "128Gi"
-  disruption:
-    consolidationPolicy: WhenEmpty
-    consolidateAfter: 10m
-```
-
-> Karpenter 자체는 `prod-system-nodegroup`에 배포. Karpenter가 죽으면 Worker 노드 프로비저닝이 불가능하므로 System NodeGroup의 가용성이 전제되어야 한다
-
-### 4.7 PodDisruptionBudget
-
-롤링 배포 중 서비스 중단을 방지한다.
-
-```yaml
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: backend-api-pdb
-  namespace: utterai-api
-spec:
-  minAvailable: 2
-  selector:
-    matchLabels:
-      app: backend-api
-```
-
-### 4.8 백엔드 Deployment
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: backend-api
-  namespace: utterai-api
-spec:
-  replicas: 3
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
-  template:
-    spec:
-      serviceAccountName: backend-api-sa
-      affinity:
-        podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchExpressions:
-                  - key: app
-                    operator: In
-                    values: [backend-api]
-              topologyKey: kubernetes.io/hostname
-      containers:
-        - name: backend-api
-          image: {ECR_URI}/utterai-backend:{git_sha}
-          ports:
-            - containerPort: 8080
-          resources:
-            requests:
-              cpu: 250m
-              memory: 512Mi
-            limits:
-              cpu: 1000m
-              memory: 1Gi
-          readinessProbe:
-            httpGet:
-              path: /health/ready
-              port: 8080
-            initialDelaySeconds: 15
-            periodSeconds: 10
-          livenessProbe:
-            httpGet:
-              path: /health/live
-              port: 8080
-            initialDelaySeconds: 30
-            periodSeconds: 20
-```
-
-> `podAntiAffinity`로 Pod를 서로 다른 노드에 분산 배치
 
 ### 4.9 IRSA 구성
 
-IRSA는 총 **8개** 역할로 구성된다. 플랫폼 컴포넌트용 3개와 애플리케이션 워크로드용 5개로 나뉜다.
+Pod의 ServiceAccount에 IAM Role ARN을 annotation으로 지정하면, EKS OIDC Provider가 토큰을 검증해 STS AssumeRoleWithWebIdentity를 수행한다. Pod는 AWS SDK를 통해 자동으로 임시 자격증명을 획득한다.
 
-**플랫폼 컴포넌트 (3개)**
+**플랫폼 컴포넌트**
 
-| IAM Role | Namespace / SA | 허용 권한 |
+| IAM Role | Namespace / SA | 주요 권한 |
 |---|---|---|
-| `utterai-prod-lbc-irsa-role` | `ingress-system/aws-load-balancer-controller` | ALB/NLB 관리 전체 (LBC 공식 정책) |
-| `utterai-prod-cluster-autoscaler-role` | `kube-system/cluster-autoscaler` | AutoScaling Group DescribeSet, SetDesiredCapacity 등 |
-| `utterai-prod-eso-irsa-role` | `external-secrets/external-secrets` | `secretsmanager:GetSecretValue`, `DescribeSecret` (`utterai-prod/*`) |
+| `utterai-prod-lbc-role` | `ingress-system/aws-load-balancer-controller` | ALB/NLB 전체 관리 |
+| `utterai-prod-eso-role` | `external-secrets/external-secrets` | Secrets Manager GetSecretValue (`utterai-prod/*`) |
+| `utterai-prod-karpenter-role` | `karpenter/karpenter` | EC2 프로비저닝, SQS 인터럽션 큐 수신 |
+| `utterai-prod-keda-role` | `keda/keda-operator` | SQS GetQueueAttributes (메시지 수 조회) |
+| `utterai-prod-loki-role` | `monitoring/loki` | S3 utterai-prod-loki Read/Write |
+| `utterai-prod-tempo-role` | `monitoring/tempo` | S3 utterai-prod-tempo Read/Write |
+| `utterai-prod-kubecost-role` | `monitoring/kubecost` | S3 utterai-prod-kubecost Read/Write |
+| `utterai-prod-ebs-csi-role` | `kube-system/ebs-csi-controller-sa` | EBS 볼륨 생성/연결 |
 
-> ESO Role이 핵심. 모든 ExternalSecret은 ESO IRSA를 통해 Secrets Manager에 접근하므로 개별 Pod Role에는 Secrets Manager 권한이 없어도 된다.
+**애플리케이션 워크로드**
 
-**애플리케이션 워크로드 (5개)**
-
-| IAM Role | Namespace / SA | 허용 권한 요약 |
+| IAM Role | Namespace / SA | 주요 권한 |
 |---|---|---|
-| `utterai-prod-api-irsa-role` | `utterai-api/utterai-api-sa` | S3(raw-audio, reports) GetObject/PutObject, SQS(audio-preprocess) SendMessage, CloudWatch PutMetricData |
-| `utterai-prod-ai-api-irsa-role` | `utterai-ai-api/utterai-ai-api-sa` | SQS(audio-preprocess) SendMessage, GetQueueAttributes |
-| `utterai-prod-ai-cpu-irsa-role` | `utterai-ai-cpu/utterai-cpu-worker-sa` | SQS(audio-preprocess) Receive/Delete, SQS(gpu-inference) Send, SQS(report-analysis) Receive/Delete, S3(raw-audio) GetObject/PutObject, S3(reports) PutObject, Bedrock InvokeModel |
-| `utterai-prod-ai-ml-gpu-irsa-role` | `utterai-ai-gpu/utterai-ml-gpu-worker-sa` | SQS(gpu-inference) Receive/Delete, SQS(report-analysis) Send, S3(raw-audio) GetObject/PutObject |
-| `utterai-prod-batch-irsa-role` | `utterai-batch/utterai-batch-worker-sa` | SQS(rag-ingest) Receive/Delete, S3(reports) PutObject, Secrets Manager GetSecretValue (db-password) |
+| `utterai-prod-api-role` | `utterai-prod-api/utterai-api-sa` | S3(raw-audio, reports, transcripts), SQS(audio-preprocess Send) |
+| `utterai-prod-cpu-worker-role` | `utterai-ai-cpu/utterai-cpu-worker-sa` | SQS Receive/Delete (audio-preprocess, report-analysis), SQS Send (gpu-inference), S3, Bedrock |
+| `utterai-prod-gpu-worker-role` | `utterai-ai-gpu/utterai-ml-gpu-worker-sa` | SQS Receive/Delete (gpu-inference), SQS Send (report-analysis), S3 |
+| `utterai-prod-batch-worker-role` | `utterai-ai-batch/utterai-batch-worker-sa` | SQS Receive/Delete (rag-ingest), S3(rag-ingest), Bedrock |
 
-```yaml
-# 예시: 백엔드 API ServiceAccount
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: utterai-api-sa
-  namespace: utterai-api
-  annotations:
-    eks.amazonaws.com/role-arn: arn:aws:iam::{ACCOUNT_ID}:role/utterai-prod-api-irsa-role
-```
+> ESO Role이 Secrets Manager 접근을 대리한다. 각 워커 Pod IRSA에는 Secrets Manager 권한이 없고, ESO가 K8s Secret으로 동기화한 값을 envFrom으로 주입받는다.
 
 ---
 
