@@ -84,6 +84,8 @@ spec:
             secretKeyRef:
               name: ai-worker-secret
               key: DB_NAME
+        - name: ASR_MODEL_NAME
+          value: large-v3-turbo
         - name: LOG_LEVEL
           value: DEBUG
         - name: OTEL_SERVICE_NAME
