@@ -36,6 +36,53 @@ data:
             "current": {},
             "hide": 0,
             "label": "Namespace"
+          },
+          {
+            "name": "logs_datasource",
+            "type": "datasource",
+            "query": "loki",
+            "current": {},
+            "hide": 0,
+            "label": "Loki"
+          },
+          {
+            "name": "log_namespace",
+            "type": "query",
+            "datasource": { "type": "loki", "uid": "${logs_datasource}" },
+            "query": "label_values(namespace)",
+            "regex": "utterai-.*",
+            "multi": true,
+            "includeAll": true,
+            "allValue": "utterai-.*",
+            "current": {},
+            "hide": 0,
+            "label": "Log Namespace"
+          },
+          {
+            "name": "log_pod",
+            "type": "query",
+            "datasource": { "type": "loki", "uid": "${logs_datasource}" },
+            "query": "label_values({namespace=~\"$log_namespace\"}, pod)",
+            "multi": true,
+            "includeAll": true,
+            "allValue": ".*",
+            "refresh": 2,
+            "current": {},
+            "hide": 0,
+            "label": "Pod"
+          },
+          {
+            "name": "log_container",
+            "type": "query",
+            "datasource": { "type": "loki", "uid": "${logs_datasource}" },
+            "query": "label_values({namespace=~\"$log_namespace\", pod=~\"$log_pod\"}, container)",
+            "multi": true,
+            "includeAll": true,
+            "allValue": ".*",
+            "refresh": 2,
+            "current": {},
+            "hide": 0,
+            "label": "Container"
           }
         ]
       },
@@ -390,10 +437,41 @@ data:
               "refId": "A"
             }
           ]
+        },
+        {
+          "type": "row",
+          "title": "Pod Logs",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 52 },
+          "collapsed": false,
+          "id": 40
+        },
+        {
+          "type": "logs",
+          "title": "Pod Logs — $log_namespace / $log_pod",
+          "id": 41,
+          "gridPos": { "h": 15, "w": 24, "x": 0, "y": 53 },
+          "datasource": { "type": "loki", "uid": "${logs_datasource}" },
+          "options": {
+            "dedupStrategy": "none",
+            "enableLogDetails": true,
+            "prettifyLogMessage": false,
+            "showLabels": false,
+            "showTime": true,
+            "sortOrder": "Descending",
+            "wrapLogMessage": true
+          },
+          "targets": [
+            {
+              "expr": "{namespace=~\"$log_namespace\", pod=~\"$log_pod\", container=~\"$log_container\"}",
+              "legendFormat": "",
+              "refId": "A",
+              "queryType": "range"
+            }
+          ]
         }
       ],
       "schemaVersion": 38,
-      "version": 1,
+      "version": 2,
       "links": [
         {
           "title": "Tempo Traces",
