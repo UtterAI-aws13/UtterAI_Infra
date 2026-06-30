@@ -232,7 +232,7 @@ resource "aws_lambda_permission" "collect_papers_eventbridge" {
 # ECR 레포는 dev/03-services에서 관리한다 (계정 공유 리소스).
 
 locals {
-  kure_lambda_name    = "utterai-${var.environment}-kure-retriever"
+  kure_lambda_name         = "utterai-${var.environment}-kure-retriever"
   kure_retriever_image_uri = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.aws_region}.amazonaws.com/utterai-kure-retriever:latest"
 }
 
