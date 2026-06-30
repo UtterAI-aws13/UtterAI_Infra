@@ -14,6 +14,10 @@ output "redis_endpoint" {
   value = module.redis.primary_endpoint
 }
 
+output "redis_auth_token_secret_arn" {
+  value = module.redis.auth_token_secret_arn
+}
+
 # ── S3 ───────────────────────────────────────────────────────────────────────
 
 output "raw_audio_bucket_name" {
@@ -24,8 +28,12 @@ output "raw_audio_bucket_arn" {
   value = module.s3.raw_audio_bucket_arn
 }
 
-output "documents_bucket_name" {
-  value = module.s3.documents_bucket_name
+output "template_bucket_name" {
+  value = module.s3.template_bucket_name
+}
+
+output "rag_ingest_bucket_name" {
+  value = module.s3.rag_ingest_bucket_name
 }
 
 output "reports_bucket_name" {
@@ -68,14 +76,12 @@ output "ai_worker_secret_arn" {
   value = module.secrets.ai_worker_secret_arn
 }
 
-output "gpu_worker_secret_arn" {
-  value = module.secrets.gpu_worker_secret_arn
+output "rag_ingest_secret_arn" {
+  value = module.secrets.rag_ingest_secret_arn
 }
 
-# ── ECR ──────────────────────────────────────────────────────────────────────
-
-output "ecr_repository_urls" {
-  value = module.ecr.repository_urls
+output "gpu_worker_secret_arn" {
+  value = module.secrets.gpu_worker_secret_arn
 }
 
 # ── Lambda: KURE retriever ────────────────────────────────────────────────────
@@ -89,10 +95,6 @@ output "kure_retriever_lambda_arn" {
 
 output "backend_api_role_arn" {
   value = module.irsa.api_role_arn
-}
-
-output "ai_api_role_arn" {
-  value = module.irsa.ai_api_role_arn
 }
 
 output "ai_cpu_worker_role_arn" {
@@ -118,3 +120,36 @@ output "cluster_autoscaler_role_arn" {
 output "eso_role_arn" {
   value = module.irsa.eso_role_arn
 }
+
+output "kubecost_bucket_name" {
+  value = module.s3.kubecost_bucket_name
+}
+
+output "kubecost_role_arn" {
+  value = module.irsa.kubecost_role_arn
+}
+
+output "loki_bucket_name" {
+  value = module.s3.loki_bucket_name
+}
+
+output "loki_role_arn" {
+  value = module.irsa.loki_role_arn
+}
+
+output "tempo_bucket_name" {
+  value = module.s3.tempo_bucket_name
+}
+
+output "tempo_role_arn" {
+  value = module.irsa.tempo_role_arn
+}
+
+output "karpenter_role_arn" {
+  value = module.irsa.karpenter_role_arn
+}
+
+output "keda_role_arn" {
+  value = module.irsa.keda_role_arn
+}
+
