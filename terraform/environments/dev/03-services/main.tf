@@ -236,7 +236,151 @@ resource "aws_lambda_permission" "collect_papers_eventbridge" {
 module "ecr" {
   source = "../../../modules/ecr"
 
-  repository_names = ["utterai-backend", "utterai-ai-cpu", "utterai-ai-gpu"]
+  repository_names = ["utterai-backend", "utterai-ai-cpu", "utterai-ai-gpu", "utterai-kure-retriever"]
+}
+
+# ── Lambda: KURE-v1 검색 (AgentCore search_evidence tool) ────────────────────
+# AgentCore Gateway → Lambda → KURE-v1 임베딩 → pgvector 검색 → 근거 반환
+# 핸들러 소스: UtterAI_AI/lambda/kure_retriever/handler.py
+
+locals {
+  kure_lambda_name = "utterai-${var.environment}-kure-retriever"
+}
+
+resource "aws_security_group" "kure_retriever_lambda" {
+  name        = "${local.kure_lambda_name}-sg"
+  description = "KURE retriever Lambda - pgvector RDS 접근용"
+  vpc_id      = data.terraform_remote_state.network.outputs.vpc_id
+
+  egress {
+    description = "RDS PostgreSQL"
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "HTTPS (Hugging Face 모델 다운로드, Secrets Manager)"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${local.kure_lambda_name}-sg"
+  }
+}
+
+# Lambda SG에서 RDS SG로 인그레스 허용
+resource "aws_security_group_rule" "rds_allow_kure_lambda" {
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  security_group_id        = module.rds.security_group_id
+  source_security_group_id = aws_security_group.kure_retriever_lambda.id
+  description              = "KURE retriever Lambda → RDS"
+}
+
+resource "aws_iam_role" "kure_retriever_lambda" {
+  name = "${local.kure_lambda_name}-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+# VPC 접근 + CloudWatch 로그 기본 권한
+resource "aws_iam_role_policy_attachment" "kure_retriever_vpc_execution" {
+  role       = aws_iam_role.kure_retriever_lambda.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
+resource "aws_iam_role_policy" "kure_retriever_permissions" {
+  role = aws_iam_role.kure_retriever_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "RdsSecret"
+        Effect   = "Allow"
+        Action   = "secretsmanager:GetSecretValue"
+        Resource = module.rds.db_secret_arn
+      },
+      {
+        Sid      = "EcrImagePull"
+        Effect   = "Allow"
+        Action   = ["ecr:GetDownloadUrlForLayer", "ecr:BatchGetImage", "ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+    ]
+  })
+}
+
+resource "aws_lambda_function" "kure_retriever" {
+  function_name = local.kure_lambda_name
+  role          = aws_iam_role.kure_retriever_lambda.arn
+  package_type  = "Image"
+  # 초기 배포 후 CI/CD가 이미지를 업데이트하므로 image_uri 변경은 Terraform 외부에서 관리한다.
+  image_uri = "${module.ecr.repository_urls["utterai-kure-retriever"]}:latest"
+
+  memory_size = 3008 # KURE-v1 모델 로딩을 위해 3 GB
+  timeout     = 30
+
+  vpc_config {
+    subnet_ids         = data.terraform_remote_state.network.outputs.private_app_subnet_ids
+    security_group_ids = [aws_security_group.kure_retriever_lambda.id]
+  }
+
+  environment {
+    variables = {
+      DB_HOST        = module.rds.endpoint
+      DB_PORT        = "5432"
+      DB_NAME        = "utterai"
+      RDS_SECRET_ARN = module.rds.db_secret_arn
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [image_uri]
+  }
+}
+
+# 5분마다 Lambda warmup — cold start 방지 (비용 $0)
+resource "aws_cloudwatch_event_rule" "kure_retriever_warmup" {
+  name                = "${local.kure_lambda_name}-warmup"
+  description         = "KURE retriever Lambda cold start 방지 (5분 주기)"
+  schedule_expression = "rate(5 minutes)"
+}
+
+resource "aws_cloudwatch_event_target" "kure_retriever_warmup" {
+  rule  = aws_cloudwatch_event_rule.kure_retriever_warmup.name
+  arn   = aws_lambda_function.kure_retriever.arn
+  input = jsonencode({ query = "ping", top_k = 1 })
+}
+
+resource "aws_lambda_permission" "kure_retriever_warmup" {
+  statement_id  = "AllowWarmupEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.kure_retriever.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.kure_retriever_warmup.arn
+}
+
+# AgentCore Gateway가 Lambda를 tool로 호출할 수 있도록 허용
+resource "aws_lambda_permission" "kure_retriever_agentcore" {
+  statement_id  = "AllowAgentCoreGateway"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.kure_retriever.function_name
+  principal     = "bedrock.amazonaws.com"
 }
 
 # ── IRSA ─────────────────────────────────────────────────────────────────────

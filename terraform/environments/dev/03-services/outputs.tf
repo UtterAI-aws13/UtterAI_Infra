@@ -86,6 +86,13 @@ output "ecr_repository_urls" {
   value = module.ecr.repository_urls
 }
 
+# ── Lambda: KURE retriever ────────────────────────────────────────────────────
+
+output "kure_retriever_lambda_arn" {
+  description = "AgentCore Gateway tool 등록 시 사용할 Lambda ARN"
+  value       = aws_lambda_function.kure_retriever.arn
+}
+
 # ── IRSA ─────────────────────────────────────────────────────────────────────
 
 output "backend_api_role_arn" {
