@@ -249,7 +249,7 @@ locals {
 
 resource "aws_security_group" "kure_retriever_lambda" {
   name        = "${local.kure_lambda_name}-sg"
-  description = "KURE retriever Lambda - pgvector RDS 접근용"
+  description = "KURE retriever Lambda - pgvector RDS access"
   vpc_id      = data.terraform_remote_state.network.outputs.vpc_id
 
   egress {
@@ -261,7 +261,7 @@ resource "aws_security_group" "kure_retriever_lambda" {
   }
 
   egress {
-    description = "HTTPS (Hugging Face 모델 다운로드, Secrets Manager)"
+    description = "HTTPS (model download, Secrets Manager)"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
