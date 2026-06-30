@@ -281,7 +281,7 @@ resource "aws_security_group_rule" "rds_allow_kure_lambda" {
   protocol                 = "tcp"
   security_group_id        = module.rds.security_group_id
   source_security_group_id = aws_security_group.kure_retriever_lambda.id
-  description              = "KURE retriever Lambda → RDS"
+  description              = "KURE retriever Lambda to RDS"
 }
 
 resource "aws_iam_role" "kure_retriever_lambda" {
@@ -357,7 +357,7 @@ resource "aws_lambda_function" "kure_retriever" {
 # 5분마다 Lambda warmup — cold start 방지 (비용 $0)
 resource "aws_cloudwatch_event_rule" "kure_retriever_warmup" {
   name                = "${local.kure_lambda_name}-warmup"
-  description         = "KURE retriever Lambda cold start 방지 (5분 주기)"
+  description         = "KURE retriever Lambda warmup - prevent cold start (every 5 min)"
   schedule_expression = "rate(5 minutes)"
 }
 
