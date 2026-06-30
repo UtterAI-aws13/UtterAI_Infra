@@ -57,9 +57,10 @@ module "redis" {
 module "s3" {
   source = "../../../modules/s3"
 
-  project_name    = var.project_name
-  environment     = var.environment
-  frontend_domain = var.frontend_domain
+  project_name          = var.project_name
+  environment           = var.environment
+  frontend_domain       = var.frontend_domain
+  allowed_extra_origins = var.allowed_extra_origins
 }
 
 # ── SQS ──────────────────────────────────────────────────────────────────────

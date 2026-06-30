@@ -34,3 +34,9 @@ variable "frontend_domain" {
   type        = string
   description = "CloudFront domain for S3 CORS (set after CloudFront is created)"
 }
+
+variable "allowed_extra_origins" {
+  type        = list(string)
+  description = "Additional allowed CORS origins (e.g. localhost for local dev)"
+  default     = []
+}
