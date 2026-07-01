@@ -91,10 +91,12 @@ jobs:
           if [ "$TARGET_ENV" = "dev" ]; then
             TARGET_BRANCH="main"
             OVERLAY_PATH="k8s/apps/ai-worker/overlays/dev"
+            AI_SERVICE_OVERLAY_PATH="k8s/apps/ai-service/overlays/dev"
             EXPECTED_TAG_PREFIX="dev-"
           elif [ "$TARGET_ENV" = "prod" ]; then
             TARGET_BRANCH="main"
             OVERLAY_PATH="k8s/apps/ai-worker/overlays/prod"
+            AI_SERVICE_OVERLAY_PATH="k8s/apps/ai-service/overlays/prod"
             EXPECTED_TAG_PREFIX="prod-"
           else
             echo "target_env는 dev 또는 prod만 허용합니다."
@@ -153,6 +155,7 @@ jobs:
             echo "target_env=$TARGET_ENV"
             echo "target_branch=$TARGET_BRANCH"
             echo "overlay_path=$OVERLAY_PATH"
+            echo "ai_service_overlay_path=$AI_SERVICE_OVERLAY_PATH"
             echo "image_tag=$IMAGE_TAG"
             echo "ecr_registry=$ECR_REGISTRY"
             echo "cpu_repository=$CPU_REPOSITORY"
@@ -230,12 +233,56 @@ jobs:
             grep -A8 "name: utterai-ai-gpu" "$KUSTOMIZATION_FILE"
           fi
 
+      # ai-service는 ai-worker(cpu-worker)와 정확히 같은 utterai-ai-cpu 이미지를
+      # command 오버라이드 없이 그대로 띄운다 (report-chat HTTP API). GPU 이미지는
+      # 쓰지 않으므로 CPU 태그 갱신에만 연동한다. 오버레이가 아직 없는 상태로 이
+      # 워크플로우가 먼저 실행될 일은 없다고 가정하되, 혹시 몰라 존재 여부를 확인한다.
+      - name: Update ai-service Kustomize image
+        if: steps.meta.outputs.build_cpu == 'true'
+        env:
+          AI_SERVICE_OVERLAY_PATH: ${{ steps.meta.outputs.ai_service_overlay_path }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+          ECR_REGISTRY: ${{ steps.meta.outputs.ecr_registry }}
+          CPU_REPOSITORY: ${{ steps.meta.outputs.cpu_repository }}
+        run: |
+          KUSTOMIZATION_FILE="$AI_SERVICE_OVERLAY_PATH/kustomization.yaml"
+          export KUSTOMIZATION_FILE
+
+          if [ ! -f "$KUSTOMIZATION_FILE" ]; then
+            echo "$KUSTOMIZATION_FILE 없음 — ai-service 오버레이가 아직 없어서 건너뜁니다."
+            exit 0
+          fi
+
+          ruby -ryaml -e '
+            file = ENV.fetch("KUSTOMIZATION_FILE")
+            data = YAML.load_file(file)
+            images = data.fetch("images")
+
+            images.each do |image|
+              if image["name"] == "utterai-ai-cpu"
+                image["newName"] = "#{ENV.fetch("ECR_REGISTRY")}/#{ENV.fetch("CPU_REPOSITORY")}"
+                image["newTag"] = ENV.fetch("IMAGE_TAG")
+              end
+            end
+
+            File.write(file, data.to_yaml)
+          '
+
+          echo "Updated $KUSTOMIZATION_FILE"
+          grep -A8 "name: utterai-ai-cpu" "$KUSTOMIZATION_FILE"
+
       - name: Validate Kustomize render
         env:
           OVERLAY_PATH: ${{ steps.meta.outputs.overlay_path }}
+          AI_SERVICE_OVERLAY_PATH: ${{ steps.meta.outputs.ai_service_overlay_path }}
         run: |
           kubectl kustomize "$OVERLAY_PATH" > /tmp/ai-worker-rendered.yaml
           grep "image:" /tmp/ai-worker-rendered.yaml
+
+          if [ -f "$AI_SERVICE_OVERLAY_PATH/kustomization.yaml" ]; then
+            kubectl kustomize "$AI_SERVICE_OVERLAY_PATH" > /tmp/ai-service-rendered.yaml
+            grep "image:" /tmp/ai-service-rendered.yaml
+          fi
 
       - name: Create GitOps update pull request
         env:
@@ -259,6 +306,11 @@ jobs:
           - GPU image tag: \`$IMAGE_TAG\`"
           fi
 
+          if [ "$BUILD_CPU" = "true" ] && [ -d k8s/apps/ai-service/overlays ]; then
+            UPDATED_IMAGES="$UPDATED_IMAGES
+          - ai-service (report-chat) image tag: \`$IMAGE_TAG\` (ai-worker CPU와 동일 이미지 공유)"
+          fi
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
@@ -269,6 +321,9 @@ jobs:
 
           git checkout -b "$UPDATE_BRANCH"
           git add k8s/apps/ai-worker/overlays
+          if [ -d k8s/apps/ai-service/overlays ]; then
+            git add k8s/apps/ai-service/overlays
+          fi
           git commit -m "ci(ai): update $TARGET_ENV image tag to $IMAGE_TAG"
           git push origin "$UPDATE_BRANCH"
 
