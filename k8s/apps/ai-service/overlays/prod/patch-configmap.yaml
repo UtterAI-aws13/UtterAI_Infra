@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: utterai-ai-service-config
+data:
+  APP_ENV: "prod"
+  LOG_LEVEL: "INFO"
+  S3_BUCKET_AUDIO: "utterai-prod-raw-audio"
+  S3_BUCKET_RAG: "utterai-prod-rag-ingest"
+  SQS_AUDIO_PREPROCESS_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-prod-audio-preprocess-queue"
+  SQS_RAG_INGEST_QUEUE_URL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-prod-rag-ingest-queue"
+  OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=prod,team=utterai,service=ai-service"

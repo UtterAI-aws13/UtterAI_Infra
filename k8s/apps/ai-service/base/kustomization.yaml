@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# AI HTTP 서비스(/ai/report-chat, /ai/rag, /internal/ai/analysis-jobs) 배포에
+# 필요한 최소 Kubernetes 리소스입니다. cpu-worker/ml-gpu-worker/batch-worker와
+# 달리 SQS를 폴링하지 않고 BE의 동기 HTTP 호출(report-chat)에 응답하는
+# 클러스터 내부 전용 서비스라 Ingress는 두지 않습니다.
+# 환경별 값은 overlays/dev, overlays/prod에서 patch로 분리합니다.
+resources:
+  - serviceaccount.yaml
+  - rolebinding.yaml
+  - configmap.yaml
+  - external-secret.yaml
+  - service.yaml

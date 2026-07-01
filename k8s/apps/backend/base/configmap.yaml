@@ -29,6 +29,9 @@ data:
   PRESIGNED_URL_EXPIRE_SECONDS: '900'
   SQS_AUDIO_PREPROCESS_QUEUE_URL: PLACEHOLDER
   SQS_REPORT_ANALYSIS_QUEUE_URL: PLACEHOLDER
+  # utterai-ai-service 네임스페이스/서비스명은 dev/prod 오버레이가 동일하게 쓰므로
+  # 여기서 바로 실값을 넣는다 (오버레이별 patch-configmap.yaml에서 덮어쓰지 않음).
+  AI_SERVICE_BASE_URL: http://utterai-ai-service.utterai-ai-service.svc.cluster.local:8000
   OTEL_SERVICE_NAME: backend
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.utterai-observability.svc.cluster.local:4318
   OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
