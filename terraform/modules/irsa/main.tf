@@ -210,6 +210,49 @@ resource "aws_iam_role_policy" "ai_cpu" {
   })
 }
 
+# ── AI Service (report-chat HTTP API) IRSA ────────────────────────────────────
+# cpu-worker와 같은 이미지·RAG DB를 쓰지만 SQS를 폴링하지 않는 동기 HTTP 서비스라
+# sqs:*/s3:*는 필요 없다. Bedrock 호출만 있으면 된다 — RAG pgvector 조회는 IAM이
+# 아니라 ExternalSecret으로 주입된 DB 자격증명(네트워크 계층 인증)으로 이뤄진다.
+
+resource "aws_iam_role" "ai_service" {
+  name = "${local.prefix}-ai-service-irsa-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = var.oidc_provider_arn }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "${local.oidc_aud}" = "sts.amazonaws.com"
+          "${local.oidc_sub}" = "system:serviceaccount:utterai-ai-service:utterai-ai-service-sa"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "ai_service" {
+  name = "${local.prefix}-ai-service-policy"
+  role = aws_iam_role.ai_service.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"]
+        Resource = [
+          "arn:aws:bedrock:*::foundation-model/*",
+          "arn:aws:bedrock:${var.aws_region}:${var.aws_account_id}:inference-profile/*",
+        ]
+      },
+    ]
+  })
+}
+
 # ── AI ML GPU Worker IRSA ─────────────────────────────────────────────────────
 
 resource "aws_iam_role" "ai_ml_gpu" {

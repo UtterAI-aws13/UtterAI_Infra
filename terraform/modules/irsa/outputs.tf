@@ -14,6 +14,10 @@ output "ai_cpu_role_arn" {
   value = aws_iam_role.ai_cpu.arn
 }
 
+output "ai_service_role_arn" {
+  value = aws_iam_role.ai_service.arn
+}
+
 output "ai_ml_gpu_role_arn" {
   value = aws_iam_role.ai_ml_gpu.arn
 }
