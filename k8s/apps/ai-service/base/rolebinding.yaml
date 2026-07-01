@@ -1,0 +1,27 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: utterai-ai-service-role
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - configmaps
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: utterai-ai-service-rolebinding
+subjects:
+- kind: ServiceAccount
+  name: utterai-ai-service-sa
+roleRef:
+  kind: Role
+  name: utterai-ai-service-role
+  apiGroup: rbac.authorization.k8s.io

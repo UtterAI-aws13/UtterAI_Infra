@@ -1,0 +1,103 @@
+---
+# 기본 차단: 모든 ingress/egress 거부 후 아래 정책으로 명시적 허용
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: utterai-ai-service
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+---
+# backend(utterai-api) → ai-service Pod (8000). 외부 노출 없음(ClusterIP 전용).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-backend
+  namespace: utterai-ai-service
+spec:
+  podSelector:
+    matchLabels:
+      app: utterai-ai-service
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: utterai-api
+    ports:
+    - port: 8000
+---
+# Prometheus scrape (monitoring namespace → 8000)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-prometheus
+  namespace: utterai-ai-service
+spec:
+  podSelector:
+    matchLabels:
+      app: utterai-ai-service
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: monitoring
+    ports:
+    - port: 8000
+---
+# DNS 조회
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-dns
+  namespace: utterai-ai-service
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+---
+# AWS 서비스 (Bedrock, S3, Secrets Manager VPC Endpoint) + RDS(RAG pgvector)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-aws
+  namespace: utterai-ai-service
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - ports:
+    - port: 443   # Bedrock, S3, Secrets Manager (VPC Endpoint), Hugging Face Hub
+    - port: 5432  # RDS PostgreSQL (RAG pgvector)
+---
+# OTEL collector (utterai-observability:4318)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-otel
+  namespace: utterai-ai-service
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: utterai-observability
+    ports:
+    - port: 4318
+      protocol: TCP

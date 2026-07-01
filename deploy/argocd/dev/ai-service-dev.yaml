@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: utterai-ai-service-dev
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: utterai-ai-service
+    app.kubernetes.io/part-of: utterai
+    utterai.io/environment: dev
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/UtterAI-aws13/UtterAI_Infra
+    targetRevision: main
+    path: k8s/apps/ai-service/overlays/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: utterai-ai-service
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

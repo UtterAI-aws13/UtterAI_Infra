@@ -1,0 +1,22 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: utterai-ai-service-config
+data:
+  APP_ENV: "PLACEHOLDER"
+  LOG_LEVEL: "PLACEHOLDER"
+  AWS_REGION: "ap-northeast-2"
+  BEDROCK_REGION: "ap-northeast-2"
+  BEDROCK_REPORT_MODEL_ID: "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+  S3_BUCKET_AUDIO: "PLACEHOLDER"
+  S3_BUCKET_RAG: "PLACEHOLDER"
+  SQS_AUDIO_PREPROCESS_QUEUE_URL: "PLACEHOLDER"
+  SQS_RAG_INGEST_QUEUE_URL: "PLACEHOLDER"
+  OTEL_SERVICE_NAME: "ai-service"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.utterai-observability.svc.cluster.local:4318"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+  OTEL_METRICS_EXPORTER: "otlp"
+  OTEL_TRACES_EXPORTER: "otlp"
+  OTEL_LOGS_EXPORTER: "none"
+  OTEL_RESOURCE_ATTRIBUTES: "PLACEHOLDER"

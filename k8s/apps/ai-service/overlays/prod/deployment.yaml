@@ -1,0 +1,118 @@
+---
+# cpu-worker NodePool(taint dedicated=worker, spot)을 공유한다 — 이유는
+# overlays/dev/deployment.yaml 상단 주석 참고.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: utterai-ai-service
+  namespace: utterai-ai-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: utterai-ai-service
+  template:
+    metadata:
+      labels:
+        app: utterai-ai-service
+    spec:
+      serviceAccountName: utterai-ai-service-sa
+      nodeSelector:
+        workload: cpu-worker
+      tolerations:
+      - key: dedicated
+        operator: Equal
+        value: worker
+        effect: NoSchedule
+      terminationGracePeriodSeconds: 90
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: utterai-ai-service
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      containers:
+      - name: ai-service
+        image: "utterai-ai-cpu:prod-placeholder"
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: utterai-ai-service-config
+        env:
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: ai-service-secret
+              key: HF_TOKEN
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: ai-service-secret
+              key: DB_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ai-service-secret
+              key: DB_PASSWORD
+        - name: DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: ai-service-secret
+              key: DB_HOST
+        - name: DB_PORT
+          valueFrom:
+            secretKeyRef:
+              name: ai-service-secret
+              key: DB_PORT
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: ai-service-secret
+              key: DB_NAME
+        - name: HF_HOME
+          value: /tmp/huggingface
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+          readOnlyRootFilesystem: true
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - "/bin/sh"
+              - "-c"
+              - sleep 5
+        volumeMounts:
+          - name: tmp
+            mountPath: /tmp
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: '2'
+            memory: 3Gi
+        readinessProbe:
+          httpGet:
+            path: "/health/ready"
+            port: 8000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: "/health/live"
+            port: 8000
+          initialDelaySeconds: 20
+          periodSeconds: 20
+          failureThreshold: 3

@@ -103,6 +103,10 @@ output "ai_cpu_worker_role_arn" {
   value = module.irsa.ai_cpu_role_arn
 }
 
+output "ai_service_role_arn" {
+  value = module.irsa.ai_service_role_arn
+}
+
 output "ai_ml_gpu_worker_role_arn" {
   value = module.irsa.ai_ml_gpu_role_arn
 }
