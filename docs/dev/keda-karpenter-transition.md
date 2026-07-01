@@ -1,8 +1,18 @@
 # Dev 환경 — CA+HPA → KEDA+Karpenter 전환 가이드
 
 > 작성일: 2026-06-17  
-> 대상 환경: `dev` (utterai-dev-eks)  
+> 최종 업데이트: 2026-07-01  
+> 대상 환경: `dev` (utterai-dev-eks) — **prod도 동일하게 전환 완료**  
 > 관련 PR: [#180](https://github.com/UtterAI-aws13/UtterAI_Infra/pull/180)
+
+## 전환 완료 현황
+
+| 환경 | cluster_autoscaler | keda | karpenter | ScaledObjects | NodePool |
+|------|-------------------|------|-----------|---------------|---------|
+| dev | ❌ 비활성화 | ✅ | ✅ | ✅ (cpu/batch/gpu-worker) | ✅ (platform/system/api/cpu-worker/batch-worker/gpu) |
+| prod | ❌ 비활성화 | ✅ | ✅ | ✅ (cpu/batch/gpu-worker, maxReplica=10) | ✅ (동일 구성) |
+
+prod ScaledObject 차이: cpu-worker `maxReplicaCount=10`, `cooldownPeriod=300s` (dev는 3/120s)
 
 ---
 
@@ -108,12 +118,13 @@ metadata:
   name: keda-aws-pod-identity
 spec:
   podIdentity:
-    provider: aws   # KEDA가 워커 Pod의 IRSA를 그대로 사용 (별도 KEDA IRSA 불필요)
+    provider: aws
 ```
 
-`identityOwner: pod` 설정과 조합해 KEDA가 각 워커 Pod의 ServiceAccount IRSA 권한으로  
-SQS 큐 깊이를 조회한다. 워커 Pod IRSA에 이미 `sqs:GetQueueAttributes`가 부여돼 있으므로  
-별도 KEDA 전용 IAM 역할이 필요 없다.
+ScaledObject의 `identityOwner: operator` 설정과 조합해 **KEDA operator 자체 IRSA**로 SQS 큐 깊이를 조회한다.  
+`modules/irsa/main.tf`에 `aws_iam_role.keda` (`{prefix}-keda-irsa-role`)가 별도로 존재하며,  
+`sqs:GetQueueAttributes` 권한이 audio-preprocess / gpu-inference / report-analysis / rag-ingest 큐에 부여돼 있다.  
+각 환경의 `04-addons/main.tf`에서 `keda_irsa_role_arn` 으로 전달한다.
 
 ### 3.4 EC2NodeClass 패치 (dev 전용)
 
@@ -210,6 +221,7 @@ resource "helm_release" "karpenter" {
 |------|--------|------|
 | `cluster_autoscaler_enabled` | `true` | false로 설정 시 CA 제거 |
 | `keda_enabled` | `false` | KEDA Helm 설치 여부 |
+| `keda_irsa_role_arn` | `""` | KEDA operator IRSA ARN (`{prefix}-keda-irsa-role`) |
 | `karpenter_enabled` | `false` | Karpenter Helm 설치 여부 |
 | `karpenter_irsa_role_arn` | `""` | Karpenter controller IRSA ARN |
 
@@ -250,6 +262,7 @@ module "eks_addons" {
 
 ## 5. 적용 순서
 
+> **현재 상태**: dev/prod 모두 전환 완료. 아래 적용 순서는 신규 환경 참고용.  
 > **전제**: `aws configure` 완료, `kubectl` 컨텍스트 = `utterai-dev-eks`
 
 ### Step 1. EKS 노드 SG에 Karpenter 태그 추가
@@ -327,17 +340,19 @@ kubectl apply -k k8s/apps/ai-worker/overlays/dev
 | 네임스페이스 | `utterai-ai-cpu` | `utterai-batch` | `utterai-ai-gpu` |
 | 모니터 큐 | audio-preprocess<br>report-analysis | rag-ingest | gpu-inference |
 | `queueLength` (Pod 1개당) | 5 | 3 | 1 |
-| `activationQueueLength` | - | 1 | 1 |
-| `minReplicaCount` | 0 | 0 | 0 |
+| `activationQueueLength` | - | 0 | 0 |
+| `minReplicaCount` | 1 | 0 | 0 |
 | `maxReplicaCount` | 3 | 2 | 1 |
 | `cooldownPeriod` | 120s | 120s | 300s |
 | scaleDown stabilization | - | - | 300s |
+| `scaleOnInFlight` | - | - | true |
+| `identityOwner` | operator | operator | operator |
 
 **스케일 계산 예시** (cpu-worker, 100개 메시지 투입):  
 `ceil(100 / 5) = 20 Pod 요청` → maxReplicaCount=3 에 의해 3 Pod로 제한
 
-**`activationQueueLength`**: 큐 메시지가 이 값 이상일 때만 0→1 스케일아웃.  
-gpu-worker/batch-worker는 1로 설정해 메시지 1개만 있어도 즉시 기동.
+**`activationQueueLength: 0`**: 큐에 메시지가 1개라도 있으면 즉시 0→1 스케일아웃.  
+**`scaleOnInFlight: true`** (gpu-worker): 처리 중인 메시지도 큐 깊이로 계산해 조기 스케일아웃 방지.
 
 ---
 
@@ -345,16 +360,21 @@ gpu-worker/batch-worker는 1로 설정해 메시지 1개만 있어도 즉시 기
 
 전체 NodePool 정의: `k8s/platform/karpenter/base/nodepools.yaml`
 
-| NodePool | 인스턴스 패밀리 | Capacity Type | 주요 용도 | consolidateAfter |
-|----------|----------------|---------------|-----------|-----------------|
-| `system` | t3/t3a medium·large | on-demand | 시스템 컴포넌트 | 30s |
-| `api` | c5/c6i large·xlarge | spot+on-demand | API 서버 | 30s |
-| `worker` | c5/m5/c6i xlarge·2xlarge | spot+on-demand | CPU/Batch 워커 | 30s |
-| `gpu` | g4dn/g5 xlarge·2xlarge | on-demand | GPU 워커 | 5m |
+| NodePool | 인스턴스 패밀리 | Capacity Type | 주요 용도 | consolidationPolicy | consolidateAfter |
+|----------|----------------|---------------|-----------|---------------------|-----------------|
+| `platform` | t3/t3a medium·large | on-demand | 플랫폼 일반 워크로드 | WhenEmptyOrUnderutilized | 30s |
+| `system` | t3/t3a medium·large | on-demand | 시스템 컴포넌트 (CriticalAddonsOnly taint) | WhenEmptyOrUnderutilized | 30s |
+| `api` | t3 medium | spot+on-demand | API 서버 (dedicated=api taint) | WhenEmptyOrUnderutilized | 30s |
+| `cpu-worker` | m5/m5a/m6i/m6a xlarge | spot+on-demand | CPU 오디오/리포트 워커 (dedicated=worker taint) | WhenEmptyOrUnderutilized | 5m |
+| `batch-worker` | c5/c6i/c6a/m5/m6i large·xlarge | spot+on-demand | RAG ingest 배치 워커 (dedicated=worker taint) | WhenEmptyOrUnderutilized | 30s |
+| `gpu` | g4dn/g5 xlarge·2xlarge | spot+on-demand | GPU 추론 워커 (dedicated=ai-gpu taint) | WhenEmpty | 10m |
 
-- **worker NodePool**: Spot 우선 → 비용 절감, 인터럽션 시 자동 재프로비저닝
-- **gpu NodePool**: `WhenEmpty` 정책 → GPU Pod가 없으면 5분 후 노드 회수  
-  (GPU 인스턴스는 비싸므로 scaleDown stabilization과 조합해 무분별한 회수 방지)
+> **worker → cpu-worker + batch-worker 분리**: 초기 `worker` 단일 NodePool을 역할별로 분리.  
+> cpu-worker는 작업 특성상 5분 대기 후 회수, batch-worker는 Spot pool 다양화를 위해 인스턴스 패밀리를 5종으로 확장.
+
+- **cpu-worker / batch-worker**: Spot 우선 → SQS 메시지 중단 시 visibility timeout으로 자동 재처리
+- **gpu NodePool**: `WhenEmpty` 정책 → GPU Pod가 없으면 10분 후 노드 회수  
+  (ScaledObject scaleDown stabilization 300s와 조합해 불필요한 GPU 노드 재기동 방지)
 
 **EC2NodeClass 패치 (dev 전용)**:
 
