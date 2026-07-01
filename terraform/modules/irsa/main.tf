@@ -649,7 +649,7 @@ resource "aws_iam_role_policy" "loki" {
 # ── Tempo IRSA ────────────────────────────────────────────────────────────────
 
 resource "aws_iam_role" "tempo" {
-  count = var.tempo_bucket_arn != "" ? 1 : 0
+  count = var.tempo_enabled ? 1 : 0
 
   name = "${local.prefix}-tempo-irsa-role"
 
@@ -670,7 +670,7 @@ resource "aws_iam_role" "tempo" {
 }
 
 resource "aws_iam_role_policy" "tempo" {
-  count = var.tempo_bucket_arn != "" ? 1 : 0
+  count = var.tempo_enabled ? 1 : 0
 
   name = "${local.prefix}-tempo-policy"
   role = aws_iam_role.tempo[0].id

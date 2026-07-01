@@ -275,6 +275,35 @@ resource "helm_release" "kube_prometheus_stack" {
 
 # ── Kubecost ─────────────────────────────────────────────────────────────────
 
+resource "kubernetes_namespace" "kubecost" {
+  count = var.kubecost_enabled ? 1 : 0
+
+  metadata {
+    name = var.kubecost_namespace
+  }
+}
+
+resource "kubernetes_secret" "kubecost_federated_storage" {
+  count = var.kubecost_enabled && var.kubecost_s3_bucket_name != "" ? 1 : 0
+
+  metadata {
+    name      = "kubecost-federated-storage"
+    namespace = var.kubecost_namespace
+  }
+
+  data = {
+    "federated-store.yaml" = <<-EOT
+      type: S3
+      config:
+        bucket: ${var.kubecost_s3_bucket_name}
+        endpoint: s3.${var.aws_region}.amazonaws.com
+        region: ${var.aws_region}
+    EOT
+  }
+
+  depends_on = [kubernetes_namespace.kubecost]
+}
+
 resource "helm_release" "kubecost" {
   count = var.kubecost_enabled ? 1 : 0
 
@@ -283,13 +312,17 @@ resource "helm_release" "kubecost" {
   chart            = "cost-analyzer"
   version          = var.kubecost_chart_version
   namespace        = var.kubecost_namespace
-  create_namespace = true
+  create_namespace = false
   cleanup_on_fail  = true
   wait             = true
   wait_for_jobs    = true
   timeout          = 600
 
-  depends_on = [helm_release.kube_prometheus_stack]
+  depends_on = [
+    helm_release.kube_prometheus_stack,
+    kubernetes_namespace.kubecost,
+    kubernetes_secret.kubecost_federated_storage,
+  ]
 
   values = [
     yamlencode({
@@ -402,29 +435,6 @@ resource "helm_release" "kubecost" {
       }
     })
   ]
-}
-
-# ── Kubecost Federated Storage Secret ────────────────────────────────────────
-
-resource "kubernetes_secret" "kubecost_federated_storage" {
-  count = var.kubecost_enabled && var.kubecost_s3_bucket_name != "" ? 1 : 0
-
-  metadata {
-    name      = "kubecost-federated-storage"
-    namespace = var.kubecost_namespace
-  }
-
-  data = {
-    "federated-store.yaml" = <<-EOT
-      type: S3
-      config:
-        bucket: ${var.kubecost_s3_bucket_name}
-        endpoint: s3.${var.aws_region}.amazonaws.com
-        region: ${var.aws_region}
-    EOT
-  }
-
-  depends_on = [helm_release.kubecost]
 }
 
 # ── Grafana Tempo ────────────────────────────────────────────────────────────

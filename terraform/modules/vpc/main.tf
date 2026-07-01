@@ -184,7 +184,7 @@ resource "aws_route_table_association" "private_data" {
 
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.this.id
-  service_name      = "com.amazonaws.ap-northeast-2.s3"
+  service_name      = "com.amazonaws.${var.aws_region}.s3"
   vpc_endpoint_type = "Gateway"
   route_table_ids   = [aws_route_table.private_app.id]
 
@@ -195,7 +195,7 @@ resource "aws_vpc_endpoint" "s3" {
 
 resource "aws_vpc_endpoint" "sqs" {
   vpc_id              = aws_vpc.this.id
-  service_name        = "com.amazonaws.ap-northeast-2.sqs"
+  service_name        = "com.amazonaws.${var.aws_region}.sqs"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = aws_subnet.private_app[*].id
   security_group_ids  = [aws_security_group.vpc_endpoint.id]
@@ -208,7 +208,7 @@ resource "aws_vpc_endpoint" "sqs" {
 
 resource "aws_vpc_endpoint" "secretsmanager" {
   vpc_id              = aws_vpc.this.id
-  service_name        = "com.amazonaws.ap-northeast-2.secretsmanager"
+  service_name        = "com.amazonaws.${var.aws_region}.secretsmanager"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = aws_subnet.private_app[*].id
   security_group_ids  = [aws_security_group.vpc_endpoint.id]
@@ -221,7 +221,7 @@ resource "aws_vpc_endpoint" "secretsmanager" {
 
 resource "aws_vpc_endpoint" "ecr_api" {
   vpc_id              = aws_vpc.this.id
-  service_name        = "com.amazonaws.ap-northeast-2.ecr.api"
+  service_name        = "com.amazonaws.${var.aws_region}.ecr.api"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = aws_subnet.private_app[*].id
   security_group_ids  = [aws_security_group.vpc_endpoint.id]
@@ -234,7 +234,7 @@ resource "aws_vpc_endpoint" "ecr_api" {
 
 resource "aws_vpc_endpoint" "ecr_dkr" {
   vpc_id              = aws_vpc.this.id
-  service_name        = "com.amazonaws.ap-northeast-2.ecr.dkr"
+  service_name        = "com.amazonaws.${var.aws_region}.ecr.dkr"
   vpc_endpoint_type   = "Interface"
   subnet_ids          = aws_subnet.private_app[*].id
   security_group_ids  = [aws_security_group.vpc_endpoint.id]

@@ -98,3 +98,9 @@ variable "loki_bucket_arn" {
 variable "tempo_bucket_arn" {
   type = string
 }
+
+variable "tempo_enabled" {
+  type        = bool
+  description = "Whether to create Tempo IRSA resources."
+  default     = true
+}

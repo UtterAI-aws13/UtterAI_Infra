@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana-agent-lab-tokyo
+  namespace: monitoring
+  annotations:
+    # DevOps Agent 연결용 Grafana는 public internet 노출보다 internal ALB를 우선합니다.
+    alb.ingress.kubernetes.io/scheme: internal
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/group.name: grafana-agent-lab-tokyo
+    # TODO: 도쿄(ap-northeast-1) 리전의 ACM 인증서 ARN으로 교체합니다.
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-1:000000000000:certificate/TODO_GRAFANA_AGENT_LAB_TOKYO_CERT
+spec:
+  ingressClassName: alb
+  rules:
+    # TODO: Route 53 private hosted zone 또는 내부 DNS에 연결할 host로 교체합니다.
+    - host: grafana-agent-lab-tokyo.internal.utterai.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                # kube-prometheus-stack fullnameOverride가 utterai-monitoring이면 Grafana service는 보통 이 이름입니다.
+                # 실제 이름은 kubectl get svc -n monitoring | grep -i grafana 로 확인합니다.
+                name: utterai-monitoring-grafana
+                port:
+                  number: 80
