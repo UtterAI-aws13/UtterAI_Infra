@@ -83,12 +83,14 @@ spec:
               - "-c"
               - sleep 5
         resources:
+          # prod에서 1Gi/3Gi로 OOMKilled 발생해 상향함(prod deployment.yaml 참고).
+          # dev는 트래픽이 적어 prod만큼은 아니지만 여유를 둔다.
           requests:
             cpu: 250m
-            memory: 512Mi
+            memory: 1Gi
           limits:
             cpu: '1'
-            memory: 2Gi
+            memory: 4Gi
         readinessProbe:
           httpGet:
             path: "/health/ready"
