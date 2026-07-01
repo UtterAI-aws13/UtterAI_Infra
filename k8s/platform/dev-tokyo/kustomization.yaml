@@ -9,3 +9,5 @@ resources:
 
 patches:
   - path: patch-cluster-secret-store.yaml
+  - path: patch-ec2nodeclass-default.yaml
+  - path: patch-ec2nodeclass-gpu.yaml
