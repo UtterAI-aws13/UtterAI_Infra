@@ -6,3 +6,6 @@ resources:
   - ../observability/overlays/dev-tokyo
   - ../image-pruner/base
   - ../karpenter/overlays/dev
+
+patches:
+  - path: patch-cluster-secret-store.yaml
