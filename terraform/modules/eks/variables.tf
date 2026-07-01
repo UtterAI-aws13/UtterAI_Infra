@@ -22,6 +22,12 @@ variable "private_app_subnet_ids" {
   type = list(string)
 }
 
+variable "vpc_cni_custom_networking_enabled" {
+  type        = bool
+  description = "Whether to enable AWS VPC CNI custom networking. Keep true for environments that create ENIConfig before nodes depend on it."
+  default     = true
+}
+
 variable "system_node_instance_type" {
   type = string
 }
