@@ -7,7 +7,7 @@ metadata:
   name: utterai-ai-service
   namespace: utterai-ai-service
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: utterai-ai-service
@@ -96,12 +96,15 @@ spec:
           - name: tmp
             mountPath: /tmp
         resources:
+          # cpu-worker(같은 KURE-v1 임베딩 모델 로드)는 requests 4Gi/limits 8Gi를 쓴다.
+          # 여기는 1Gi/3Gi로 너무 적게 줬다가 실사용 중 OOMKilled 발생(exit 137) —
+          # cpu-worker와 비슷한 수준으로 올린다.
           requests:
             cpu: 500m
-            memory: 1Gi
+            memory: 2Gi
           limits:
             cpu: '2'
-            memory: 3Gi
+            memory: 6Gi
         readinessProbe:
           httpGet:
             path: "/health/ready"

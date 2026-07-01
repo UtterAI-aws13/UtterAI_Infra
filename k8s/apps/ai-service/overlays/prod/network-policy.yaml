@@ -11,7 +11,6 @@ spec:
   - Ingress
   - Egress
 ---
-# backend(utterai-api) → ai-service Pod (8000). 외부 노출 없음(ClusterIP 전용).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -27,7 +26,7 @@ spec:
   - from:
     - namespaceSelector:
         matchLabels:
-          kubernetes.io/metadata.name: utterai-api
+          kubernetes.io/metadata.name: utterai-prod-api
     ports:
     - port: 8000
 ---

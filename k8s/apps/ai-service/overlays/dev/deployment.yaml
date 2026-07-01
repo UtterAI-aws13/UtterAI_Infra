@@ -1,15 +1,4 @@
 ---
-# utterai-ai-cpu 이미지를 그대로 재사용한다. Dockerfile.cpu의 기본 CMD가
-# 이미 "uvicorn app.main:app --host 0.0.0.0 --port 8000"이므로 command를
-# 오버라이드하지 않는다 (cpu-worker/ml-gpu-worker/batch-worker만 command로
-# 워커 모듈을 오버라이드해서 쓴다). 전용 노드풀을 새로 만들지 않고 cpu-worker
-# NodePool(taint dedicated=worker, spot m5.xlarge 등)을 그대로 공유한다 —
-# 리소스 요청이 가벼워 여유 용량으로 충분하고, 새 인스턴스 패밀리를 늘리지 않는다.
-#
-# spot 회수 시 in-flight 채팅 요청(BE↔Bedrock 동기 호출, 최대 60s)이 끊기지
-# 않도록 preStop으로 Service에서 빠지는 시간을 벌고, terminationGracePeriodSeconds를
-# 넉넉히 잡아 uvicorn이 진행 중인 요청을 마무리할 시간을 준다. 그래도 끊기는
-# 경우는 BE의 report_chat._call_ai_service()가 연결 실패 시 1회 재시도한다.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -85,10 +74,10 @@ spec:
         resources:
           requests:
             cpu: 250m
-            memory: 512Mi
+            memory: 1Gi
           limits:
             cpu: '1'
-            memory: 2Gi
+            memory: 4Gi
         readinessProbe:
           httpGet:
             path: "/health/ready"
