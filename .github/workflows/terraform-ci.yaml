@@ -23,7 +23,7 @@ jobs:
     name: Terraform Format and Validate
     runs-on: ubuntu-latest
     env:
-      TF_PLUGIN_CACHE_DIR: ${{ runner.temp }}/terraform-plugin-cache
+      TF_PLUGIN_CACHE_DIR: /tmp/terraform-plugin-cache
 
     steps:
       - name: Checkout repository
