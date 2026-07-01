@@ -22,6 +22,8 @@ jobs:
   terraform-check:
     name: Terraform Format and Validate
     runs-on: ubuntu-latest
+    env:
+      TF_PLUGIN_CACHE_DIR: ${{ runner.temp }}/terraform-plugin-cache
 
     steps:
       - name: Checkout repository
@@ -29,6 +31,9 @@ jobs:
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
+
+      - name: Prepare Terraform plugin cache
+        run: mkdir -p "$TF_PLUGIN_CACHE_DIR"
 
       - name: Terraform fmt check
         run: terraform fmt -check -recursive
