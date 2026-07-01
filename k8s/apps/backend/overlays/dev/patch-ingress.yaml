@@ -4,4 +4,4 @@ kind: Ingress
 metadata:
   name: utterai-api-ingress
   annotations:
-    alb.ingress.kubernetes.io/group.name: utterai-dev
+    alb.ingress.kubernetes.io/group.name: utterai-dev-tokyo
