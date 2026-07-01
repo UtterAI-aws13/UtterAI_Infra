@@ -28,6 +28,30 @@ data:
         spike_limit_mib: 64
       attributes/redact:
         actions:
+          - key: prompt
+            action: delete
+          - key: prompt.text
+            action: delete
+          - key: llm.prompt
+            action: delete
+          - key: transcript
+            action: delete
+          - key: transcript.text
+            action: delete
+          - key: soap_note
+            action: delete
+          - key: soap.note
+            action: delete
+          - key: patient
+            action: delete
+          - key: patient.id
+            action: delete
+          - key: patient.name
+            action: delete
+          - key: user_id
+            action: delete
+          - key: user.id
+            action: delete
           - key: http.request.header.authorization
             action: delete
           - key: http.request.header.cookie
@@ -48,6 +72,12 @@ data:
             action: delete
           - key: queue.name
             action: delete
+      filter/phoenix_cpu:
+        error_mode: ignore
+        traces:
+          span:
+            - 'resource.attributes["service.name"] != "cpu-worker"'
+            - 'resource.attributes["phoenix.enabled"] != "true"'
       resource/loki_labels:
         attributes:
           - action: insert
@@ -102,6 +132,8 @@ data:
         endpoint: data-prepper.utterai-observability.svc.cluster.local:21890
         tls:
           insecure: true
+      otlphttp/phoenix:
+        traces_endpoint: http://phoenix.utterai-observability.svc.cluster.local:6006/v1/traces
       loki:
         endpoint: http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push
         default_labels_enabled:
@@ -115,6 +147,10 @@ data:
           receivers: [otlp]
           processors: [memory_limiter, attributes/redact, batch]
           exporters: [otlp/tempo, servicegraph, spanmetrics, otlp/data-prepper]
+        traces/phoenix:
+          receivers: [otlp]
+          processors: [memory_limiter, attributes/redact, filter/phoenix_cpu, batch]
+          exporters: [otlphttp/phoenix]
         metrics:
           receivers: [otlp]
           processors: [memory_limiter, batch]

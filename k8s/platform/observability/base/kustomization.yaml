@@ -4,6 +4,7 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - otel-collector.yaml
+  - phoenix.yaml
   - opensearch.yaml
   - data-prepper.yaml
   - grafana-dashboard-core-metrics.yaml

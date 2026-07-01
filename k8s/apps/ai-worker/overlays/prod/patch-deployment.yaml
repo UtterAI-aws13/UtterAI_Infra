@@ -34,7 +34,9 @@ spec:
             - name: LOG_LEVEL
               value: INFO
             - name: OTEL_RESOURCE_ATTRIBUTES
-              value: deployment.environment=prod,team=utterai
+              value: deployment.environment=prod,team=utterai,phoenix.enabled=true,phoenix.project=utterai-ai-cpu-poc
+            - name: PHOENIX_TRACING_ENABLED
+              value: "true"
             - name: HF_HOME
               value: /tmp/huggingface
           securityContext:
