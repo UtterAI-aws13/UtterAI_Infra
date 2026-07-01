@@ -12,7 +12,7 @@ spec:
   source:
     repoURL: https://github.com/UtterAI-aws13/UtterAI_Infra
     targetRevision: main
-    path: k8s/platform/dev
+    path: k8s/platform/dev-tokyo
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
