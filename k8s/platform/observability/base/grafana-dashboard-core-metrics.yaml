@@ -1,0 +1,363 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: utterai-core-metrics-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/name: utterai-core-metrics-dashboard
+    app.kubernetes.io/part-of: utterai
+data:
+  utterai-core-metrics.json: |
+    {
+      "title": "UtterAI 핵심 운영 지표",
+      "uid": "utterai-core-metrics",
+      "editable": true,
+      "graphTooltip": 1,
+      "refresh": "30s",
+      "schemaVersion": 39,
+      "version": 1,
+      "time": { "from": "now-1h", "to": "now" },
+      "templating": {
+        "list": [
+          {
+            "name": "datasource",
+            "type": "datasource",
+            "query": "prometheus",
+            "current": {},
+            "hide": 0,
+            "label": "Prometheus"
+          }
+        ]
+      },
+      "panels": [
+        {
+          "type": "row",
+          "title": "요약 상태",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+          "id": 1,
+          "collapsed": false
+        },
+        {
+          "type": "bargauge",
+          "title": "Pod 상태 요약",
+          "id": 2,
+          "gridPos": { "h": 6, "w": 8, "x": 0, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 1 },
+                  { "color": "red", "value": 5 }
+                ]
+              }
+            },
+            "overrides": [
+              { "matcher": { "id": "byRegexp", "options": "Running" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+              { "matcher": { "id": "byRegexp", "options": "Pending|Failed|Unknown" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }
+            ]
+          },
+          "options": { "displayMode": "gradient", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"] }, "showUnfilled": true },
+          "targets": [{
+            "expr": "sum by (phase) (kube_pod_status_phase)",
+            "legendFormat": "{{phase}}",
+            "refId": "A"
+          }]
+        },
+        {
+          "type": "stat",
+          "title": "Ready Node 수",
+          "id": 3,
+          "gridPos": { "h": 6, "w": 4, "x": 8, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } } },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area", "textMode": "auto" },
+          "targets": [{
+            "expr": "sum(kube_node_status_condition{condition=\"Ready\",status=\"true\"})",
+            "refId": "A"
+          }]
+        },
+        {
+          "type": "stat",
+          "title": "GPU Worker Pending",
+          "id": 4,
+          "gridPos": { "h": 6, "w": 4, "x": 12, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+          "targets": [{
+            "expr": "sum(kube_pod_status_phase{namespace=\"utterai-ai-gpu\",phase=\"Pending\"})",
+            "refId": "A"
+          }]
+        },
+        {
+          "type": "stat",
+          "title": "OTel Collector 수집 상태",
+          "id": 5,
+          "gridPos": { "h": 6, "w": 4, "x": 16, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } } },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+          "targets": [{
+            "expr": "max(up{job=~\".*otel.*|otel-collector\"})",
+            "refId": "A"
+          }]
+        },
+        {
+          "type": "stat",
+          "title": "최근 5분 분석 Job 생성",
+          "id": 6,
+          "gridPos": { "h": 6, "w": 4, "x": 20, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } } },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+          "targets": [{
+            "expr": "sum(increase(utterai_analysis_jobs_created_total[5m]))",
+            "refId": "A"
+          }]
+        },
+        {
+          "type": "row",
+          "title": "문제 목록",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 },
+          "id": 10,
+          "collapsed": false
+        },
+        {
+          "type": "table",
+          "title": "문제 Pod 목록",
+          "id": 11,
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "custom": { "align": "auto", "displayMode": "color-background" } }, "overrides": [] },
+          "options": { "showHeader": true, "sortBy": [{ "displayName": "Value", "desc": true }] },
+          "targets": [{
+            "expr": "sum by (namespace, phase) (kube_pod_status_phase{phase=~\"Pending|Failed|Unknown\"}) > 0",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          }]
+        },
+        {
+          "type": "table",
+          "title": "CrashLoopBackOff Pod",
+          "id": 12,
+          "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "custom": { "align": "auto", "displayMode": "color-background" } }, "overrides": [] },
+          "options": { "showHeader": true, "sortBy": [{ "displayName": "Value", "desc": true }] },
+          "targets": [{
+            "expr": "sum by (namespace, pod, container, reason) (kube_pod_container_status_waiting_reason{reason=\"CrashLoopBackOff\"}) > 0",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          }]
+        },
+        {
+          "type": "table",
+          "title": "재시작 많은 Pod",
+          "id": 13,
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "custom": { "align": "auto", "displayMode": "color-background" } }, "overrides": [] },
+          "options": { "showHeader": true, "sortBy": [{ "displayName": "Value", "desc": true }] },
+          "targets": [{
+            "expr": "topk(10, sum by (namespace, pod) (increase(kube_pod_container_status_restarts_total[1h])))",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          }]
+        },
+        {
+          "type": "row",
+          "title": "UtterAI 워크로드",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 },
+          "id": 20,
+          "collapsed": false
+        },
+        {
+          "type": "bargauge",
+          "title": "UtterAI Pod 상태",
+          "id": 21,
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 17 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 3 }] } }, "overrides": [] },
+          "options": { "displayMode": "gradient", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"] }, "showUnfilled": true },
+          "targets": [{
+            "expr": "sum by (namespace, phase) (kube_pod_status_phase{namespace=~\"utterai-prod-api|utterai-api|utterai-ai-cpu|utterai-ai-gpu|utterai-batch\"})",
+            "legendFormat": "{{namespace}} / {{phase}}",
+            "refId": "A"
+          }]
+        },
+        {
+          "type": "table",
+          "title": "UtterAI 문제 Pod",
+          "id": 22,
+          "gridPos": { "h": 8, "w": 8, "x": 8, "y": 17 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "custom": { "align": "auto", "displayMode": "color-background" } }, "overrides": [] },
+          "options": { "showHeader": true, "sortBy": [{ "displayName": "Value", "desc": true }] },
+          "targets": [{
+            "expr": "sum by (namespace, phase) (kube_pod_status_phase{namespace=~\"utterai-prod-api|utterai-api|utterai-ai-cpu|utterai-ai-gpu|utterai-batch\",phase=~\"Pending|Failed|Unknown\"}) > 0",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          }]
+        },
+        {
+          "type": "table",
+          "title": "UtterAI CrashLoopBackOff Pod",
+          "id": 23,
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 17 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "custom": { "align": "auto", "displayMode": "color-background" } }, "overrides": [] },
+          "options": { "showHeader": true, "sortBy": [{ "displayName": "Value", "desc": true }] },
+          "targets": [{
+            "expr": "sum by (namespace, pod, container, reason) (kube_pod_container_status_waiting_reason{namespace=~\"utterai-prod-api|utterai-api|utterai-ai-cpu|utterai-ai-gpu|utterai-batch\",reason=\"CrashLoopBackOff\"}) > 0",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          }]
+        },
+        {
+          "type": "row",
+          "title": "앱 처리량 / 지연",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 25 },
+          "id": 30,
+          "collapsed": false
+        },
+        {
+          "type": "bargauge",
+          "title": "분석 Job 전달 상태",
+          "id": 31,
+          "gridPos": { "h": 8, "w": 6, "x": 0, "y": 26 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } }, "overrides": [{ "matcher": { "id": "byRegexp", "options": "failed" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }] },
+          "options": { "displayMode": "gradient", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"] }, "showUnfilled": true },
+          "targets": [{
+            "expr": "sum by (status) (increase(utterai_analysis_job_dispatch_total[5m]))",
+            "legendFormat": "{{status}}",
+            "refId": "A"
+          }]
+        },
+        {
+          "type": "bargauge",
+          "title": "Worker별 SQS 수신 수",
+          "id": 32,
+          "gridPos": { "h": 8, "w": 6, "x": 6, "y": 26 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+          "options": { "displayMode": "gradient", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"] }, "showUnfilled": true },
+          "targets": [{
+            "expr": "sum by (worker) (increase(utterai_ai_sqs_receive_total[5m]))",
+            "legendFormat": "{{worker}}",
+            "refId": "A"
+          }]
+        },
+        {
+          "type": "timeseries",
+          "title": "AI 단계 처리시간 p95",
+          "id": 33,
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 26 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2 }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 30 }, { "color": "red", "value": 120 }] } }, "overrides": [] },
+          "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] } },
+          "targets": [{
+            "expr": "histogram_quantile(0.95, sum by (le, worker, stage) (rate(utterai_ai_stage_duration_seconds_bucket[5m])))",
+            "legendFormat": "{{worker}} / {{stage}}",
+            "refId": "A"
+          }]
+        },
+        {
+          "type": "row",
+          "title": "관측 스택 상태",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 34 },
+          "id": 40,
+          "collapsed": false
+        },
+        {
+          "type": "table",
+          "title": "수집 실패 대상",
+          "id": 41,
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 35 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "custom": { "align": "auto", "displayMode": "color-background" } }, "overrides": [] },
+          "options": { "showHeader": true, "sortBy": [{ "displayName": "Value", "desc": true }] },
+          "targets": [{
+            "expr": "up == 0",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          }]
+        },
+        {
+          "type": "bargauge",
+          "title": "Observability Target 상태",
+          "id": 42,
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 35 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } }, "overrides": [] },
+          "options": { "displayMode": "gradient", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"] }, "showUnfilled": true },
+          "targets": [
+            { "expr": "max(up{job=~\".*otel.*|otel-collector\"})", "legendFormat": "otel-collector", "refId": "A" },
+            { "expr": "max(up{job=~\".*prometheus.*\"})", "legendFormat": "prometheus", "refId": "B" },
+            { "expr": "max(up{job=~\".*tempo.*|tempo\"})", "legendFormat": "tempo", "refId": "C" },
+            { "expr": "max(up{job=~\".*kubecost.*|kubecost|kubecost-aggregator\"})", "legendFormat": "kubecost", "refId": "D" }
+          ]
+        },
+        {
+          "type": "row",
+          "title": "Loki 로그",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 43 },
+          "id": 50,
+          "collapsed": false
+        },
+        {
+          "type": "logs",
+          "title": "UtterAI ERROR 로그",
+          "id": 51,
+          "gridPos": { "h": 10, "w": 12, "x": 0, "y": 44 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "fieldConfig": { "defaults": {}, "overrides": [] },
+          "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showCommonLabels": false, "showLabels": true, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+          "targets": [{
+            "expr": "{namespace=~\"utterai-prod-api|utterai-api|utterai-ai-cpu|utterai-ai-gpu|utterai-batch\"} |= \"ERROR\"",
+            "refId": "A",
+            "maxLines": 100
+          }]
+        },
+        {
+          "type": "logs",
+          "title": "GPU Worker 로그",
+          "id": 52,
+          "gridPos": { "h": 10, "w": 6, "x": 12, "y": 44 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "fieldConfig": { "defaults": {}, "overrides": [] },
+          "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showCommonLabels": false, "showLabels": true, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+          "targets": [{
+            "expr": "{namespace=\"utterai-ai-gpu\",pod=~\"utterai-ml-gpu-worker.*|.*gpu.*\"}",
+            "refId": "A",
+            "maxLines": 100
+          }]
+        },
+        {
+          "type": "logs",
+          "title": "OTel Collector 로그",
+          "id": 53,
+          "gridPos": { "h": 10, "w": 6, "x": 18, "y": 44 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "fieldConfig": { "defaults": {}, "overrides": [] },
+          "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showCommonLabels": false, "showLabels": true, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+          "targets": [{
+            "expr": "{namespace=\"utterai-observability\",pod=~\"otel-collector.*\"}",
+            "refId": "A",
+            "maxLines": 100
+          }]
+        }
+      ]
+    }

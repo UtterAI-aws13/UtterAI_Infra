@@ -159,28 +159,45 @@ resource "helm_release" "kube_prometheus_stack" {
       }
 
       prometheus = {
-        prometheusSpec = {
-          retention      = "3d"
-          scrapeInterval = "60s"
+        prometheusSpec = merge(
+          {
+            retention      = var.prometheus_retention
+            scrapeInterval = "60s"
 
-          serviceMonitorSelectorNilUsesHelmValues = false
-          podMonitorSelectorNilUsesHelmValues     = false
-          ruleSelectorNilUsesHelmValues           = false
-          serviceMonitorNamespaceSelector         = {}
-          podMonitorNamespaceSelector             = {}
-          ruleNamespaceSelector                   = {}
+            serviceMonitorSelectorNilUsesHelmValues = false
+            podMonitorSelectorNilUsesHelmValues     = false
+            ruleSelectorNilUsesHelmValues           = false
+            serviceMonitorNamespaceSelector         = {}
+            podMonitorNamespaceSelector             = {}
+            ruleNamespaceSelector                   = {}
 
-          resources = {
-            requests = {
-              cpu    = "200m"
-              memory = "1Gi"
+            resources = {
+              requests = {
+                cpu    = "200m"
+                memory = "1Gi"
+              }
+              limits = {
+                cpu    = "1"
+                memory = "3Gi"
+              }
             }
-            limits = {
-              cpu    = "1"
-              memory = "3Gi"
+          },
+          var.prometheus_storage_enabled ? {
+            storageSpec = {
+              volumeClaimTemplate = {
+                spec = {
+                  storageClassName = var.prometheus_storage_class_name
+                  accessModes      = ["ReadWriteOnce"]
+                  resources = {
+                    requests = {
+                      storage = var.prometheus_storage_size
+                    }
+                  }
+                }
+              }
             }
-          }
-        }
+          } : {}
+        )
       }
 
       grafana = merge(

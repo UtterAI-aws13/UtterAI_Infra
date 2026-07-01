@@ -73,6 +73,11 @@ module "eks_addons" {
   grafana_admin_user_key               = var.grafana_admin_user_key
   grafana_admin_password_key           = var.grafana_admin_password_key
 
+  prometheus_retention          = "3d"
+  prometheus_storage_enabled    = true
+  prometheus_storage_class_name = "gp2"
+  prometheus_storage_size       = "20Gi"
+
   kubecost_enabled                   = var.kubecost_enabled
   kubecost_persistent_volume_enabled = var.kubecost_persistent_volume_enabled
 
