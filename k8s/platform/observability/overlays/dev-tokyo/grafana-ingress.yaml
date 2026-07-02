@@ -9,8 +9,8 @@ metadata:
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
     alb.ingress.kubernetes.io/group.name: grafana-agent-lab-tokyo
-    # TODO: 도쿄(ap-northeast-1) 리전의 ACM 인증서 ARN으로 교체합니다.
-    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-1:000000000000:certificate/TODO_GRAFANA_AGENT_LAB_TOKYO_CERT
+    # Agent Lab 전용 Grafana HTTPS 인증서입니다.
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-northeast-1:032886669461:certificate/34970981-b07f-4943-af72-c97fe3ed3e4f
 spec:
   ingressClassName: alb
   rules:
