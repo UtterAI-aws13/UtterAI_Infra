@@ -15,8 +15,8 @@ spec:
         name: keda-aws-pod-identity
         kind: ClusterTriggerAuthentication
       metadata:
-        queueURL: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-rag-ingest-queue"
+        queueURL: "https://sqs.ap-northeast-1.amazonaws.com/032886669461/utterai-dev-tokyo-rag-ingest-queue"
         queueLength: "3"
         activationQueueLength: "0"
-        awsRegion: ap-northeast-2
+        awsRegion: ap-northeast-1
         identityOwner: operator

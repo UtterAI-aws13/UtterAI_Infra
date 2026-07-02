@@ -12,16 +12,18 @@ spec:
           env:
             - name: APP_ENV
               value: dev
+            - name: AWS_REGION
+              value: ap-northeast-1
             - name: SQS_AUDIO_PREPROCESS_QUEUE_URL
-              value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-audio-preprocess-queue
+              value: https://sqs.ap-northeast-1.amazonaws.com/032886669461/utterai-dev-tokyo-audio-preprocess-queue
             - name: SQS_GPU_INFERENCE_QUEUE_URL
-              value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-gpu-inference-queue
+              value: https://sqs.ap-northeast-1.amazonaws.com/032886669461/utterai-dev-tokyo-gpu-inference-queue
             - name: SQS_REPORT_ANALYSIS_QUEUE_URL
-              value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-report-analysis-queue
+              value: https://sqs.ap-northeast-1.amazonaws.com/032886669461/utterai-dev-tokyo-report-analysis-queue
             - name: S3_BUCKET_REPORT
-              value: utterai-dev-reports
+              value: utterai-dev-tokyo-reports
             - name: S3_BUCKET_AUDIO
-              value: utterai-dev-raw-audio
+              value: utterai-dev-tokyo-raw-audio
             - name: LOG_LEVEL
               value: DEBUG
 ---
@@ -39,14 +41,16 @@ spec:
           env:
             - name: APP_ENV
               value: dev
+            - name: AWS_REGION
+              value: ap-northeast-1
             - name: SQS_GPU_INFERENCE_QUEUE_URL
-              value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-gpu-inference-queue
+              value: https://sqs.ap-northeast-1.amazonaws.com/032886669461/utterai-dev-tokyo-gpu-inference-queue
             - name: SQS_REPORT_ANALYSIS_QUEUE_URL
-              value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-report-analysis-queue
+              value: https://sqs.ap-northeast-1.amazonaws.com/032886669461/utterai-dev-tokyo-report-analysis-queue
             - name: S3_BUCKET_AUDIO
-              value: utterai-dev-raw-audio
+              value: utterai-dev-tokyo-raw-audio
             - name: S3_BUCKET_REPORT
-              value: utterai-dev-reports
+              value: utterai-dev-tokyo-reports
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -61,7 +65,9 @@ spec:
           env:
             - name: APP_ENV
               value: dev
+            - name: AWS_REGION
+              value: ap-northeast-1
             - name: SQS_RAG_INGEST_QUEUE_URL
-              value: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-dev-rag-ingest-queue
+              value: https://sqs.ap-northeast-1.amazonaws.com/032886669461/utterai-dev-tokyo-rag-ingest-queue
             - name: S3_BUCKET_RAG
-              value: utterai-dev-rag-ingest
+              value: utterai-dev-tokyo-rag-ingest
