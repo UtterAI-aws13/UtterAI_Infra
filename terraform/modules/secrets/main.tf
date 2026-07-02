@@ -18,6 +18,14 @@ resource "aws_secretsmanager_secret" "ai_worker" {
   recovery_window_in_days = 0
 }
 
+# ── CPU Worker Secret ─────────────────────────────────────────────────────────
+# Keys: HF_TOKEN
+
+resource "aws_secretsmanager_secret" "cpu_worker" {
+  name                    = "${local.prefix}/cpu-worker-secret"
+  recovery_window_in_days = 0
+}
+
 # ── RAG Ingest Secret ─────────────────────────────────────────────────────────
 # Keys: DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME
 
