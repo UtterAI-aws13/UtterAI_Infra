@@ -6,6 +6,9 @@ resources:
   - otel-collector.yaml
   - opensearch.yaml
   - data-prepper.yaml
+  - grafana-dashboard-core-metrics.yaml
+  - grafana-dashboard-job-trace.yaml
+  - grafana-dashboard-sqs-keda-karpenter.yaml
   - grafana-dashboard-ca-karpenter.yaml
   - grafana-dashboard-utterai.yaml
   - grafana-dashboard-pipeline.yaml

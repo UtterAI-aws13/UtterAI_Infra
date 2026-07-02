@@ -1,0 +1,196 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: utterai-sqs-keda-karpenter-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/name: utterai-sqs-keda-karpenter-dashboard
+    app.kubernetes.io/part-of: utterai
+data:
+  utterai-sqs-keda-karpenter.json: |
+    {
+      "title": "UtterAI SQS / KEDA / Karpenter",
+      "uid": "utterai-sqs-keda-karpenter",
+      "editable": true,
+      "graphTooltip": 1,
+      "refresh": "30s",
+      "schemaVersion": 39,
+      "version": 1,
+      "time": { "from": "now-1h", "to": "now" },
+      "templating": {
+        "list": [
+          {
+            "name": "datasource",
+            "type": "datasource",
+            "query": "prometheus",
+            "current": {},
+            "hide": 0,
+            "label": "Prometheus"
+          },
+          {
+            "name": "queue_regex",
+            "type": "textbox",
+            "query": "utterai-.*(audio-preprocess|gpu-inference|report-analysis|rag-ingest)-queue",
+            "current": { "text": "utterai-.*(audio-preprocess|gpu-inference|report-analysis|rag-ingest)-queue", "value": "utterai-.*(audio-preprocess|gpu-inference|report-analysis|rag-ingest)-queue" },
+            "hide": 0,
+            "label": "queue regex"
+          }
+        ]
+      },
+      "panels": [
+        {
+          "type": "row",
+          "title": "SQS Backlog",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+          "id": 1,
+          "collapsed": false
+        },
+        {
+          "type": "timeseries",
+          "title": "SQS Visible Messages",
+          "id": 2,
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2 }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 10 }, { "color": "red", "value": 30 }] } }, "overrides": [] },
+          "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] } },
+          "targets": [{ "expr": "aws_sqs_approximate_number_of_messages_visible_maximum{queue_name=~\"$queue_regex\"}", "legendFormat": "{{queue_name}}", "refId": "A" }]
+        },
+        {
+          "type": "timeseries",
+          "title": "SQS In-flight / Oldest Message",
+          "id": 3,
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2 }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 10 }, { "color": "red", "value": 30 }] } }, "overrides": [{ "matcher": { "id": "byRegexp", "options": "oldest.*" }, "properties": [{ "id": "unit", "value": "s" }] }] },
+          "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] } },
+          "targets": [
+            { "expr": "aws_sqs_approximate_number_of_messages_not_visible_maximum{queue_name=~\"$queue_regex\"}", "legendFormat": "{{queue_name}} in-flight", "refId": "A" },
+            { "expr": "aws_sqs_approximate_age_of_oldest_message_maximum{queue_name=~\"$queue_regex\"}", "legendFormat": "{{queue_name}} oldest age", "refId": "B" }
+          ]
+        },
+        {
+          "type": "row",
+          "title": "KEDA / Worker Replica",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+          "id": 10,
+          "collapsed": false
+        },
+        {
+          "type": "timeseries",
+          "title": "KEDA HPA Current vs Desired",
+          "id": 11,
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2 }, "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+          "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] } },
+          "targets": [
+            { "expr": "kube_horizontalpodautoscaler_status_current_replicas{namespace=~\"utterai-ai-cpu|utterai-ai-gpu|utterai-batch\"}", "legendFormat": "{{namespace}} / {{horizontalpodautoscaler}} current", "refId": "A" },
+            { "expr": "kube_horizontalpodautoscaler_status_desired_replicas{namespace=~\"utterai-ai-cpu|utterai-ai-gpu|utterai-batch\"}", "legendFormat": "{{namespace}} / {{horizontalpodautoscaler}} desired", "refId": "B" }
+          ]
+        },
+        {
+          "type": "timeseries",
+          "title": "Worker Deployment Replicas",
+          "id": 12,
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2 }, "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+          "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] } },
+          "targets": [
+            { "expr": "kube_deployment_status_replicas{namespace=~\"utterai-ai-cpu|utterai-ai-gpu|utterai-batch\"}", "legendFormat": "{{namespace}} / {{deployment}} desired", "refId": "A" },
+            { "expr": "kube_deployment_status_replicas_available{namespace=~\"utterai-ai-cpu|utterai-ai-gpu|utterai-batch\"}", "legendFormat": "{{namespace}} / {{deployment}} available", "refId": "B" }
+          ]
+        },
+        {
+          "type": "row",
+          "title": "Pending / Karpenter",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+          "id": 20,
+          "collapsed": false
+        },
+        {
+          "type": "table",
+          "title": "Worker Pending Pod",
+          "id": 21,
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 19 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "custom": { "align": "auto", "displayMode": "color-background" } }, "overrides": [] },
+          "options": { "showHeader": true, "sortBy": [{ "displayName": "Value", "desc": true }] },
+          "targets": [{ "expr": "sum by (namespace, pod) (kube_pod_status_phase{namespace=~\"utterai-ai-cpu|utterai-ai-gpu|utterai-batch\",phase=\"Pending\"}) > 0", "format": "table", "instant": true, "refId": "A" }]
+        },
+        {
+          "type": "timeseries",
+          "title": "Karpenter Node Activity",
+          "id": 22,
+          "gridPos": { "h": 8, "w": 8, "x": 8, "y": 19 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "custom": { "lineWidth": 2 }, "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+          "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] } },
+          "targets": [
+            { "expr": "sum(increase(karpenter_nodes_created_total[15m]))", "legendFormat": "created 15m", "refId": "A" },
+            { "expr": "sum(increase(karpenter_nodes_terminated_total[15m]))", "legendFormat": "terminated 15m", "refId": "B" }
+          ]
+        },
+        {
+          "type": "stat",
+          "title": "Ready Node 수",
+          "id": 23,
+          "gridPos": { "h": 8, "w": 4, "x": 16, "y": 19 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } } },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+          "targets": [{ "expr": "sum(kube_node_status_condition{condition=\"Ready\",status=\"true\"})", "refId": "A" }]
+        },
+        {
+          "type": "stat",
+          "title": "Karpenter Metric Series",
+          "id": 24,
+          "gridPos": { "h": 8, "w": 4, "x": 20, "y": 19 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } } },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+          "targets": [{ "expr": "count({__name__=~\"karpenter_.*\"})", "refId": "A" }]
+        },
+        {
+          "type": "row",
+          "title": "Worker 처리량 / 로그",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 27 },
+          "id": 30,
+          "collapsed": false
+        },
+        {
+          "type": "timeseries",
+          "title": "Worker SQS Receive / Publish",
+          "id": 31,
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 28 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "ops", "custom": { "lineWidth": 2 }, "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+          "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] } },
+          "targets": [
+            { "expr": "sum by (worker) (rate(utterai_ai_sqs_receive_total[5m]))", "legendFormat": "{{worker}} receive", "refId": "A" },
+            { "expr": "sum by (stage) (rate(utterai_ai_sqs_publish_total[5m]))", "legendFormat": "{{stage}} publish", "refId": "B" }
+          ]
+        },
+        {
+          "type": "logs",
+          "title": "KEDA Operator 로그",
+          "id": 32,
+          "gridPos": { "h": 8, "w": 6, "x": 12, "y": 28 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "fieldConfig": { "defaults": {}, "overrides": [] },
+          "options": { "dedupStrategy": "none", "enableLogDetails": true, "showLabels": true, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+          "targets": [{ "expr": "{namespace=\"keda\"}", "refId": "A", "maxLines": 100 }]
+        },
+        {
+          "type": "logs",
+          "title": "Karpenter 로그",
+          "id": 33,
+          "gridPos": { "h": 8, "w": 6, "x": 18, "y": 28 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "fieldConfig": { "defaults": {}, "overrides": [] },
+          "options": { "dedupStrategy": "none", "enableLogDetails": true, "showLabels": true, "showTime": true, "sortOrder": "Descending", "wrapLogMessage": true },
+          "targets": [{ "expr": "{namespace=\"karpenter\"}", "refId": "A", "maxLines": 100 }]
+        }
+      ]
+    }

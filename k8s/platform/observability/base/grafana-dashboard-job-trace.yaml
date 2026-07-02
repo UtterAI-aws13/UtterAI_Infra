@@ -1,0 +1,185 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: utterai-job-trace-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+    app.kubernetes.io/name: utterai-job-trace-dashboard
+    app.kubernetes.io/part-of: utterai
+data:
+  utterai-job-trace.json: |
+    {
+      "title": "UtterAI 단건 Job 추적",
+      "uid": "utterai-job-trace",
+      "editable": true,
+      "graphTooltip": 1,
+      "refresh": "30s",
+      "schemaVersion": 39,
+      "version": 1,
+      "time": { "from": "now-1h", "to": "now" },
+      "templating": {
+        "list": [
+          {
+            "name": "datasource",
+            "type": "datasource",
+            "query": "prometheus",
+            "current": {},
+            "hide": 0,
+            "label": "Prometheus"
+          },
+          {
+            "name": "analysis_job_id",
+            "type": "textbox",
+            "query": "",
+            "current": { "text": "", "value": "" },
+            "hide": 0,
+            "label": "analysis_job_id"
+          },
+          {
+            "name": "namespace",
+            "type": "textbox",
+            "query": "utterai-prod-api|utterai-api|utterai-ai-cpu|utterai-ai-gpu|utterai-batch",
+            "current": { "text": "utterai-prod-api|utterai-api|utterai-ai-cpu|utterai-ai-gpu|utterai-batch", "value": "utterai-prod-api|utterai-api|utterai-ai-cpu|utterai-ai-gpu|utterai-batch" },
+            "hide": 0,
+            "label": "namespace regex"
+          }
+        ]
+      },
+      "panels": [
+        {
+          "type": "row",
+          "title": "단건 Job 진행 상태",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+          "id": 1,
+          "collapsed": false
+        },
+        {
+          "type": "stat",
+          "title": "최근 5분 분석 Job 생성",
+          "id": 2,
+          "gridPos": { "h": 5, "w": 4, "x": 0, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } } },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value", "graphMode": "area" },
+          "targets": [{ "expr": "sum(increase(utterai_analysis_jobs_created_total[5m]))", "refId": "A" }]
+        },
+        {
+          "type": "bargauge",
+          "title": "분석 Job 전달 상태",
+          "id": 3,
+          "gridPos": { "h": 5, "w": 5, "x": 4, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": {
+            "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } },
+            "overrides": [{ "matcher": { "id": "byRegexp", "options": "failed" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] }]
+          },
+          "options": { "displayMode": "gradient", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"] }, "showUnfilled": true },
+          "targets": [{ "expr": "sum by (status) (increase(utterai_analysis_job_dispatch_total[5m]))", "legendFormat": "{{status}}", "refId": "A" }]
+        },
+        {
+          "type": "bargauge",
+          "title": "Worker별 SQS 수신",
+          "id": 4,
+          "gridPos": { "h": 5, "w": 5, "x": 9, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "blue", "value": null }] } }, "overrides": [] },
+          "options": { "displayMode": "gradient", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"] }, "showUnfilled": true },
+          "targets": [{ "expr": "sum by (worker) (increase(utterai_ai_sqs_receive_total[5m]))", "legendFormat": "{{worker}}", "refId": "A" }]
+        },
+        {
+          "type": "stat",
+          "title": "Stage 실패 15분",
+          "id": 5,
+          "gridPos": { "h": 5, "w": 5, "x": 14, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+          "targets": [{ "expr": "sum(increase(utterai_ai_stage_failures_total[15m]))", "refId": "A" }]
+        },
+        {
+          "type": "stat",
+          "title": "Pending UtterAI Pod",
+          "id": 6,
+          "gridPos": { "h": 5, "w": 5, "x": 19, "y": 1 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } },
+          "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+          "targets": [{ "expr": "sum(kube_pod_status_phase{namespace=~\"$namespace\",phase=\"Pending\"})", "refId": "A" }]
+        },
+        {
+          "type": "row",
+          "title": "analysis_job_id 로그 검색",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 6 },
+          "id": 10,
+          "collapsed": false
+        },
+        {
+          "type": "logs",
+          "title": "전체 UtterAI 로그 — analysis_job_id",
+          "id": 11,
+          "gridPos": { "h": 10, "w": 24, "x": 0, "y": 7 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "fieldConfig": { "defaults": {}, "overrides": [] },
+          "options": { "dedupStrategy": "none", "enableLogDetails": true, "prettifyLogMessage": false, "showCommonLabels": false, "showLabels": true, "showTime": true, "sortOrder": "Ascending", "wrapLogMessage": true },
+          "targets": [{ "expr": "{namespace=~\"$namespace\"} |= \"$analysis_job_id\"", "refId": "A", "maxLines": 300 }]
+        },
+        {
+          "type": "logs",
+          "title": "Backend 로그",
+          "id": 12,
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 17 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "fieldConfig": { "defaults": {}, "overrides": [] },
+          "options": { "dedupStrategy": "none", "enableLogDetails": true, "showCommonLabels": false, "showLabels": true, "showTime": true, "sortOrder": "Ascending", "wrapLogMessage": true },
+          "targets": [{ "expr": "{namespace=~\"utterai-prod-api|utterai-api\"} |= \"$analysis_job_id\"", "refId": "A", "maxLines": 150 }]
+        },
+        {
+          "type": "logs",
+          "title": "CPU Worker 로그",
+          "id": 13,
+          "gridPos": { "h": 8, "w": 8, "x": 8, "y": 17 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "fieldConfig": { "defaults": {}, "overrides": [] },
+          "options": { "dedupStrategy": "none", "enableLogDetails": true, "showCommonLabels": false, "showLabels": true, "showTime": true, "sortOrder": "Ascending", "wrapLogMessage": true },
+          "targets": [{ "expr": "{namespace=\"utterai-ai-cpu\"} |= \"$analysis_job_id\"", "refId": "A", "maxLines": 150 }]
+        },
+        {
+          "type": "logs",
+          "title": "GPU Worker 로그",
+          "id": 14,
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 17 },
+          "datasource": { "type": "loki", "uid": "loki" },
+          "fieldConfig": { "defaults": {}, "overrides": [] },
+          "options": { "dedupStrategy": "none", "enableLogDetails": true, "showCommonLabels": false, "showLabels": true, "showTime": true, "sortOrder": "Ascending", "wrapLogMessage": true },
+          "targets": [{ "expr": "{namespace=\"utterai-ai-gpu\"} |= \"$analysis_job_id\"", "refId": "A", "maxLines": 150 }]
+        },
+        {
+          "type": "row",
+          "title": "처리 지연과 Trace",
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 25 },
+          "id": 20,
+          "collapsed": false
+        },
+        {
+          "type": "timeseries",
+          "title": "AI Stage p95",
+          "id": 21,
+          "gridPos": { "h": 9, "w": 12, "x": 0, "y": 26 },
+          "datasource": { "type": "prometheus", "uid": "${datasource}" },
+          "fieldConfig": { "defaults": { "unit": "s", "custom": { "lineWidth": 2 }, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 30 }, { "color": "red", "value": 120 }] } }, "overrides": [] },
+          "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull", "max"] } },
+          "targets": [{ "expr": "histogram_quantile(0.95, sum by (le, worker, stage) (rate(utterai_ai_stage_duration_seconds_bucket[5m])))", "legendFormat": "{{worker}} / {{stage}}", "refId": "A" }]
+        },
+        {
+          "type": "traces",
+          "title": "Tempo TraceQL — analysis_job_id",
+          "id": 22,
+          "gridPos": { "h": 9, "w": 12, "x": 12, "y": 26 },
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "fieldConfig": { "defaults": {}, "overrides": [] },
+          "options": {},
+          "targets": [{ "queryType": "traceql", "query": "{span.analysis_job_id=\"$analysis_job_id\"}", "limit": 20, "refId": "A" }]
+        }
+      ]
+    }

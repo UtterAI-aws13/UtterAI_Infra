@@ -61,6 +61,30 @@ variable "external_secrets_cluster_store_name" {
   description = "Existing ClusterSecretStore name used by ExternalSecret resources."
 }
 
+variable "prometheus_retention" {
+  type        = string
+  default     = "3d"
+  description = "Prometheus TSDB retention time."
+}
+
+variable "prometheus_storage_enabled" {
+  type        = bool
+  default     = false
+  description = "Enable persistent storage for Prometheus TSDB. When false, Prometheus uses emptyDir."
+}
+
+variable "prometheus_storage_class_name" {
+  type        = string
+  default     = "gp2"
+  description = "StorageClass used by the Prometheus PVC when persistent storage is enabled."
+}
+
+variable "prometheus_storage_size" {
+  type        = string
+  default     = "20Gi"
+  description = "Prometheus PVC size when persistent storage is enabled."
+}
+
 variable "kubecost_enabled" {
   type        = bool
   default     = true
