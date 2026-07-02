@@ -78,6 +78,7 @@ data:
           span:
             - 'resource.attributes["service.name"] != "cpu-worker"'
             - 'resource.attributes["phoenix.enabled"] != "true"'
+            - 'name != "worker.report.message" and not IsMatch(name, "^phoenix\\.cpu_report\\.")'
       resource/loki_labels:
         attributes:
           - action: insert
@@ -184,6 +185,8 @@ spec:
       app: otel-collector
   template:
     metadata:
+      annotations:
+        utterai.io/phoenix-filter-version: cpu-report-v1
       labels:
         app: otel-collector
         app.kubernetes.io/name: otel-collector
