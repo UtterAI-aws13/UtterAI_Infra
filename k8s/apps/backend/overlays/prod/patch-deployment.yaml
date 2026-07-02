@@ -29,6 +29,16 @@ spec:
         volumeMounts:
         - name: tmp
           mountPath: "/tmp"
+      - name: db-seed
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - name: tmp
+          mountPath: "/tmp"
       containers:
       - name: api
         securityContext:
@@ -62,6 +72,16 @@ spec:
         emptyDir: {}
       initContainers:
       - name: db-migrate
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - name: tmp
+          mountPath: "/tmp"
+      - name: db-seed
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:

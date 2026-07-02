@@ -45,6 +45,20 @@ spec:
             secretKeyRef:
               name: backend-api-secret
               key: DB_PASSWORD
+      - name: db-seed
+        image: "utterai-backend:dev-placeholder"
+        command:
+        - python
+        - scripts/seed_ontology.py
+        envFrom:
+        - configMapRef:
+            name: utterai-api-config
+        env:
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: backend-api-secret
+              key: DB_PASSWORD
       containers:
       - name: api
         image: "utterai-backend:dev-placeholder"
