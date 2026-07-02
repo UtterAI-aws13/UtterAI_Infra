@@ -261,7 +261,7 @@ resource "aws_security_group" "kure_retriever_lambda" {
   }
 
   egress {
-    description = "HTTPS (model download, Secrets Manager)"
+    description = "HTTPS (Secrets Manager, ECR image pull)"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"

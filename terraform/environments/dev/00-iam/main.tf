@@ -51,3 +51,28 @@ resource "aws_iam_role_policy" "github_actions_ai_kms" {
     }]
   })
 }
+
+# CI가 utterai-kure-retriever 이미지를 ECR에 푸시한 뒤 Lambda 코드를 직접
+# 갱신하기 위한 권한. package_type=Image Lambda는 ECR push만으로 재배포되지
+# 않으므로 update-function-code를 CI에서 호출한다 (03-services kure_retriever_lambda 참고).
+resource "aws_iam_role_policy" "github_actions_ai_kure_retriever_deploy" {
+  name = "kure-retriever-lambda-deploy"
+  role = aws_iam_role.github_actions_ai.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "KureRetrieverLambdaDeploy"
+      Effect = "Allow"
+      Action = [
+        "lambda:UpdateFunctionCode",
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration",
+      ]
+      Resource = [
+        "arn:aws:lambda:ap-northeast-2:${data.aws_caller_identity.current.account_id}:function:utterai-dev-kure-retriever",
+        "arn:aws:lambda:ap-northeast-2:${data.aws_caller_identity.current.account_id}:function:utterai-prod-kure-retriever",
+      ]
+    }]
+  })
+}
