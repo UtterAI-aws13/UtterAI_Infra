@@ -468,10 +468,13 @@ resource "aws_iam_role_policy" "finops_agent_permissions" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid      = "BedrockInvoke"
-        Effect   = "Allow"
-        Action   = "bedrock:InvokeModel"
-        Resource = "arn:aws:bedrock:${var.aws_region}::foundation-model/*"
+        Sid    = "BedrockInvoke"
+        Effect = "Allow"
+        Action = "bedrock:InvokeModel"
+        Resource = [
+          "arn:aws:bedrock:*::foundation-model/*",
+          "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/*",
+        ]
       },
       {
         Sid      = "InvokeFinopsQuery"
