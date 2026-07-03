@@ -1,9 +1,14 @@
 import json
+import os
+import urllib.request
 import boto3
 from datetime import datetime, timedelta
 
 ce = boto3.client("ce", region_name="us-east-1")  # Cost Explorer is us-east-1 only
+KUBECOST_ENDPOINT = os.environ.get("KUBECOST_ENDPOINT", "").rstrip("/")
 
+
+# ── AWS Cost Explorer tools ────────────────────────────────────────────────────
 
 def get_cost_by_service(start_date: str, end_date: str) -> dict:
     resp = ce.get_cost_and_usage(
@@ -79,11 +84,97 @@ def get_cost_by_tag(tag_key: str, tag_value: str, start_date: str, end_date: str
     }
 
 
+# ── Kubecost tools ─────────────────────────────────────────────────────────────
+
+def _kubecost_get(path: str) -> dict:
+    if not KUBECOST_ENDPOINT:
+        raise RuntimeError("KUBECOST_ENDPOINT not configured (Phase 2 setup required)")
+    url = f"{KUBECOST_ENDPOINT}{path}"
+    with urllib.request.urlopen(url, timeout=10) as r:
+        return json.loads(r.read())
+
+
+def get_namespace_costs(window: str = "30d") -> dict:
+    data = _kubecost_get(f"/model/allocation?window={window}&aggregate=namespace&accumulate=true")
+    items = []
+    for name, v in (data.get("data") or [{}])[0].items():
+        if name == "__idle__":
+            continue
+        total = v.get("totalCost", 0)
+        items.append({
+            "namespace": name,
+            "total_usd": round(total, 4),
+            "cpu_usd": round(v.get("cpuCost", 0), 4),
+            "memory_usd": round(v.get("ramCost", 0), 4),
+            "gpu_usd": round(v.get("gpuCost", 0), 4),
+        })
+    items.sort(key=lambda x: x["total_usd"], reverse=True)
+    return {"window": window, "namespaces": items[:15]}
+
+
+def get_workload_costs(namespace: str, window: str = "30d") -> dict:
+    path = f"/model/allocation?window={window}&aggregate=deployment&accumulate=true&namespace={namespace}"
+    data = _kubecost_get(path)
+    items = []
+    for name, v in (data.get("data") or [{}])[0].items():
+        if name == "__idle__":
+            continue
+        items.append({
+            "workload": name,
+            "total_usd": round(v.get("totalCost", 0), 4),
+            "cpu_usd": round(v.get("cpuCost", 0), 4),
+            "memory_usd": round(v.get("ramCost", 0), 4),
+            "gpu_usd": round(v.get("gpuCost", 0), 4),
+        })
+    items.sort(key=lambda x: x["total_usd"], reverse=True)
+    return {"namespace": namespace, "window": window, "workloads": items[:10]}
+
+
+def get_spot_savings(window: str = "30d") -> dict:
+    data = _kubecost_get(f"/model/allocation?window={window}&aggregate=cluster&accumulate=true")
+    cluster = list((data.get("data") or [{}])[0].values())
+    if not cluster:
+        return {"error": "No cluster data"}
+    c = cluster[0]
+    return {
+        "window": window,
+        "total_usd": round(c.get("totalCost", 0), 2),
+        "spot_usd": round(c.get("spotCost", 0), 2),
+        "on_demand_usd": round(c.get("onDemandCost", 0), 2),
+        "spot_ratio_pct": round(
+            c.get("spotCost", 0) / max(c.get("totalCost", 1), 0.01) * 100, 1
+        ),
+    }
+
+
+def get_cluster_cost_summary(window: str = "30d") -> dict:
+    data = _kubecost_get(f"/model/allocation?window={window}&aggregate=cluster&accumulate=true")
+    cluster = list((data.get("data") or [{}])[0].values())
+    if not cluster:
+        return {"error": "No cluster data"}
+    c = cluster[0]
+    return {
+        "window": window,
+        "total_usd": round(c.get("totalCost", 0), 2),
+        "cpu_usd": round(c.get("cpuCost", 0), 2),
+        "memory_usd": round(c.get("ramCost", 0), 2),
+        "gpu_usd": round(c.get("gpuCost", 0), 2),
+        "storage_usd": round(c.get("pvCost", 0), 2),
+        "network_usd": round(c.get("networkCost", 0), 2),
+    }
+
+
+# ── Dispatcher ────────────────────────────────────────────────────────────────
+
 TOOLS = {
     "get_cost_by_service": get_cost_by_service,
     "get_daily_cost_trend": get_daily_cost_trend,
     "get_cost_forecast": get_cost_forecast,
     "get_cost_by_tag": get_cost_by_tag,
+    "get_namespace_costs": get_namespace_costs,
+    "get_workload_costs": get_workload_costs,
+    "get_spot_savings": get_spot_savings,
+    "get_cluster_cost_summary": get_cluster_cost_summary,
 }
 
 

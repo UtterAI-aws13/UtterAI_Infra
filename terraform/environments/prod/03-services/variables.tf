@@ -40,3 +40,9 @@ variable "allowed_extra_origins" {
   description = "Additional allowed CORS origins (e.g. localhost for local dev)"
   default     = []
 }
+
+variable "kubecost_alb_endpoint" {
+  type        = string
+  description = "Internal ALB DNS for Kubecost (http://<alb-dns>). Set after ArgoCD syncs the Ingress."
+  default     = ""
+}

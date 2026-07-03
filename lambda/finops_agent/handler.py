@@ -72,6 +72,51 @@ TOOL_DEFINITIONS = [
             "required": ["tag_key", "tag_value", "start_date", "end_date"],
         },
     },
+    {
+        "name": "get_namespace_costs",
+        "description": "Kubecost: EKS 네임스페이스별 비용. CPU/메모리/GPU 비용 포함. 쿠버네티스 워크로드 비용 파악에 사용.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "window": {"type": "string", "description": "조회 기간 (예: 7d, 30d, 2024-06-01T00:00:00Z,2024-07-01T00:00:00Z)"},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "get_workload_costs",
+        "description": "Kubecost: 특정 네임스페이스 내 Deployment별 비용 조회. 특정 서비스의 쿠버네티스 비용 확인에 사용.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "namespace": {"type": "string", "description": "쿠버네티스 네임스페이스명"},
+                "window": {"type": "string", "description": "조회 기간 (예: 7d, 30d)"},
+            },
+            "required": ["namespace"],
+        },
+    },
+    {
+        "name": "get_spot_savings",
+        "description": "Kubecost: Spot vs On-Demand 비용 비율 및 Spot 절감액. Spot 전환 효과 확인에 사용.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "window": {"type": "string", "description": "조회 기간 (예: 7d, 30d)"},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "get_cluster_cost_summary",
+        "description": "Kubecost: EKS 클러스터 전체 비용 (CPU/메모리/GPU/스토리지/네트워크 분류). 클러스터 리소스 종류별 비용 파악에 사용.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "window": {"type": "string", "description": "조회 기간 (예: 7d, 30d)"},
+            },
+            "required": [],
+        },
+    },
 ]
 
 

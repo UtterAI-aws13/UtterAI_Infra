@@ -400,9 +400,40 @@ resource "aws_iam_role" "finops_query" {
   })
 }
 
+resource "aws_security_group" "finops_query" {
+  name        = "${local.finops_query_name}-sg"
+  description = "FinOps query Lambda - Kubecost ALB + AWS APIs"
+  vpc_id      = data.terraform_remote_state.network.outputs.vpc_id
+
+  egress {
+    description = "Kubecost internal ALB"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "HTTPS (Cost Explorer, Secrets Manager)"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${local.finops_query_name}-sg"
+  }
+}
+
 resource "aws_iam_role_policy_attachment" "finops_query_basic" {
   role       = aws_iam_role.finops_query.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy_attachment" "finops_query_vpc" {
+  role       = aws_iam_role.finops_query.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
 resource "aws_iam_role_policy" "finops_query_ce" {
@@ -433,6 +464,17 @@ resource "aws_lambda_function" "finops_query" {
   runtime          = "python3.12"
   timeout          = 30
   memory_size      = 256
+
+  vpc_config {
+    subnet_ids         = data.terraform_remote_state.network.outputs.private_app_subnet_ids
+    security_group_ids = [aws_security_group.finops_query.id]
+  }
+
+  environment {
+    variables = {
+      KUBECOST_ENDPOINT = var.kubecost_alb_endpoint
+    }
+  }
 }
 
 # ── finops-agent ──────────────────────────────────────────────────────────────
