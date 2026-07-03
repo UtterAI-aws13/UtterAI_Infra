@@ -497,8 +497,7 @@ resource "aws_lambda_function" "finops_agent" {
     variables = {
       FINOPS_QUERY_LAMBDA_ARN = aws_lambda_function.finops_query.arn
       BEDROCK_REGION          = var.aws_region
-      # Bedrock 콘솔에서 실제 모델 ID 확인 후 필요 시 수정
-      BEDROCK_MODEL_ID = "anthropic.claude-sonnet-4-6-20251101-v1:0"
+      BEDROCK_MODEL_ID        = "anthropic.claude-sonnet-4-6"
     }
   }
 }
