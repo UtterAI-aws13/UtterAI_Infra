@@ -369,6 +369,140 @@ resource "aws_lambda_permission" "kure_retriever_agentcore" {
   principal     = "bedrock.amazonaws.com"
 }
 
+# ── Lambda: FinOps Agent ──────────────────────────────────────────────────────
+# finops-query  : Cost Explorer tool dispatcher (no VPC, public endpoint)
+# finops-agent  : Claude agentic loop — receives natural-language question,
+#                 calls finops-query via tool_use, returns Korean answer
+
+locals {
+  finops_query_name = "utterai-${var.environment}-finops-query"
+  finops_agent_name = "utterai-${var.environment}-finops-agent"
+}
+
+# ── finops-query ──────────────────────────────────────────────────────────────
+
+data "archive_file" "finops_query" {
+  type        = "zip"
+  source_file = "${path.module}/../../../../lambda/finops_query/handler.py"
+  output_path = "${path.module}/finops_query.zip"
+}
+
+resource "aws_iam_role" "finops_query" {
+  name = "${local.finops_query_name}-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "finops_query_basic" {
+  role       = aws_iam_role.finops_query.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "finops_query_ce" {
+  role = aws_iam_role.finops_query.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "CostExplorer"
+      Effect = "Allow"
+      Action = [
+        "ce:GetCostAndUsage",
+        "ce:GetCostForecast",
+        "ce:GetDimensionValues",
+        "ce:GetTags",
+      ]
+      Resource = "*"
+    }]
+  })
+}
+
+resource "aws_lambda_function" "finops_query" {
+  function_name    = local.finops_query_name
+  role             = aws_iam_role.finops_query.arn
+  filename         = data.archive_file.finops_query.output_path
+  source_code_hash = data.archive_file.finops_query.output_base64sha256
+  handler          = "handler.handler"
+  runtime          = "python3.12"
+  timeout          = 30
+  memory_size      = 256
+}
+
+# ── finops-agent ──────────────────────────────────────────────────────────────
+
+data "archive_file" "finops_agent" {
+  type        = "zip"
+  source_file = "${path.module}/../../../../lambda/finops_agent/handler.py"
+  output_path = "${path.module}/finops_agent.zip"
+}
+
+resource "aws_iam_role" "finops_agent" {
+  name = "${local.finops_agent_name}-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "finops_agent_basic" {
+  role       = aws_iam_role.finops_agent.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "finops_agent_permissions" {
+  role = aws_iam_role.finops_agent.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "BedrockInvoke"
+        Effect   = "Allow"
+        Action   = "bedrock:InvokeModel"
+        Resource = "arn:aws:bedrock:${var.aws_region}::foundation-model/*"
+      },
+      {
+        Sid      = "InvokeFinopsQuery"
+        Effect   = "Allow"
+        Action   = "lambda:InvokeFunction"
+        Resource = aws_lambda_function.finops_query.arn
+      },
+    ]
+  })
+}
+
+resource "aws_lambda_function" "finops_agent" {
+  function_name    = local.finops_agent_name
+  role             = aws_iam_role.finops_agent.arn
+  filename         = data.archive_file.finops_agent.output_path
+  source_code_hash = data.archive_file.finops_agent.output_base64sha256
+  handler          = "handler.handler"
+  runtime          = "python3.12"
+  timeout          = 60
+  memory_size      = 512
+
+  environment {
+    variables = {
+      FINOPS_QUERY_LAMBDA_ARN = aws_lambda_function.finops_query.arn
+      BEDROCK_REGION          = var.aws_region
+      # Bedrock 콘솔에서 실제 모델 ID 확인 후 필요 시 수정
+      BEDROCK_MODEL_ID = "anthropic.claude-sonnet-4-6-20251101-v1:0"
+    }
+  }
+}
+
 # ── IRSA ─────────────────────────────────────────────────────────────────────
 
 module "irsa" {

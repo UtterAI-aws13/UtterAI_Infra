@@ -168,13 +168,17 @@ aws lambda invoke \
 
 ### Phase 1 파일 변경 목록
 
+Lambda 코드는 비용 모니터링 인프라 관심사이므로 `UtterAI_Infra` 레포에서 관리한다.
+
 | 파일 | 변경 내용 | 상태 |
 |------|----------|------|
-| `terraform/environments/prod/03-services/main.tf` | finops-query Lambda + IAM 추가 | ⬜ |
-| `terraform/environments/prod/03-services/main.tf` | finops-agent Lambda + IAM 추가 | ⬜ |
-| `terraform/environments/prod/03-services/outputs.tf` | finops agent Lambda ARN output | ⬜ |
-| `UtterAI_AI/app/lambda/finops_query/handler.py` | Cost Explorer tool 구현 | ⬜ |
-| `UtterAI_AI/app/lambda/finops_agent/handler.py` | Claude agentic loop 구현 | ⬜ |
+| `lambda/finops_query/handler.py` | Cost Explorer tool dispatcher | ✅ |
+| `lambda/finops_agent/handler.py` | Claude agentic loop 구현 | ✅ |
+| `terraform/environments/prod/03-services/main.tf` | finops-query + finops-agent Lambda + IAM 추가 | ✅ |
+| `terraform/environments/prod/03-services/outputs.tf` | finops Lambda ARN output 추가 | ✅ |
+
+> `BEDROCK_MODEL_ID` 기본값: `anthropic.claude-sonnet-4-6-20251101-v1:0`
+> apply 전 Bedrock 콘솔에서 실제 모델 ID 확인 필요.
 
 ---
 

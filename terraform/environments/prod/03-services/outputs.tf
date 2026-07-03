@@ -91,6 +91,18 @@ output "kure_retriever_lambda_arn" {
   value       = aws_lambda_function.kure_retriever.arn
 }
 
+# ── Lambda: FinOps Agent ──────────────────────────────────────────────────────
+
+output "finops_query_lambda_arn" {
+  description = "Cost Explorer tool dispatcher ARN"
+  value       = aws_lambda_function.finops_query.arn
+}
+
+output "finops_agent_lambda_arn" {
+  description = "FinOps Agent (Claude agentic loop) ARN — Phase 3 Slack 연동 시 사용"
+  value       = aws_lambda_function.finops_agent.arn
+}
+
 # ── IRSA ─────────────────────────────────────────────────────────────────────
 
 output "backend_api_role_arn" {
