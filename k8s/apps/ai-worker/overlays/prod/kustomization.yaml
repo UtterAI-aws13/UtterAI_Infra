@@ -24,4 +24,4 @@ images:
   newTag: prod-c271e35
 - name: utterai-ai-gpu
   newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-gpu'
-  newTag: prod-c271e35
+  newTag: prod-eb9ebe2
