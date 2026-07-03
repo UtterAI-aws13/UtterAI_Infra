@@ -1,7 +1,8 @@
 import json
 import os
+import urllib.request
 import boto3
-from datetime import datetime
+from datetime import datetime, timedelta
 
 bedrock = boto3.client("bedrock-runtime", region_name=os.environ.get("BEDROCK_REGION", "ap-northeast-2"))
 lambda_client = boto3.client("lambda")
@@ -13,13 +14,25 @@ SYSTEM_PROMPT = """\
 당신은 UtterAI 인프라의 FinOps 전문 에이전트입니다.
 AWS 비용 데이터를 조회해서 간결하고 명확하게 한국어로 답변합니다.
 
-규칙:
-- 금액은 USD와 KRW(환율 1,400원 기준)를 함께 표시합니다 (예: $12.34 / 약 17,276원)
-- 증감율은 방향(↑/↓)과 퍼센트를 함께 표시합니다
-- 서비스명을 특정하지 않은 경우 상위 5개만 보여줍니다
-- 날짜를 특정하지 않으면 이번 달(월초~오늘)을 기본 기간으로 사용합니다
+## 날짜 규칙 (반드시 준수)
 - 오늘 날짜: {today}
-- 이번 달 시작: {month_start}\
+- 이번 달 시작: {month_start}
+- "오늘", "오늘자" → start_date={today}, end_date={tomorrow} (Cost Explorer end는 exclusive)
+- "어제" → start_date={yesterday}, end_date={today}
+- "이번 달", 날짜 미지정 → start_date={month_start}, end_date={tomorrow}
+- "지난 N일" → days=N
+
+## 도구 선택 규칙
+- "서비스별 합계" (기간 합산) → get_cost_by_service
+- "일별 + 서비스별" (날짜별 서비스 breakdown) → get_daily_cost_by_service
+- "일별 추이" (단일 서비스 or 전체 합계 트렌드) → get_daily_cost_trend
+- "예측" → get_cost_forecast
+- "네임스페이스/워크로드/Spot" → Kubecost tools
+
+## 출력 규칙
+- 금액: USD + KRW(환율 1,400원) 함께 표시 (예: $12.34 / 약 17,276원)
+- 증감: 방향(↑/↓)과 퍼센트 함께
+- 서비스 미지정 시 상위 5개만\
 """
 
 TOOL_DEFINITIONS = [
@@ -36,8 +49,20 @@ TOOL_DEFINITIONS = [
         },
     },
     {
+        "name": "get_daily_cost_by_service",
+        "description": "날짜별 × 서비스별 비용 matrix. '일별 서비스별', '날짜별 breakdown' 질문에 사용. get_cost_by_service(월별 합산)와 다르게 날짜별로 쪼개줌.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "start_date": {"type": "string", "description": "시작일 YYYY-MM-DD"},
+                "end_date": {"type": "string", "description": "종료일 YYYY-MM-DD (당일 미포함, exclusive)"},
+            },
+            "required": ["start_date", "end_date"],
+        },
+    },
+    {
         "name": "get_daily_cost_trend",
-        "description": "특정 서비스의 일별 비용 트렌드. 증감 추이 파악에 사용. service='ALL'이면 전체 합계.",
+        "description": "단일 서비스 또는 전체(ALL)의 일별 비용 추이. 특정 서비스가 며칠간 얼마 나왔는지 트렌드 파악에 사용.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -128,16 +153,36 @@ def call_tool(name: str, tool_input: dict) -> str:
     return json.dumps(json.loads(resp["Payload"].read()), ensure_ascii=False)
 
 
+def _post_to_slack(response_url: str, text: str) -> None:
+    payload = json.dumps({"response_type": "in_channel", "text": text}).encode()
+    req = urllib.request.Request(
+        response_url,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=5):
+        pass
+
+
 def handler(event, context):
     question = event.get("question", "")
+    response_url = event.get("response_url", "")
+    user_name = event.get("user_name", "")
+
     if not question:
         return {"error": "question 필드가 필요합니다"}
 
-    today = datetime.now().strftime("%Y-%m-%d")
-    month_start = datetime.now().strftime("%Y-%m-01")
+    now = datetime.now()
+    today = now.strftime("%Y-%m-%d")
+    tomorrow = (now + timedelta(days=1)).strftime("%Y-%m-%d")
+    yesterday = (now - timedelta(days=1)).strftime("%Y-%m-%d")
+    month_start = now.strftime("%Y-%m-01")
 
     messages = [{"role": "user", "content": question}]
-    system = SYSTEM_PROMPT.format(today=today, month_start=month_start)
+    system = SYSTEM_PROMPT.format(
+        today=today, tomorrow=tomorrow, yesterday=yesterday, month_start=month_start
+    )
 
     for _ in range(10):
         resp = bedrock.invoke_model(
@@ -159,7 +204,11 @@ def handler(event, context):
         if stop_reason == "end_turn":
             for block in content:
                 if block.get("type") == "text":
-                    return {"answer": block["text"]}
+                    answer = block["text"]
+                    if response_url:
+                        prefix = f"*{user_name}*: _{question}_\n\n" if user_name else ""
+                        _post_to_slack(response_url, prefix + answer)
+                    return {"answer": answer}
 
         if stop_reason == "tool_use":
             tool_results = []
@@ -176,4 +225,7 @@ def handler(event, context):
 
         break
 
-    return {"error": "답변 생성 실패", "stop_reason": stop_reason}
+    error_msg = "답변 생성에 실패했습니다. 다시 시도해주세요."
+    if response_url:
+        _post_to_slack(response_url, error_msg)
+    return {"error": error_msg, "stop_reason": stop_reason}

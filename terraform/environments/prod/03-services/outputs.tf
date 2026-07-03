@@ -99,8 +99,13 @@ output "finops_query_lambda_arn" {
 }
 
 output "finops_agent_lambda_arn" {
-  description = "FinOps Agent (Claude agentic loop) ARN — Phase 3 Slack 연동 시 사용"
+  description = "FinOps Agent (Claude agentic loop) ARN"
   value       = aws_lambda_function.finops_agent.arn
+}
+
+output "finops_slack_function_url" {
+  description = "Slack slash command Request URL — Slack App 설정에 등록"
+  value       = aws_lambda_function_url.finops_slack.function_url
 }
 
 # ── IRSA ─────────────────────────────────────────────────────────────────────

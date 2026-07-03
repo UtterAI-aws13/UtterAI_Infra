@@ -547,6 +547,89 @@ resource "aws_lambda_function" "finops_agent" {
   }
 }
 
+# ── Lambda: finops-slack (Slack slash command → finops-agent 비동기 호출) ─────
+
+locals {
+  finops_slack_name = "utterai-${var.environment}-finops-slack"
+}
+
+data "archive_file" "finops_slack" {
+  type        = "zip"
+  source_file = "${path.module}/../../../../lambda/finops_slack/handler.py"
+  output_path = "${path.module}/finops_slack.zip"
+}
+
+resource "aws_iam_role" "finops_slack" {
+  name = "${local.finops_slack_name}-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "finops_slack_basic" {
+  role       = aws_iam_role.finops_slack.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy" "finops_slack_permissions" {
+  role = aws_iam_role.finops_slack.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "GetSlackSecret"
+        Effect   = "Allow"
+        Action   = "secretsmanager:GetSecretValue"
+        Resource = "arn:aws:secretsmanager:ap-northeast-2:${data.aws_caller_identity.current.account_id}:secret:utterai-prod/finops-slack*"
+      },
+      {
+        Sid      = "InvokeFinopsAgent"
+        Effect   = "Allow"
+        Action   = "lambda:InvokeFunction"
+        Resource = aws_lambda_function.finops_agent.arn
+      },
+    ]
+  })
+}
+
+resource "aws_lambda_function" "finops_slack" {
+  function_name    = local.finops_slack_name
+  role             = aws_iam_role.finops_slack.arn
+  filename         = data.archive_file.finops_slack.output_path
+  source_code_hash = data.archive_file.finops_slack.output_base64sha256
+  handler          = "handler.handler"
+  runtime          = "python3.12"
+  timeout          = 10
+  memory_size      = 256
+
+  environment {
+    variables = {
+      FINOPS_AGENT_LAMBDA_ARN = aws_lambda_function.finops_agent.arn
+      SLACK_SECRET_ID         = "utterai-prod/finops-slack"
+    }
+  }
+}
+
+resource "aws_lambda_function_url" "finops_slack" {
+  function_name      = aws_lambda_function.finops_slack.function_name
+  authorization_type = "NONE"
+}
+
+resource "aws_lambda_permission" "finops_slack_public" {
+  statement_id           = "AllowPublicFunctionURL"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.finops_slack.function_name
+  principal              = "*"
+  function_url_auth_type = "NONE"
+}
+
 # ── IRSA ─────────────────────────────────────────────────────────────────────
 
 module "irsa" {
