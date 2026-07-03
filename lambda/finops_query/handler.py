@@ -47,6 +47,25 @@ def get_daily_cost_trend(service: str, days: int) -> dict:
     return {"service": service, "daily": daily}
 
 
+def get_daily_cost_by_service(start_date: str, end_date: str) -> dict:
+    resp = ce.get_cost_and_usage(
+        TimePeriod={"Start": start_date, "End": end_date},
+        Granularity="DAILY",
+        Metrics=["UnblendedCost"],
+        GroupBy=[{"Type": "DIMENSION", "Key": "SERVICE"}],
+    )
+    days = []
+    for day in resp["ResultsByTime"]:
+        services = []
+        for group in day["Groups"]:
+            cost = round(float(group["Metrics"]["UnblendedCost"]["Amount"]), 2)
+            if cost >= 0.01:
+                services.append({"service": group["Keys"][0], "cost_usd": cost})
+        services.sort(key=lambda x: x["cost_usd"], reverse=True)
+        days.append({"date": day["TimePeriod"]["Start"], "services": services[:10]})
+    return {"period": f"{start_date} ~ {end_date}", "daily_breakdown": days}
+
+
 def get_cost_forecast(days: int) -> dict:
     start = datetime.now().strftime("%Y-%m-%d")
     end = (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d")
@@ -169,6 +188,7 @@ def get_cluster_cost_summary(window: str = "30d") -> dict:
 TOOLS = {
     "get_cost_by_service": get_cost_by_service,
     "get_daily_cost_trend": get_daily_cost_trend,
+    "get_daily_cost_by_service": get_daily_cost_by_service,
     "get_cost_forecast": get_cost_forecast,
     "get_cost_by_tag": get_cost_by_tag,
     "get_namespace_costs": get_namespace_costs,
