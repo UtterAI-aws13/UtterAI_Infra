@@ -6,3 +6,4 @@ resources:
   - ../observability/base
   - ../image-pruner/base
   - ../karpenter/overlays/prod
+  - ../kubecost/base

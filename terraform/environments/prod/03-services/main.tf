@@ -400,9 +400,40 @@ resource "aws_iam_role" "finops_query" {
   })
 }
 
+resource "aws_security_group" "finops_query" {
+  name        = "${local.finops_query_name}-sg"
+  description = "FinOps query Lambda - Kubecost ALB + AWS APIs"
+  vpc_id      = data.terraform_remote_state.network.outputs.vpc_id
+
+  egress {
+    description = "Kubecost internal ALB"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    description = "HTTPS (Cost Explorer, Secrets Manager)"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "${local.finops_query_name}-sg"
+  }
+}
+
 resource "aws_iam_role_policy_attachment" "finops_query_basic" {
   role       = aws_iam_role.finops_query.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_iam_role_policy_attachment" "finops_query_vpc" {
+  role       = aws_iam_role.finops_query.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
 resource "aws_iam_role_policy" "finops_query_ce" {
@@ -433,6 +464,17 @@ resource "aws_lambda_function" "finops_query" {
   runtime          = "python3.12"
   timeout          = 30
   memory_size      = 256
+
+  vpc_config {
+    subnet_ids         = data.terraform_remote_state.network.outputs.private_app_subnet_ids
+    security_group_ids = [aws_security_group.finops_query.id]
+  }
+
+  environment {
+    variables = {
+      KUBECOST_ENDPOINT = var.kubecost_alb_endpoint
+    }
+  }
 }
 
 # ── finops-agent ──────────────────────────────────────────────────────────────
@@ -468,10 +510,13 @@ resource "aws_iam_role_policy" "finops_agent_permissions" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid      = "BedrockInvoke"
-        Effect   = "Allow"
-        Action   = "bedrock:InvokeModel"
-        Resource = "arn:aws:bedrock:${var.aws_region}::foundation-model/*"
+        Sid    = "BedrockInvoke"
+        Effect = "Allow"
+        Action = "bedrock:InvokeModel"
+        Resource = [
+          "arn:aws:bedrock:*::foundation-model/*",
+          "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/*",
+        ]
       },
       {
         Sid      = "InvokeFinopsQuery"
@@ -497,7 +542,7 @@ resource "aws_lambda_function" "finops_agent" {
     variables = {
       FINOPS_QUERY_LAMBDA_ARN = aws_lambda_function.finops_query.arn
       BEDROCK_REGION          = var.aws_region
-      BEDROCK_MODEL_ID        = "anthropic.claude-sonnet-4-6"
+      BEDROCK_MODEL_ID        = "global.anthropic.claude-haiku-4-5-20251001-v1:0"
     }
   }
 }
