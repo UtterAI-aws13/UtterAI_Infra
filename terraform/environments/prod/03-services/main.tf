@@ -500,7 +500,7 @@ resource "aws_lambda_function" "finops_agent" {
     variables = {
       FINOPS_QUERY_LAMBDA_ARN = aws_lambda_function.finops_query.arn
       BEDROCK_REGION          = var.aws_region
-      BEDROCK_MODEL_ID        = "global.anthropic.claude-sonnet-4-6"
+      BEDROCK_MODEL_ID        = "global.anthropic.claude-sonnet-4-5-20250929-v1:0"
     }
   }
 }

@@ -6,7 +6,7 @@ from datetime import datetime
 bedrock = boto3.client("bedrock-runtime", region_name=os.environ.get("BEDROCK_REGION", "ap-northeast-2"))
 lambda_client = boto3.client("lambda")
 
-MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "global.anthropic.claude-sonnet-4-6")
+MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "global.anthropic.claude-sonnet-4-5-20250929-v1:0")
 FINOPS_QUERY_ARN = os.environ["FINOPS_QUERY_LAMBDA_ARN"]
 
 SYSTEM_PROMPT = """\
