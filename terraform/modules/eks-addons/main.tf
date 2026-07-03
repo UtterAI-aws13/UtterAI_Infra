@@ -406,7 +406,8 @@ resource "helm_release" "kubecost" {
       }
 
       kubecostAggregator = {
-        deployMethod = "singlepod"
+        deployMethod                 = "singlepod"
+        federatedStorageConfigSecret = var.kubecost_s3_bucket_name != "" ? "kubecost-federated-storage" : null
       }
 
       prometheus = {
