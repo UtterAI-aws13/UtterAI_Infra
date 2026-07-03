@@ -405,9 +405,12 @@ resource "helm_release" "kubecost" {
         }
       }
 
+      federatedETL = {
+        federatedCluster = var.kubecost_s3_bucket_name != "" ? true : false
+      }
+
       kubecostAggregator = {
-        deployMethod                 = "singlepod"
-        federatedStorageConfigSecret = var.kubecost_s3_bucket_name != "" ? "kubecost-federated-storage" : null
+        deployMethod = "singlepod"
       }
 
       prometheus = {
