@@ -11,14 +11,14 @@ resources:
 - service-green.yaml
 - network-policy.yaml
 - pdb.yaml
-- hpa-blue.yaml
+- hpa-green.yaml
 images:
 - name: utterai-backend-blue
   newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend'
   newTag: prod-0b75293
 - name: utterai-backend-green
   newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-backend'
-  newTag: prod-d4625ad
+  newTag: prod-aa065de
 patches:
 - path: patch-active-service.yaml
 - path: patch-configmap.yaml
