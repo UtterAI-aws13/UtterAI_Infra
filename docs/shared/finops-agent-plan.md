@@ -177,8 +177,7 @@ Lambda 코드는 비용 모니터링 인프라 관심사이므로 `UtterAI_Infra
 | `terraform/environments/prod/03-services/main.tf` | finops-query + finops-agent Lambda + IAM 추가 | ✅ |
 | `terraform/environments/prod/03-services/outputs.tf` | finops Lambda ARN output 추가 | ✅ |
 
-> `BEDROCK_MODEL_ID` 기본값: `anthropic.claude-sonnet-4-6-20251101-v1:0`
-> apply 전 Bedrock 콘솔에서 실제 모델 ID 확인 필요.
+> `BEDROCK_MODEL_ID`: `anthropic.claude-sonnet-4-6` (ap-northeast-2 확인 완료)
 
 ---
 
