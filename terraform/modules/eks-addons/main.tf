@@ -405,6 +405,10 @@ resource "helm_release" "kubecost" {
         }
       }
 
+      federatedETL = {
+        federatedCluster = var.kubecost_s3_bucket_name != "" ? true : false
+      }
+
       kubecostAggregator = {
         deployMethod = "singlepod"
       }
