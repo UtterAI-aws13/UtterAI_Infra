@@ -22,6 +22,8 @@ locals {
   gateway_name = "utterai-${var.environment}-report-evidence-gateway"
 }
 
+data "aws_region" "current" {}
+
 data "aws_iam_policy_document" "report_evidence_gateway_assume" {
   statement {
     effect  = "Allow"
@@ -30,6 +32,23 @@ data "aws_iam_policy_document" "report_evidence_gateway_assume" {
     principals {
       type        = "Service"
       identifiers = ["bedrock-agentcore.amazonaws.com"]
+    }
+
+    # AWS의 confused-deputy 방지 요구사항 - 이 조건이 없으면 Gateway가 실제로
+    # target을 만들 때 "not authorized to perform AssumeRole" 에러가 난다
+    # (역할 자체는 만들어지지만 AssumeRole 시점에 검증에서 막힘, 실제 apply로 확인함).
+    condition {
+      test     = "StringEquals"
+      variable = "aws:SourceAccount"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
+
+    condition {
+      test     = "ArnLike"
+      variable = "aws:SourceArn"
+      values = [
+        "arn:aws:bedrock-agentcore:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:gateway/${local.gateway_name}*"
+      ]
     }
   }
 }
