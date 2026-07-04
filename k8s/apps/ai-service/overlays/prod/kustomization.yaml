@@ -24,4 +24,4 @@ patches:
 images:
 - name: utterai-ai-cpu
   newName: '032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-cpu'
-  newTag: prod-688e702
+  newTag: prod-35802e8
