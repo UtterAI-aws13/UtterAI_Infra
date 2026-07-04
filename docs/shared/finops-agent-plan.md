@@ -1,7 +1,11 @@
 # UtterAI FinOps Agent — 설계 · 구현 계획
 
-> 최초 작성: 2026-07-03
+> 최초 작성: 2026-07-03 · 구현 완료(Phase 1~3): 2026-07-03
 > **범례**: ✅ 완료 / 🔄 PR 오픈 / ⬜ 미착수 / 🖱️ 수동 작업
+>
+> **as-built 요약**: 이 문서는 설계 당시 계획이며, 실제 구현은 Phase 1~3 모두 완료되어 prod에 배포·가동 중이다.
+> 계획과 달라진 부분(레포 위치, 최종 모델 ID 등)은 각 Phase 하단에 실제 값으로 갱신해 두었다.
+> 구현 상세는 [`docs/prod/architecture.md` §9.1](../prod/architecture.md#91-finops-비용-조회-slack-봇--배포가동-중) 참고.
 
 ---
 
@@ -177,7 +181,14 @@ Lambda 코드는 비용 모니터링 인프라 관심사이므로 `UtterAI_Infra
 | `terraform/environments/prod/03-services/main.tf` | finops-query + finops-agent Lambda + IAM 추가 | ✅ |
 | `terraform/environments/prod/03-services/outputs.tf` | finops Lambda ARN output 추가 | ✅ |
 
-> `BEDROCK_MODEL_ID`: `anthropic.claude-sonnet-4-6` (ap-northeast-2 확인 완료)
+> **`BEDROCK_MODEL_ID` 최종값: `global.anthropic.claude-haiku-4-5-20251001-v1:0`**
+> 계획 당시엔 `anthropic.claude-sonnet-4-6`을 가정했으나 배포 중 3회 교체했다:
+> 1. `anthropic.claude-sonnet-4-6` → on-demand 직접 호출 불가(inference profile 필요)
+> 2. `global.anthropic.claude-sonnet-4-6`(inference profile ID) → Marketplace 미구독으로 AccessDenied
+> 3. `global.anthropic.claude-sonnet-4-5-20250929-v1:0` → 계정에서 별도 활성화 필요, 보류
+> 4. **`global.anthropic.claude-haiku-4-5-20251001-v1:0`(채택)** → ai-worker에서 이미 활성화된 모델이라 즉시 동작 확인
+>
+> IAM도 `bedrock:InvokeModel` Resource에 `inference-profile/*`를 추가해야 했다(최초엔 `foundation-model/*`만 있어서 AccessDenied 발생).
 
 ---
 
@@ -185,32 +196,36 @@ Lambda 코드는 비용 모니터링 인프라 관심사이므로 `UtterAI_Infra
 
 > 네임스페이스·워크로드·Spot 절감액 조회를 위한 Kubecost REST API 연동.
 
-### 2-1. Kubecost 내부 ALB 노출
+### 2-1. Kubecost 내부 ALB 노출 — ✅ 실제 구현 (계획 대비 경로·포트 변경)
 
 Kubecost는 현재 ClusterIP Service만 있어서 클러스터 외부(Lambda)에서 접근 불가. 내부 ALB(internal)로 노출해서 동일 VPC 안의 Lambda에서 접근 가능하게 만든다.
 
 ```
-Lambda (VPC 내부)
-    │ HTTP 9090
+Lambda (VPC 내부, finops_query SG egress 80/tcp)
+    │ HTTP :80
     ▼
-internal ALB (utterai-prod-kubecost-internal)
-    │
+internal ALB (group.name=kubecost-internal, ArgoCD가 프로비저닝)
+    │ target-type=ip, 백엔드 포트 9090
     ▼
-Kubecost Service (kubecost-cost-analyzer.kubecost.svc:9090)
+Kubecost Service (kubecost.kubecost.svc:9090)
 ```
 
+실제 파일 위치·서비스명·포트가 계획과 다르다: Ingress는 `k8s/platform/kubecost/base/internal-alb-ingress.yaml`(계획의 `addons/overlays/prod/` 아님)이고, 백엔드 Service 이름은 `kubecost-cost-analyzer`가 아니라 `kubecost`다. Lambda→ALB 구간은 리스너 포트 80이며(SG egress도 80), ALB→Pod 구간만 9090을 사용한다.
+
 ```yaml
-# k8s/platform/addons/overlays/prod/kubecost-ingress.yaml
+# k8s/platform/kubecost/base/internal-alb-ingress.yaml (실제)
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: kubecost-internal
   namespace: kubecost
   annotations:
-    kubernetes.io/ingress.class: alb
     alb.ingress.kubernetes.io/scheme: internal
     alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/group.name: kubecost-internal
 spec:
+  ingressClassName: alb
   rules:
     - http:
         paths:
@@ -218,12 +233,12 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: kubecost-cost-analyzer
+                name: kubecost
                 port:
                   number: 9090
 ```
 
-### 2-2. Lambda: finops-kubecost
+### 2-2. Lambda: finops-kubecost — ✅ 계획대로 구현 (별도 Lambda 없이 finops-query에 통합)
 
 Phase 1의 `finops-query` Lambda에 Kubecost tool을 추가한다 (별도 Lambda 불필요).
 
@@ -241,16 +256,16 @@ def get_cluster_cost_summary(window: str = "30d") -> dict:
     """클러스터 전체 비용 요약 (총액, 네임스페이스별 비중)"""
 ```
 
-#### Kubecost REST API 패턴
+#### Kubecost REST API 패턴 — ✅ 실제로는 `/model/allocation` 한 엔드포인트만 사용
+
+계획 당시엔 Spot 절감액 조회에 별도 `/model/savings/requestSizingV2`를 검토했으나, 실제 구현은 `aggregate` 파라미터만 바꿔가며 `/model/allocation` 하나로 4개 tool(네임스페이스/워크로드/Spot/클러스터 요약)을 전부 처리한다 — 응답에 이미 `spotCost`/`onDemandCost`/`gpuCost` 등이 포함되어 있어 별도 엔드포인트가 불필요했다.
 
 ```
-GET http://<kubecost-internal-alb>/model/allocation
-  ?window=30d
-  &aggregate=namespace
-  &accumulate=true
-
-GET http://<kubecost-internal-alb>/model/savings/requestSizingV2
-  → Spot 절감 예측
+GET http://<kubecost-internal-alb>/model/allocation?window=30d&aggregate=namespace&accumulate=true
+GET http://<kubecost-internal-alb>/model/allocation?window=30d&aggregate=deployment&accumulate=true&namespace=<ns>
+GET http://<kubecost-internal-alb>/model/allocation?window=30d&aggregate=cluster&accumulate=true
+  → cluster 응답의 spotCost/onDemandCost 비율로 get_spot_savings 계산
+  → cluster 응답의 cpuCost/ramCost/gpuCost/pvCost/networkCost로 get_cluster_cost_summary 계산
 ```
 
 ### 2-3. VPC 설정
@@ -264,17 +279,17 @@ vpc_config {
 }
 ```
 
-보안 그룹: Kubecost ALB 향 HTTP(9090) egress 허용.
+보안 그룹(`aws_security_group.finops_query`, 실제): egress 80/tcp(Kubecost ALB, 계획 문서엔 9090으로 적었으나 ALB 리스너가 80이라 80으로 구현) + egress 443/tcp(Cost Explorer/Secrets Manager HTTPS). ingress 없음.
 
-### Phase 2 파일 변경 목록
+### Phase 2 파일 변경 목록 — ✅ 전체 완료
 
 | 파일 | 변경 내용 | 상태 |
 |------|----------|------|
-| `k8s/platform/addons/overlays/prod/kubecost-ingress.yaml` | Kubecost internal ALB Ingress 추가 | ⬜ |
-| `terraform/environments/prod/03-services/main.tf` | finops-query Lambda VPC 설정 추가 | ⬜ |
-| `terraform/environments/prod/03-services/main.tf` | finops SG + Kubecost ALB SG 규칙 추가 | ⬜ |
-| `UtterAI_AI/app/lambda/finops_query/handler.py` | Kubecost tool 추가 | ⬜ |
-| `terraform/environments/prod/03-services/main.tf` | `KUBECOST_ENDPOINT` 환경변수 추가 | ⬜ |
+| `k8s/platform/kubecost/base/internal-alb-ingress.yaml` | Kubecost internal ALB Ingress 추가 (계획 경로: `addons/overlays/prod/`) | ✅ |
+| `terraform/environments/prod/03-services/main.tf` | finops-query Lambda VPC 설정 추가 | ✅ |
+| `terraform/environments/prod/03-services/main.tf` | finops SG(`finops_query`) + egress 규칙 추가 | ✅ |
+| `lambda/finops_query/handler.py` | Kubecost tool 4종 추가 (계획 경로: `UtterAI_AI/app/lambda/` — 실제로는 Infra 레포에 구현) | ✅ |
+| `terraform/environments/prod/03-services/variables.tf` | `kubecost_alb_endpoint` 변수 추가, Lambda 환경변수 `KUBECOST_ENDPOINT`로 주입 | ✅ |
 
 ---
 
@@ -282,51 +297,64 @@ vpc_config {
 
 > `/finops 이번 달 GPU 비용 얼마야?` Slack slash command 구현.
 
-### 3-1. Slack App 설정 (수동)
+### 3-1. Slack App 설정 (수동) — ✅ 완료, 단 Bot Token은 불필요했음
 
 ```
 Slack API (api.slack.com/apps)
   → Create App → Slash Commands
-  → /finops → Request URL: https://api.utterai.org/finops  (or Lambda URL)
-  → Bot Token: xoxb-...  → AWS Secrets Manager 저장
+  → /finops → Request URL: finops-slack Lambda의 Function URL
+  → Signing Secret → AWS Secrets Manager(utterai-prod/finops-slack)에 {"signing_secret": "..."} 형태로 저장
 ```
 
-### 3-2. Lambda: finops-slack-handler
+**계획 대비 단순화된 점**: 계획 문서는 `Bot Token(xoxb-...)`을 전제했지만, 실제 응답은 Slack Web API(`chat.postMessage`)가 아니라 slash command 요청에 담겨 온 **`response_url`로 직접 POST**하는 방식이라 Bot Token 자체가 필요 없다. Secrets Manager에는 서명 검증용 `signing_secret` 하나만 저장한다.
 
-Slack slash command 요청을 받아 `finops-agent` Lambda를 async invoke 후 즉시 200 응답 (Slack 3초 타임아웃 대응). 결과는 `response_url`로 후속 POST.
+### 3-2. Lambda: finops-slack — ✅ 완료 (역할 분리가 계획과 다름)
+
+`finops-slack`은 서명 검증과 async invoke만 담당하고, **최종 답변의 Slack POST는 `finops-agent`가 직접 수행**한다(계획은 `finops-slack`이 콜백까지 담당하는 것으로 가정했었음).
 
 ```python
+# lambda/finops_slack/handler.py — 실제 구현
 def handler(event, context):
-    # 1. Slack 서명 검증 (HMAC-SHA256)
-    # 2. finops-agent Lambda async invoke
-    # 3. 즉시 {"response_type": "in_channel", "text": "조회 중..."} 반환
+    # 1. Slack 서명 검증: v0=HMAC-SHA256(signing_secret, f"v0:{timestamp}:{body}"), replay 방지(300s)
+    # 2. question이 없으면 사용법 안내(ephemeral) 즉시 반환
+    # 3. finops-agent Lambda를 InvocationType=Event로 비동기 invoke (question, response_url, user_name 전달)
+    # 4. 즉시 {"response_type": "in_channel", "text": "조회 중입니다... ⏳"} 반환 (Slack 3초 제한 대응)
 
-def finops_agent_callback(question, response_url):
-    # finops-agent 결과를 Slack response_url로 POST
+# lambda/finops_agent/handler.py — 실제로 이 Lambda가 response_url에 최종 답변을 POST
+def _post_to_slack(response_url, text):
+    # urllib으로 {"response_type": "in_channel", "text": text} POST
 ```
 
-### 3-3. 외부 노출
-
-기존 CloudFront + ALB 경로에 `/finops` 엔드포인트 추가, 또는 Lambda Function URL(HTTPS) 직접 사용.
-
-Lambda Function URL 방식 (권장, ALB 변경 불필요):
+### 3-3. 외부 노출 — ✅ Lambda Function URL 방식 채택 (계획대로)
 
 ```hcl
+# terraform/environments/prod/03-services/main.tf:620 (실제)
 resource "aws_lambda_function_url" "finops_slack" {
-  function_name      = aws_lambda_function.finops_slack_handler.function_name
+  function_name      = aws_lambda_function.finops_slack.function_name
   authorization_type = "NONE"  # Slack 서명 검증으로 보안
+}
+
+resource "aws_lambda_permission" "finops_slack_public" {
+  statement_id           = "AllowPublicFunctionURL"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.finops_slack.function_name
+  principal              = "*"
+  function_url_auth_type = "NONE"
 }
 ```
 
-### Phase 3 파일 변경 목록
+CloudFront/ALB 경로 추가 대안은 채택하지 않음 — Function URL이 계획대로 가장 단순했다.
+
+### Phase 3 파일 변경 목록 — ✅ 전체 완료
 
 | 파일 | 변경 내용 | 상태 |
 |------|----------|------|
-| `terraform/environments/prod/03-services/main.tf` | finops-slack-handler Lambda + Function URL | ⬜ |
-| `terraform/modules/secrets/main.tf` | Slack Bot Token secret 추가 | ⬜ |
-| `UtterAI_AI/app/lambda/finops_slack/handler.py` | Slack slash command handler 구현 | ⬜ |
-| Slack API 콘솔 | `/finops` slash command 등록 + Lambda URL 연결 | ⬜ 🖱️ |
-| AWS Secrets Manager | `utterai-prod/slack-finops-bot-token` 수동 등록 | ⬜ 🖱️ |
+| `terraform/environments/prod/03-services/main.tf` | finops-slack Lambda + Function URL + `aws_lambda_permission`(공개 invoke 허용) | ✅ |
+| `terraform/modules/secrets/main.tf` | ~~Slack Bot Token secret~~ (불필요, 아래 수동 등록으로 대체) | ✅ (해당 없음) |
+| `lambda/finops_slack/handler.py` | Slack slash command handler 구현 (계획 경로: `UtterAI_AI/app/lambda/` — 실제로는 Infra 레포) | ✅ |
+| `lambda/finops_agent/handler.py` | `get_daily_cost_by_service` tool 추가 + Slack POST 콜백 로직 추가("쿼리 정확도 개선") | ✅ |
+| Slack API 콘솔 | `/finops` slash command 등록 + Function URL 연결 | ✅ 🖱️ |
+| AWS Secrets Manager | `utterai-prod/finops-slack` (`{"signing_secret": "..."}`) 수동 등록, Terraform 미관리 | ✅ 🖱️ |
 
 ---
 
@@ -359,11 +387,13 @@ Phase 3 (Slack):
 
 ## 구현 순서 요약
 
-| Phase | 소요 시간 | 핵심 작업 | 결과물 |
-|-------|---------|----------|--------|
-| Phase 1 | 1~2일 | Cost Explorer Lambda + Claude agentic loop | CLI/콘솔로 비용 자연어 조회 |
-| Phase 2 | 1~2일 | Kubecost internal ALB + Lambda VPC 이동 | 네임스페이스·Spot 비용 조회 추가 |
-| Phase 3 | 1일 | Slack slash command handler | `/finops` 슬랙 명령으로 조회 |
+| Phase | 계획 소요 | 실제 소요 | 핵심 작업 | 결과물 | 상태 |
+|-------|---------|---------|----------|--------|------|
+| Phase 1 | 1~2일 | 당일 | Cost Explorer Lambda + Claude agentic loop | CLI/콘솔로 비용 자연어 조회 | ✅ |
+| Phase 2 | 1~2일 | 당일 | Kubecost internal ALB + Lambda VPC 이동 | 네임스페이스·Spot 비용 조회 추가 | ✅ |
+| Phase 3 | 1일 | 당일 | Slack slash command handler | `/finops` 슬랙 명령으로 조회 | ✅ |
+
+세 Phase 모두 2026-07-03 하루 안에 구현·배포 완료(`fc2d7f0` → `dff6ebe`, 중간에 Bedrock 모델 교체 fix 커밋 4개 포함). `aws lambda list-functions`로 3개 Lambda 실배포 확인됨(`docs/prod/architecture.md` §9.1).
 
 ---
 

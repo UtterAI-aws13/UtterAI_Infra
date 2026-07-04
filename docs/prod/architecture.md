@@ -363,28 +363,92 @@ rag-ingest-queue ──▶ Batch Worker (임베딩 → RDS)
 
 ### 9.1 FinOps 비용 조회 Slack 봇 — **배포·가동 중**
 
-`docs/shared/finops-agent-plan.md`의 3-Phase 설계를 구현한 것으로, AgentCore Gateway/MCP를 의도적으로 쓰지 않고 순수 Lambda-to-Lambda + Bedrock InvokeModel 방식을 택했다("주요 결정 사항: AgentCore Gateway 미사용").
+`docs/shared/finops-agent-plan.md`의 3-Phase 설계를 3-Lambda 체인으로 구현. AgentCore Gateway/MCP를 의도적으로 쓰지 않고 순수 Lambda-to-Lambda + Bedrock InvokeModel 방식을 택했다("주요 결정 사항: AgentCore Gateway 미사용" — §10의 kure-retriever와는 완전히 다른 설계 노선). 코드·Terraform 정의 위치는 전부 `UtterAI_Infra` 레포(`lambda/finops_*`, `terraform/environments/prod/03-services/main.tf:372-631`).
 
 ```
 Slack "/finops 이번 달 GPU 비용 얼마야?"
-    │  HTTPS POST
+    │  HTTPS POST (application/x-www-form-urlencoded)
     ▼
 finops-slack Lambda  (Function URL, AuthType=NONE, 자체 HMAC 서명 검증)
-    │  Secrets Manager(utterai-prod/finops-slack)에서 Slack Signing Secret 조회
-    │  서명 검증 + replay 방지(300초 윈도우) 후 "조회 중입니다..." 즉시 응답(3초 제한 대응)
-    │  비동기 invoke (InvocationType=Event)
+    │  Secrets Manager(utterai-prod/finops-slack)에서 Slack Signing Secret 조회 (콜드스타트 1회 캐시)
+    │  서명 검증: v0=HMAC-SHA256(signing_secret, "v0:{timestamp}:{body}") + replay 방지(|now-timestamp|>300s 거부)
+    │  검증 성공 시 finops-agent를 비동기 invoke(InvocationType=Event) 후
+    │  Slack 3초 제한 안에 "조회 중입니다... ⏳" 즉시 응답(response_type=in_channel)
     ▼
-finops-agent Lambda  (Memory 512MB, Timeout 60s)
+finops-agent Lambda  (Memory 512MB, Timeout 60s, VPC 없음)
     │  Bedrock Runtime invoke_model, 모델: global.anthropic.claude-haiku-4-5-20251001-v1:0
-    │    (⚠️ 계획 문서는 sonnet-4-6 명시 — 실제 배포는 haiku-4-5, 확인 필요)
-    │  최대 10회 tool_use 루프, 9개 도구 정의를 함께 전달
+    │  시스템 프롬프트에 오늘/이번달 시작일 등 날짜를 매 요청 계산해서 주입 (LLM의 상대날짜 계산 오류 방지)
+    │  최대 10회 tool_use 루프, 9개 도구 정의(Cost Explorer 5종 + Kubecost 4종)를 함께 전달
+    │  최종 답변(end_turn)을 response_url로 POST, 실패 시에도 에러 메시지를 Slack에 POST
     ▼
-finops-query Lambda  (Memory 256MB, Timeout 30s) — 순수 디스패처, Bedrock 미사용
-    │  AWS Cost Explorer(us-east-1 ce 클라이언트): 서비스별/일별/태그별 비용, 예측
-    │  Kubecost REST(내부 ALB 경유): 네임스페이스/워크로드별 비용, Spot 절감액, 클러스터 요약
+finops-query Lambda  (Memory 256MB, Timeout 30s, VPC 내부) — 순수 디스패처, Bedrock 미사용
+    │  AWS Cost Explorer(us-east-1 ce 클라이언트, 리전 고정): 서비스별/일별/태그별 비용, 예측
+    │  Kubecost REST(내부 ALB, KUBECOST_ENDPOINT 환경변수): 네임스페이스/워크로드별 비용, Spot 절감액, 클러스터 요약
     ▼
 결과 → finops-agent가 종합 응답 생성 → Slack response_url로 POST
 ```
+
+#### 9.1.1 Lambda 3종 스펙 및 IAM
+
+| Lambda | Runtime | Memory/Timeout | VPC | IAM 핵심 권한 | 트리거 |
+|---|---|---|---|---|---|
+| `utterai-prod-finops-slack` | python3.12 | 256MB / 10s | 없음 | `secretsmanager:GetSecretValue`(`utterai-prod/finops-slack*`), `lambda:InvokeFunction`(finops-agent ARN 한정) | Function URL(AuthType=NONE, 공개 — 보안은 Slack 서명 검증에 위임) |
+| `utterai-prod-finops-agent` | python3.12 | 512MB / 60s | 없음 | `bedrock:InvokeModel`(foundation-model/\* + inference-profile/\*), `lambda:InvokeFunction`(finops-query ARN 한정) | finops-slack의 비동기 invoke, 또는 콘솔에서 직접 invoke(`{"question": "..."}`) |
+| `utterai-prod-finops-query` | python3.12 | 256MB / 30s | Private App Subnet + 전용 SG | `ce:GetCostAndUsage`/`GetCostForecast`/`GetDimensionValues`/`GetTags` (Resource=\*), `AWSLambdaVPCAccessExecutionRole` | finops-agent의 동기 invoke (tool_use마다 1회) |
+
+- `finops-query`만 VPC에 배치되는 이유: Kubecost 내부 ALB(사설 IP)에 도달하려면 Private App Subnet에 ENI가 필요. Cost Explorer는 퍼블릭 엔드포인트라 원래 VPC가 필요 없지만, 같은 Lambda 안에 두 데이터소스를 합쳤기 때문에 VPC 종속.
+- 전용 SG(`finops_query`)는 egress만 정의: 80/tcp(Kubecost ALB), 443/tcp(Cost Explorer·Secrets Manager). Ingress 규칙 없음(Lambda가 외부에서 직접 호출되지 않음).
+- 세 Lambda 모두 Terraform `archive_file` data source로 핸들러 `.py` 단일 파일을 zip 패키징 — 별도 빌드 파이프라인/ECR 없이 `terraform apply` 시점에 로컬에서 압축·배포됨(kure-retriever의 컨테이너 이미지 방식과 대조적).
+
+#### 9.1.2 Bedrock 모델 ID — 3회 수정 끝에 확정
+
+배포 당일(2026-07-03) 아래 순서로 모델 ID를 교체하며 안정화했다:
+
+1. `anthropic.claude-sonnet-4-6` → on-demand 직접 호출 불가 (Bedrock은 이 모델을 inference profile 경유로만 노출)
+2. `global.anthropic.claude-sonnet-4-6` (inference profile ID로 수정) + IAM에 `inference-profile/*` Resource 추가 → 계정에서 Marketplace 미구독으로 AccessDenied
+3. `global.anthropic.claude-sonnet-4-5-20250929-v1:0` → 이 모델도 별도 활성화 필요
+4. **`global.anthropic.claude-haiku-4-5-20251001-v1:0` (최종)** → ai-worker에서 이미 활성화되어 있던 모델이라 즉시 동작 확인
+
+현재 코드(`main.tf:545`)와 배포된 Lambda 환경변수가 일치하는 상태 — 계획 문서(`finops-agent-plan.md`)의 sonnet-4-6 표기만 갱신 필요했던 부분으로, 이번에 함께 수정함.
+
+#### 9.1.3 도구(tool_use) 9종
+
+| 분류 | 도구 | 데이터소스 |
+|---|---|---|
+| Cost Explorer | `get_cost_by_service` | 기간 합산 서비스별 비용 |
+| Cost Explorer | `get_daily_cost_by_service` | 날짜 × 서비스 매트릭스 |
+| Cost Explorer | `get_daily_cost_trend` | 단일 서비스/전체 일별 추이(최대 90일) |
+| Cost Explorer | `get_cost_forecast` | ML 기반 향후 비용 예측 |
+| Cost Explorer | `get_cost_by_tag` | 태그(Environment 등) 기준 비용 |
+| Kubecost | `get_namespace_costs` | 네임스페이스별 CPU/메모리/GPU 비용 |
+| Kubecost | `get_workload_costs` | 네임스페이스 내 Deployment별 비용 |
+| Kubecost | `get_spot_savings` | Spot vs On-Demand 비율·절감액 |
+| Kubecost | `get_cluster_cost_summary` | 클러스터 전체 리소스 종류별 비용 |
+
+Kubecost REST는 `/model/allocation?window=...&aggregate=...&accumulate=true`(namespace/deployment/cluster aggregate) 한 엔드포인트를 재사용. 시스템 프롬프트가 날짜 표현("오늘"/"어제"/"이번 달")을 실제 `start_date`/`end_date`로 변환하는 규칙과 도구 선택 규칙(서비스별 합계 vs 일별 breakdown vs 트렌드)을 명시해 LLM의 오호출을 줄인다.
+
+#### 9.1.4 Kubecost 내부 ALB 연동 (Phase 2)
+
+```
+k8s/platform/kubecost/base/internal-alb-ingress.yaml
+  namespace: kubecost, backend: kubecost:9090
+  annotations: scheme=internal, target-type=ip, group.name=kubecost-internal
+      │ ArgoCD(utterai-platform-prod)가 동기화 → ALB 프로비저닝
+      ▼
+ALB DNS 확인 후 terraform.tfvars의 kubecost_alb_endpoint 변수에 수동 입력
+      ▼
+finops-query Lambda 환경변수 KUBECOST_ENDPOINT = "http://<alb-dns>"
+```
+
+이 변수는 ArgoCD가 먼저 Ingress를 동기화해서 ALB DNS가 발급된 뒤에만 채울 수 있는 닭-달걀 의존성이라, `03-services`(Terraform)와 `utterai-platform-prod`(ArgoCD)를 순서대로 적용해야 한다. 기본값은 빈 문자열이며, 비어 있으면 `finops-query`가 Kubecost 도구 호출 시 `RuntimeError("KUBECOST_ENDPOINT not configured")`를 반환한다.
+
+#### 9.1.5 Slack App 연동 (Phase 3, 수동 작업)
+
+- Slack App의 Slash Command(`/finops`) Request URL = `finops-slack` Lambda의 Function URL
+- Signing Secret은 Terraform 미관리 — `utterai-prod/finops-slack` Secrets Manager 시크릿은 Slack API 콘솔에서 발급 후 **수동 등록**(`{"signing_secret": "..."}`)
+- Function URL 자체는 `AuthType=NONE`(누구나 호출 가능)이지만 실질적인 인증은 핸들러 내부의 HMAC 서명 검증이 전담 — Slack이 아닌 요청은 전부 401
+
+
 
 ### 9.2 collect-papers — **배포·가동 중**
 
@@ -661,7 +725,9 @@ Kubecost: 내부 ALB Ingress 신규(§11.2) — Prometheus/Grafana는 외부(기
 | **ClusterSecretStore** | 전 네임스페이스 공유 단일 스토어 | 한 네임스페이스 침해 시 전체 Secret 접근 가능(측면 이동 리스크) |
 | **자체 호스팅 OpenSearch** | 단일 노드, 비관리형 | 노드 장애 시 관측성 데이터 유실 가능 |
 | **단일 NAT Gateway** | 2a에만 배치 | 2a 장애 시 2c의 아웃바운드도 영향 |
-| **FinOps 모델 ID** | 계획 문서는 `sonnet-4-6`, 실제 배포는 `claude-haiku-4-5` | 의도적 변경인지 확인 필요 |
+| **FinOps 모델 ID** | ~~계획 문서는 `sonnet-4-6`, 실제 배포는 `claude-haiku-4-5`~~ → §9.1.2에 3단계 교체 이력·사유 문서화 완료, 계획 문서도 갱신 | (해소됨) |
+| **finops-slack Function URL** | `AuthType=NONE`으로 공개 노출, 인증은 핸들러 내부 HMAC 서명 검증에만 의존 | 서명 검증 로직에 버그 발생 시 누구나 finops-agent(Bedrock 호출 비용 발생)를 트리거 가능 |
+| **finops-slack Secrets** | `utterai-prod/finops-slack` 시크릿이 Terraform 미관리, 콘솔에서 수동 생성 | state/코드만 봐서는 존재 여부·값 형식(`signing_secret` 키)을 알 수 없음, 재현성 낮음 |
 | **GPU NodePool capacity** | Spot+On-Demand 허용 | "GPU는 On-Demand 전용" 정책이 있었다면 코드와 불일치 |
 | **ArgoCD 동기화** | `ai-service-prod`, `backend-prod` 조사 시점 OutOfSync | Git과 클러스터 상태 드리프트 여부 확인 필요 |
 
