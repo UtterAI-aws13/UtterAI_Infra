@@ -321,7 +321,11 @@ resource "aws_lambda_function" "kure_retriever" {
   image_uri     = local.kure_retriever_image_uri
 
   memory_size = 3008
-  timeout     = 30
+  # 실제 검색(모델 로딩 + Kiwi/ontology + pgvector 쿼리)이 콜드 상태에서 15~47초
+  # 걸리는 것을 실측해 30초보다 여유 있게 60초로 잡았다. AgentCore Gateway 자체의
+  # tool 호출 타임아웃(~30초)은 이 값과 별개이며 Lambda 쪽에서 조정 불가하다 -
+  # CloudWatch warmup(5분 간격)으로 컨테이너를 최대한 웜 상태로 유지해 완화한다.
+  timeout = 60
 
   vpc_config {
     subnet_ids         = data.terraform_remote_state.network.outputs.private_app_subnet_ids
@@ -334,6 +338,10 @@ resource "aws_lambda_function" "kure_retriever" {
       DB_PORT        = "5432"
       DB_NAME        = "utterai"
       RDS_SECRET_ARN = module.rds.db_secret_arn
+      # 없으면 app.config.Settings.app_env 기본값("local")으로 떨어져 DB 연결이
+      # sslmode=disable로 시도되고, RDS가 "no pg_hba.conf entry ... no encryption"로
+      # 거부한다 - 실제 호출로 확인한 진짜 원인 (모델 로딩 속도 문제가 아니었다).
+      APP_ENV = var.environment
     }
   }
 
