@@ -184,6 +184,20 @@ resource "aws_iam_role_policy" "ai_cpu" {
         Resource = [var.report_analysis_queue_arn]
       },
       {
+        # 5-agent 리포트 생성 큐 - cpu-worker의 세 번째 폴링 스레드(report_generation_worker)가 소비한다.
+        Effect   = "Allow"
+        Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:ChangeMessageVisibility", "sqs:GetQueueAttributes"]
+        Resource = [var.report_generation_queue_arn]
+      },
+      {
+        # Evidence Research Agent가 evidence_research_gateway_url 경로로 AgentCore
+        # Gateway를 SigV4 직접 호출하기 위한 권한 (ai-service의 동일 권한과 동일한 이유).
+        Sid      = "InvokeReportEvidenceGateway"
+        Effect   = "Allow"
+        Action   = ["bedrock-agentcore:InvokeGateway"]
+        Resource = [var.report_generation_gateway_arn_pattern]
+      },
+      {
         Effect   = "Allow"
         Action   = ["s3:GetObject", "s3:PutObject"]
         Resource = ["${var.raw_audio_bucket_arn}/*"]

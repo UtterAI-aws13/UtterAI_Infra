@@ -98,6 +98,10 @@ spec:
           value: PLACEHOLDER
         - name: SQS_REPORT_ANALYSIS_QUEUE_URL
           value: PLACEHOLDER
+        - name: SQS_REPORT_GENERATION_QUEUE_URL
+          value: PLACEHOLDER
+        - name: EVIDENCE_RESEARCH_GATEWAY_URL
+          value: PLACEHOLDER
         - name: S3_BUCKET_REPORT
           value: PLACEHOLDER
         - name: BEDROCK_REGION

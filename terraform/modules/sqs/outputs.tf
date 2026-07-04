@@ -26,6 +26,14 @@ output "report_analysis_queue_arn" {
   value = aws_sqs_queue.report_analysis.arn
 }
 
+output "report_generation_queue_url" {
+  value = aws_sqs_queue.report_generation.url
+}
+
+output "report_generation_queue_arn" {
+  value = aws_sqs_queue.report_generation.arn
+}
+
 output "rag_ingest_queue_url" {
   value = aws_sqs_queue.rag_ingest.url
 }

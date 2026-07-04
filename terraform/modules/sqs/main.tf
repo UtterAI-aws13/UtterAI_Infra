@@ -89,6 +89,39 @@ resource "aws_sqs_queue" "report_analysis" {
   }
 }
 
+# ── Report Generation Queue (5-agent, ai-api produce → cpu-worker consume) ────
+# cpu-worker의 세 번째 폴링 스레드가 이 큐를 소비한다 - 전용 워커를 새로
+# 두지 않고 기존 cpu-worker pod에 얹었다 (worker 코드가 receive 시
+# VisibilityTimeout=1800으로 직접 지정하고 heartbeat로 연장하므로, 아래
+# 큐 레벨 기본값은 그 사이의 안전망 역할만 한다).
+
+resource "aws_sqs_queue" "report_generation_dlq" {
+  name                      = "${local.prefix}-report-generation-dlq"
+  message_retention_seconds = 604800
+  sqs_managed_sse_enabled   = true
+
+  tags = {
+    Name = "${local.prefix}-report-generation-dlq"
+  }
+}
+
+resource "aws_sqs_queue" "report_generation" {
+  name                       = "${local.prefix}-report-generation-queue"
+  visibility_timeout_seconds = var.report_visibility_timeout_seconds
+  message_retention_seconds  = var.message_retention_seconds
+  max_message_size           = 262144
+  sqs_managed_sse_enabled    = true
+
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.report_generation_dlq.arn
+    maxReceiveCount     = var.report_max_receive_count
+  })
+
+  tags = {
+    Name = "${local.prefix}-report-generation-queue"
+  }
+}
+
 # ── RAG Ingest Queue (batch-worker) ──────────────────────────────────────────
 
 resource "aws_sqs_queue" "rag_ingest_dlq" {

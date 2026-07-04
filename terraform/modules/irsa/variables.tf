@@ -62,6 +62,15 @@ variable "report_analysis_queue_arn" {
   type = string
 }
 
+variable "report_generation_queue_arn" {
+  type = string
+}
+
+variable "report_generation_gateway_arn_pattern" {
+  type        = string
+  description = "Evidence Research Agent가 호출하는 AgentCore Gateway ARN 패턴 (wildcard)"
+}
+
 variable "audio_preprocess_dlq_arn" {
   type = string
 }

@@ -25,6 +25,10 @@ spec:
               value: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-prod-gpu-inference-queue"
             - name: SQS_REPORT_ANALYSIS_QUEUE_URL
               value: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-prod-report-analysis-queue"
+            - name: SQS_REPORT_GENERATION_QUEUE_URL
+              value: "https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-prod-report-generation-queue"
+            - name: EVIDENCE_RESEARCH_GATEWAY_URL
+              value: "https://utterai-prod-report-evidence-gateway-5pqqq1wq76.gateway.bedrock-agentcore.ap-northeast-2.amazonaws.com/mcp"
             - name: S3_BUCKET_REPORT
               value: utterai-prod-reports
             - name: S3_BUCKET_AUDIO
