@@ -111,10 +111,11 @@ spec:
 ---
 # cpu-worker: SQS 기반 작업 → Spot 중단 시 visibility timeout으로 자동 재처리
 # 인스턴스 패밀리 4종으로 확장해 spot pool 확보
-# 2xlarge: pod 1개(cpu.requests=2)가 xlarge(4vCPU)에서는 노드당 1개만 들어가
+# pod 1개(cpu.requests=2)가 xlarge(4vCPU)에서는 노드당 1개만 들어가
 # maxReplicaCount(10)를 limits.cpu=32(=xlarge 8노드)로도 못 채우는 문제가 있었음.
-# 2xlarge(8vCPU)로 올려 노드당 3pod가 들어가게 하고, limits도 4노드(2xlarge) 기준으로 맞춤
-# → 32vCPU/8vCPU=4노드, 128Gi/32Gi=4노드 → 최대 12pod (maxReplicaCount=10 커버)
+# 2xlarge로 올려 해결 시도했으나 조직 SCP가 2xlarge 인스턴스 launch를 차단해 롤백.
+# 대신 xlarge 유지한 채 limits를 10노드(=maxReplicaCount) 기준으로 상향
+# → 40vCPU/4vCPU=10노드, 160Gi/16Gi=10노드 → 최대 10pod (maxReplicaCount=10 정확히 커버)
 apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
@@ -146,10 +147,10 @@ spec:
           values: ["m5", "m5a", "m6i", "m6a"]
         - key: karpenter.k8s.aws/instance-size
           operator: In
-          values: ["2xlarge"]
+          values: ["xlarge"]
   limits:
-    cpu: "32"
-    memory: "128Gi"
+    cpu: "40"
+    memory: "160Gi"
   disruption:
     consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: 5m
