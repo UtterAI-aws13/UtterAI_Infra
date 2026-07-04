@@ -249,6 +249,14 @@ resource "aws_iam_role_policy" "ai_service" {
           "arn:aws:bedrock:${var.aws_region}:${var.aws_account_id}:inference-profile/*",
         ]
       },
+      {
+        # Evidence Research Agent가 evidence_research_gateway_url이 설정됐을 때
+        # AgentCore Gateway(MCP, AWS_IAM 인증)를 SigV4로 직접 호출하기 위한 권한.
+        Sid      = "InvokeReportEvidenceGateway"
+        Effect   = "Allow"
+        Action   = ["bedrock-agentcore:InvokeGateway"]
+        Resource = ["arn:aws:bedrock-agentcore:${var.aws_region}:${var.aws_account_id}:gateway/${local.prefix}-report-evidence-gateway-*"]
+      },
     ]
   })
 }
