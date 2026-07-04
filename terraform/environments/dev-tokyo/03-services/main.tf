@@ -263,12 +263,15 @@ module "irsa" {
   tempo_bucket_arn       = module.s3.tempo_bucket_arn
   tempo_enabled          = true
 
-  audio_preprocess_queue_arn = module.sqs.audio_preprocess_queue_arn
-  gpu_inference_queue_arn    = module.sqs.gpu_inference_queue_arn
-  report_analysis_queue_arn  = module.sqs.report_analysis_queue_arn
-  audio_preprocess_dlq_arn   = module.sqs.audio_preprocess_dlq_arn
-  rag_ingest_queue_arn       = module.sqs.rag_ingest_queue_arn
-  rag_ingest_dlq_arn         = module.sqs.rag_ingest_dlq_arn
+  audio_preprocess_queue_arn  = module.sqs.audio_preprocess_queue_arn
+  gpu_inference_queue_arn     = module.sqs.gpu_inference_queue_arn
+  report_analysis_queue_arn   = module.sqs.report_analysis_queue_arn
+  report_generation_queue_arn = module.sqs.report_generation_queue_arn
+  audio_preprocess_dlq_arn    = module.sqs.audio_preprocess_dlq_arn
+  rag_ingest_queue_arn        = module.sqs.rag_ingest_queue_arn
+  rag_ingest_dlq_arn          = module.sqs.rag_ingest_dlq_arn
+
+  report_generation_gateway_arn_pattern = "arn:aws:bedrock-agentcore:${var.aws_region}:${data.aws_caller_identity.current.account_id}:gateway/utterai-${var.environment}-report-evidence-gateway-*"
 
   private_app_subnet_ids = data.terraform_remote_state.network.outputs.private_app_subnet_ids
   node_security_group_id = data.terraform_remote_state.eks.outputs.node_security_group_id
