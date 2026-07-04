@@ -46,7 +46,7 @@ data "aws_iam_policy_document" "report_evidence_gateway_assume" {
     condition {
       test     = "ArnLike"
       variable = "aws:SourceArn"
-      values   = [
+      values = [
         "arn:aws:bedrock-agentcore:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:gateway/${local.gateway_name}*"
       ]
     }
