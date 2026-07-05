@@ -195,10 +195,6 @@ resource "helm_release" "kube_prometheus_stack" {
                 effect   = "NoSchedule"
               }
             ]
-            podDisruptionBudget = {
-              enabled      = true
-              minAvailable = 1
-            }
           },
           var.prometheus_storage_enabled ? {
             storageSpec = {
@@ -216,6 +212,13 @@ resource "helm_release" "kube_prometheus_stack" {
             }
           } : {}
         )
+
+        # Prometheus Operator CRD(spec)에는 없는 필드라 prometheusSpec 안에 두면
+        # 조용히 무시된다 — chart 최상위 prometheus.podDisruptionBudget으로 분리.
+        podDisruptionBudget = {
+          enabled      = true
+          minAvailable = 1
+        }
       }
 
       grafana = merge(
