@@ -181,6 +181,24 @@ resource "helm_release" "kube_prometheus_stack" {
                 memory = "3Gi"
               }
             }
+
+            # system NodePool(CriticalAddonsOnly taint)에 고정 — Karpenter가
+            # 워크로드 노드를 대량으로 만들고/정리하는 동안에도 관측성 자체가
+            # 흔들리지 않도록 격리한다.
+            nodeSelector = {
+              role = "system"
+            }
+            tolerations = [
+              {
+                key      = "CriticalAddonsOnly"
+                operator = "Exists"
+                effect   = "NoSchedule"
+              }
+            ]
+            podDisruptionBudget = {
+              enabled      = true
+              minAvailable = 1
+            }
           },
           var.prometheus_storage_enabled ? {
             storageSpec = {
@@ -207,6 +225,22 @@ resource "helm_release" "kube_prometheus_stack" {
             type = "ClusterIP"
           }
           defaultDashboardsTimezone = "Asia/Seoul"
+
+          # Prometheus와 동일하게 system NodePool에 고정 — 이유는 위 prometheusSpec 주석 참고
+          nodeSelector = {
+            role = "system"
+          }
+          tolerations = [
+            {
+              key      = "CriticalAddonsOnly"
+              operator = "Exists"
+              effect   = "NoSchedule"
+            }
+          ]
+          podDisruptionBudget = {
+            enabled      = true
+            minAvailable = 1
+          }
           additionalDataSources = [
             {
               uid       = "loki"
