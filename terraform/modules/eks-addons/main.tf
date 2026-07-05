@@ -1136,6 +1136,13 @@ resource "helm_release" "karpenter" {
           limits   = { cpu = "500m", memory = "1Gi" }
         }
       }
+
+      # cluster-autoscaler/metrics-server와 동일하게 ServiceMonitor를 켜지 않으면
+      # Prometheus가 karpenter_* 메트릭 존재 자체를 모른다 — Grafana의
+      # Karpenter Activity 패널이 계속 No data였던 원인.
+      serviceMonitor = {
+        enabled = true
+      }
     })
   ]
 }
