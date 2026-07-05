@@ -143,6 +143,8 @@
 | Lambda IAM (SM GetSecretValue, S3 GetObject/PutObject, SQS SendMessage, Bedrock InvokeModel) | ✅ | |
 | FinOps Lambda 3종 (`finops-slack`/`finops-agent`/`finops-query`) | ✅ | 2026-07-03 신규 배포, `main.tf:380-639`. 상세는 [`architecture.md` §9.1](./architecture.md#91-finops-비용-조회-slack-봇--배포가동-중) |
 | `finops-query` `KUBECOST_ENDPOINT` 재현성 | ⚠️ | `kubecost_alb_endpoint` 변수가 `*.tfvars`(git 미추적)에만 값 존재 — clone 후 바로 apply 시 빈 문자열로 회귀 (`architecture.md` 리스크 표 참고) |
+| Spot 절감액 CUR 2.0/Athena 계산 | ✅ | 2026-07-05 코드·인프라·Lambda 배포 완료. Export `HEALTHY`, 첫 데이터 전달 대기 중에는 `data_unavailable` 반환 |
+| FinOps 관측성 | ✅ | 로그 30일 보존, Lambda 오류 3개 + Athena 스캔 + Spot 쿼리 오류 경보 |
 
 ---
 

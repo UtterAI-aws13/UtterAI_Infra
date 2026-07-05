@@ -46,3 +46,14 @@ variable "kubecost_alb_endpoint" {
   description = "Internal ALB DNS for Kubecost (http://<alb-dns>). Set after ArgoCD syncs the Ingress."
   default     = ""
 }
+
+variable "spot_tracking_start_date" {
+  type        = string
+  description = "First production date included in cumulative Spot savings queries (YYYY-MM-DD)."
+  default     = "2026-07-01"
+
+  validation {
+    condition     = can(regex("^\\d{4}-\\d{2}-\\d{2}$", var.spot_tracking_start_date))
+    error_message = "spot_tracking_start_date must use YYYY-MM-DD."
+  }
+}

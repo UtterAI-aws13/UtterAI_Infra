@@ -378,12 +378,13 @@ finops-slack Lambda  (Function URL, AuthType=NONE, 자체 HMAC 서명 검증)
 finops-agent Lambda  (Memory 512MB, Timeout 60s, VPC 없음)
     │  Bedrock Runtime invoke_model, 모델: global.anthropic.claude-haiku-4-5-20251001-v1:0
     │  시스템 프롬프트에 오늘/이번달 시작일 등 날짜를 매 요청 계산해서 주입 (LLM의 상대날짜 계산 오류 방지)
-    │  최대 10회 tool_use 루프, 9개 도구 정의(Cost Explorer 5종 + Kubecost 4종)를 함께 전달
-    │  최종 답변(end_turn)을 response_url로 POST, 실패 시에도 에러 메시지를 Slack에 POST
+    │  최대 10회 tool_use 루프, 9개 도구 정의(Cost Explorer 5종 + Kubecost 3종 + CUR/Athena 1종)
+    │  Spot 절감 단일 질문은 Claude 후속 생성을 건너뛰고 코드 템플릿으로 확정 수치만 출력
     ▼
 finops-query Lambda  (Memory 256MB, Timeout 30s, VPC 내부) — 순수 디스패처, Bedrock 미사용
     │  AWS Cost Explorer(us-east-1 ce 클라이언트, 리전 고정): 서비스별/일별/태그별 비용, 예측
-    │  Kubecost REST(내부 ALB, KUBECOST_ENDPOINT 환경변수): 네임스페이스/워크로드별 비용, Spot 절감액, 클러스터 요약
+    │  Kubecost REST(내부 ALB): 네임스페이스/워크로드별 비용, 클러스터 요약
+    │  CUR 2.0 → S3 Parquet → Glue/Athena: Spot 실제 비용·온디맨드 환산 비용·절감액
     ▼
 결과 → finops-agent가 종합 응답 생성 → Slack response_url로 POST
 ```
@@ -394,11 +395,11 @@ finops-query Lambda  (Memory 256MB, Timeout 30s, VPC 내부) — 순수 디스�
 |---|---|---|---|---|---|
 | `utterai-prod-finops-slack` | python3.12 | 256MB / 10s | 없음 | `secretsmanager:GetSecretValue`(`utterai-prod/finops-slack*`), `lambda:InvokeFunction`(finops-agent ARN 한정) | Function URL(AuthType=NONE, 공개 — 보안은 Slack 서명 검증에 위임) |
 | `utterai-prod-finops-agent` | python3.12 | 512MB / 60s | 없음 | `bedrock:InvokeModel`(foundation-model/\* + inference-profile/\*), `lambda:InvokeFunction`(finops-query ARN 한정) | finops-slack의 비동기 invoke, 또는 콘솔에서 직접 invoke(`{"question": "..."}`) |
-| `utterai-prod-finops-query` | python3.12 | 256MB / 30s | Private App Subnet + 전용 SG | `ce:GetCostAndUsage`/`GetCostForecast`/`GetDimensionValues`/`GetTags` (Resource=\*), `AWSLambdaVPCAccessExecutionRole` | finops-agent의 동기 invoke (tool_use마다 1회) |
+| `utterai-prod-finops-query` | python3.12 | 256MB / 30s | Private App Subnet + 전용 SG | Cost Explorer, Athena Workgroup, Glue table, CUR/결과 S3 prefix, `cloudwatch:PutMetricData`, VPC 실행 권한 | finops-agent의 동기 invoke (tool_use마다 1회) |
 
 - `finops-query`만 VPC에 배치되는 이유: Kubecost 내부 ALB(사설 IP)에 도달하려면 Private App Subnet에 ENI가 필요. Cost Explorer는 퍼블릭 엔드포인트라 원래 VPC가 필요 없지만, 같은 Lambda 안에 두 데이터소스를 합쳤기 때문에 VPC 종속.
 - 전용 SG(`finops_query`)는 egress만 정의: 80/tcp(Kubecost ALB), 443/tcp(Cost Explorer·Secrets Manager). Ingress 규칙 없음(Lambda가 외부에서 직접 호출되지 않음).
-- 세 Lambda 모두 Terraform `archive_file` data source로 핸들러 `.py` 단일 파일을 zip 패키징 — 별도 빌드 파이프라인/ECR 없이 `terraform apply` 시점에 로컬에서 압축·배포됨(kure-retriever의 컨테이너 이미지 방식과 대조적).
+- finops-slack/agent는 단일 핸들러 파일, finops-query는 `handler.py`+`spot_savings.py` 디렉터리를 Terraform `archive_file`로 zip 패키징한다.
 
 #### 9.1.2 Bedrock 모델 ID — 3회 수정 끝에 확정
 
@@ -422,10 +423,10 @@ finops-query Lambda  (Memory 256MB, Timeout 30s, VPC 내부) — 순수 디스�
 | Cost Explorer | `get_cost_by_tag` | 태그(Environment 등) 기준 비용 |
 | Kubecost | `get_namespace_costs` | 네임스페이스별 CPU/메모리/GPU 비용 |
 | Kubecost | `get_workload_costs` | 네임스페이스 내 Deployment별 비용 |
-| Kubecost | `get_spot_savings` | Spot vs On-Demand 비율·절감액 |
+| CUR 2.0 + Athena | `get_spot_savings` | 동일 Spot 사용량의 실제 비용 vs 온디맨드 공개가격 환산 비용, 절감액·절감률 |
 | Kubecost | `get_cluster_cost_summary` | 클러스터 전체 리소스 종류별 비용 |
 
-Kubecost REST는 `/model/allocation?window=...&aggregate=...&accumulate=true`(namespace/deployment/cluster aggregate) 한 엔드포인트를 재사용. 시스템 프롬프트가 날짜 표현("오늘"/"어제"/"이번 달")을 실제 `start_date`/`end_date`로 변환하는 규칙과 도구 선택 규칙(서비스별 합계 vs 일별 breakdown vs 트렌드)을 명시해 LLM의 오호출을 줄인다.
+Kubecost REST는 `/model/allocation?window=...&aggregate=...&accumulate=true`를 namespace/deployment/cluster 비용에만 사용한다. Spot 절감액은 Allocation 응답의 `totalCost`를 사용하지 않고 CUR 2.0의 `pricing_public_on_demand_cost - line_item_unblended_cost`로 계산한다. 시스템 프롬프트는 KST 상대날짜와 도구에 없는 숫자 추론 금지를 명시한다.
 
 #### 9.1.4 Kubecost 내부 ALB 연동 (Phase 2)
 
@@ -447,6 +448,24 @@ finops-query Lambda 환경변수 KUBECOST_ENDPOINT = "http://<alb-dns>"
 - Slack App의 Slash Command(`/finops`) Request URL = `finops-slack` Lambda의 Function URL
 - Signing Secret은 Terraform 미관리 — `utterai-prod/finops-slack` Secrets Manager 시크릿은 Slack API 콘솔에서 발급 후 **수동 등록**(`{"signing_secret": "..."}`)
 - Function URL 자체는 `AuthType=NONE`(누구나 호출 가능)이지만 실질적인 인증은 핸들러 내부의 HMAC 서명 검증이 전담 — Slack이 아닌 요청은 전부 401
+
+#### 9.1.6 Spot 절감 정확도 고도화 (Phase 4, 2026-07-05 배포)
+
+```text
+BCM Data Export (CUR 2.0, hourly, resource-level, Parquet)
+  → s3://utterai-prod-finops-cur-<account>/finops/utterai-prod-cur-2-0/data/BILLING_PERIOD=YYYY-MM/
+  → Glue DB utterai_prod_finops / table cur2_spot_costs
+  → Athena Workgroup utterai-prod-finops (쿼리당 1GiB 제한)
+  → finops-query get_spot_savings
+```
+
+- 계산식: `Σ publicOnDemandCost - Σ UnblendedCost`, 절감률은 온디맨드 환산액 기준
+- 조회 범위: KST, 최대 90일, 파티션 프루닝, group_by allowlist
+- “Spot 전환 후” 기본 시작일: `SPOT_TRACKING_START_DATE=2026-07-01`
+- `complete`만 금액 표시. 기준가격 누락은 `partial`, 첫 CUR 전달 전은 `data_unavailable`
+- Spot 단일 질문의 Slack 표는 Claude가 아니라 코드가 생성해 숫자 환각을 차단
+- 보안/운영: S3 퍼블릭 차단·SSE-S3·400일 보존, Athena 결과 30일 만료, Lambda 로그 30일 보존, 오류/스캔 경보 5개
+- 2026-07-05 실배포 검증: query/agent Lambda 모두 `data_unavailable`을 정상 반환. Export는 `HEALTHY`이나 첫 execution/Parquet 전달은 아직 대기 중
 
 
 

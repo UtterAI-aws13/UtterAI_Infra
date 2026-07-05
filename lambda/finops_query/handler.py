@@ -4,6 +4,8 @@ import urllib.request
 import boto3
 from datetime import datetime, timedelta
 
+from spot_savings import get_spot_savings
+
 ce = boto3.client("ce", region_name="us-east-1")  # Cost Explorer is us-east-1 only
 KUBECOST_ENDPOINT = os.environ.get("KUBECOST_ENDPOINT", "").rstrip("/")
 
@@ -147,23 +149,6 @@ def get_workload_costs(namespace: str, window: str = "30d") -> dict:
         })
     items.sort(key=lambda x: x["total_usd"], reverse=True)
     return {"namespace": namespace, "window": window, "workloads": items[:10]}
-
-
-def get_spot_savings(window: str = "30d") -> dict:
-    data = _kubecost_get(f"/model/allocation?window={window}&aggregate=cluster&accumulate=true")
-    cluster = list((data.get("data") or [{}])[0].values())
-    if not cluster:
-        return {"error": "No cluster data"}
-    c = cluster[0]
-    return {
-        "window": window,
-        "total_usd": round(c.get("totalCost", 0), 2),
-        "spot_usd": round(c.get("spotCost", 0), 2),
-        "on_demand_usd": round(c.get("onDemandCost", 0), 2),
-        "spot_ratio_pct": round(
-            c.get("spotCost", 0) / max(c.get("totalCost", 1), 0.01) * 100, 1
-        ),
-    }
 
 
 def get_cluster_cost_summary(window: str = "30d") -> dict:

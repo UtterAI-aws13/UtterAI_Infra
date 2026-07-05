@@ -48,16 +48,16 @@ def handler(event, context):
         raw_body = base64.b64decode(raw_body).decode("utf-8")
     body = raw_body
     headers = {k.lower(): v for k, v in (event.get("headers") or {}).items()}
-    print(f"[DEBUG] headers={headers}")
-    print(f"[DEBUG] body={body[:200]}")
 
     if not _verify_signature(headers, body):
+        print("[WARN] rejected Slack request with invalid signature")
         return {"statusCode": 401, "body": "Unauthorized"}
 
     params = dict(urllib.parse.parse_qsl(body))
     question = params.get("text", "").strip()
     response_url = params.get("response_url", "")
     user_name = params.get("user_name", "unknown")
+    print(f"[INFO] accepted /finops request user={user_name} question_length={len(question)}")
 
     if not question:
         return {

@@ -391,7 +391,7 @@ locals {
 
 data "archive_file" "finops_query" {
   type        = "zip"
-  source_file = "${path.module}/../../../../lambda/finops_query/handler.py"
+  source_dir  = "${path.module}/../../../../lambda/finops_query"
   output_path = "${path.module}/finops_query.zip"
 }
 
@@ -480,7 +480,11 @@ resource "aws_lambda_function" "finops_query" {
 
   environment {
     variables = {
-      KUBECOST_ENDPOINT = var.kubecost_alb_endpoint
+      KUBECOST_ENDPOINT        = var.kubecost_alb_endpoint
+      ATHENA_DATABASE          = aws_glue_catalog_database.finops.name
+      ATHENA_TABLE             = aws_glue_catalog_table.finops_cur.name
+      ATHENA_WORKGROUP         = aws_athena_workgroup.finops.name
+      SPOT_TRACKING_START_DATE = var.spot_tracking_start_date
     }
   }
 }

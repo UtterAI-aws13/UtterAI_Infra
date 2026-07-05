@@ -413,3 +413,168 @@ KURE retriever는 AgentCore Gateway를 거쳐 외부 클라이언트(Bedrock Run
 **환율 고정 — 1,400원/USD**
 
 Cost Explorer는 USD로 반환. 매 요청마다 환율 API를 호출하지 않고 시스템 프롬프트에 고정 환율 명시. 정확한 KRW가 필요하면 별도 환율 tool 추가 가능.
+
+---
+
+## Phase 4 — Spot 절감액 정확도·운영 고도화 (진행 중)
+
+> 시작일: 2026-07-05
+> 배경: 기존 `get_spot_savings`는 Kubecost Allocation 응답에 존재하지 않는
+> `spotCost`/`onDemandCost` 필드를 `0`으로 처리했고, Claude가 `totalCost=21.33`을
+> 절감액으로 오해해 Slack에 잘못 표시했다. 실제 클러스터에는 Spot 노드가 존재하므로
+> "Spot 사용 0"이라는 답변도 사실과 다르다.
+
+### 계산 기준
+
+Spot 절감액은 전환 전후 총비용 단순 비교가 아니라 **동일한 Spot 사용량을
+온디맨드 공개가격으로 실행했을 때의 환산 비용**과 비교한다.
+
+```text
+온디맨드 환산 비용 = Σ pricing/publicOnDemandCost
+실제 Spot 비용     = Σ lineItem/UnblendedCost
+Spot 절감액         = 온디맨드 환산 비용 - 실제 Spot 비용
+Spot 절감률         = Spot 절감액 / 온디맨드 환산 비용 × 100
+```
+
+전환 전후 총비용은 워크로드 사용량 변화가 섞이므로 별도 지표로만 제공한다.
+
+### 구현 단계와 진행 상태
+
+| 단계 | 작업 | 완료 기준 | 상태 |
+|------|------|-----------|------|
+| 4-1 | 오답 즉시 차단 | 누락 필드를 `0`으로 만들지 않고 `data_unavailable` 반환, LLM 숫자 추론 금지, 단위 테스트 | ✅ 완료 |
+| 4-2 | 비용 데이터 기반 | CUR 2.0/Data Export, S3, Glue, Athena Workgroup, 최소권한 IAM을 Terraform으로 관리 | ✅ 완료 |
+| 4-3 | 정확한 계산 도구 | Athena 기반 `get_spot_savings(start_date, end_date, group_by)`와 구조화된 응답 계약 구현 | ✅ 완료 |
+| 4-4 | 결정적 Slack 출력 | 숫자·표는 코드가 생성하고 Claude는 의도/기간 선택만 담당 | ✅ 완료 |
+| 4-5 | 전환 후 누적 조회 | 검증된 `SPOT_TRACKING_START_DATE`부터 누적 절감액 조회 | ✅ 완료 |
+| 4-6 | 검증·관측성·배포 | 테스트, 데이터 최신성/오류 지표·알람, 실제 Lambda/Slack 검증 | ✅ 완료 (CUR 첫 전달 대기) |
+
+### 목표 응답 계약
+
+```json
+{
+  "status": "complete",
+  "period": {
+    "start": "2026-07-01",
+    "end": "2026-07-06",
+    "timezone": "Asia/Seoul"
+  },
+  "spot_actual_usd": 8.41,
+  "on_demand_equivalent_usd": 29.74,
+  "savings_usd": 21.33,
+  "savings_pct": 71.7,
+  "spot_node_hours": 92.4,
+  "breakdown": [],
+  "data_updated_at": "2026-07-05T12:00:00Z",
+  "calculation_method": "AWS_CUR_PUBLIC_ON_DEMAND"
+}
+```
+
+`complete`가 아닌 경우 숫자를 `0`으로 대체하지 않는다. `status`, `reason`,
+`data_updated_at`을 이용해 Slack에 데이터 미준비/지연을 명시한다.
+
+### 조사 결과 (착수 시점)
+
+- AWS 계정에 BCM Data Export 없음
+- 레거시 CUR Report Definition 없음
+- Glue Database 없음
+- Athena는 기본 `primary` Workgroup만 존재
+- 실제 EKS 노드 중 Spot 3대 확인(API NodePool 2대, cpu-worker NodePool 1대)
+- 현재 `get_spot_savings(window=30d)` 실제 반환:
+  `total_usd=21.33`, `spot_usd=0`, `on_demand_usd=0`, `spot_ratio_pct=0`
+
+각 단계 완료 직후 이 표의 상태와 실제 변경 파일·검증 결과를 갱신한다.
+
+### 4-1 완료 기록 — 오답 즉시 차단
+
+- `lambda/finops_query/handler.py`
+  - Kubecost `totalCost`를 유지하되 `cluster_total_usd`로만 명시
+  - 존재하지 않는 `spotCost`/`onDemandCost`와 파생 절감률 제거
+  - 정확한 CUR 기반 계산 전까지 `status=data_unavailable` 반환
+- `lambda/finops_agent/handler.py`
+  - 도구에 없는 숫자·비율·절감액 추론 금지 규칙 추가
+  - `data_unavailable`을 `0`으로 변환하지 않도록 명시
+- `tests/unit/test_finops_query.py`
+  - `totalCost=21.33`이 절감액으로 노출되지 않는 회귀 테스트
+  - 빈 Kubecost Allocation 응답 테스트
+- 검증: `python -m unittest tests.unit.test_finops_query -v` 2건 통과,
+  Lambda 핸들러 3종 `py_compile` 통과
+
+### 4-2 완료 기록 — CUR 2.0 · Athena 기반
+
+- `terraform/environments/prod/03-services/finops_billing.tf` 신규
+  - CUR 2.0 BCM Data Export: `utterai-prod-cur-2-0`
+  - 시간 단위·리소스 단위 Parquet, 기존 월 파티션 덮어쓰기
+  - 암호화·퍼블릭 차단·400일 보존 S3 버킷
+  - 30일 만료 Athena 결과 버킷
+  - Glue DB `utterai_prod_finops`, 파티션 프로젝션 테이블 `cur2_spot_costs`
+  - Athena Workgroup `utterai-prod-finops`, 쿼리당 1GiB 스캔 제한
+  - finops-query 역할에 Athena/Glue/S3 최소권한 추가
+- `terraform.tf`: BCM API용 `aws.us_east_1` provider alias 추가
+- `variables.tf`: `spot_tracking_start_date`(`2026-07-01`) 추가
+- AWS 적용 결과: FinOps 신규 리소스 17개 생성, 기존 리소스 변경/삭제 없음
+- Export 상태: `HEALTHY` 확인
+- Provider 5.100이 AWS 기본값 `BILLING_VIEW_ARN`,
+  `INCLUDE_MANUAL_DISCOUNT_COMPATIBILITY`를 응답에 추가해 최초 apply가 inconsistent
+  result로 끝나는 문제가 있었고, 두 값을 코드에 명시한 뒤 state taint를 해제해 해소
+- 검증: `terraform validate` 성공, FinOps target plan 인프라 변경 없음
+
+### 4-3 완료 기록 — Athena 기반 Spot 절감 계산
+
+- `lambda/finops_query/spot_savings.py` 신규
+  - KST 기준 명시 날짜 또는 `Nd` 조회, 최대 90일 제한
+  - `billing_period` 파티션 프루닝과 SQL 입력 allowlist
+  - EC2 `SpotUsage` 사용 행만 집계
+  - `pricing_public_on_demand_cost - line_item_unblended_cost`로 절감액 계산
+  - 전체/인스턴스 타입/NodePool 기준 breakdown 지원
+  - 기준가격 누락 시 `partial`, 데이터 미도착 시 `data_unavailable`
+- `lambda/finops_query/handler.py`: 기존 Kubecost 추정 로직을 Athena 모듈로 교체
+- `terraform/environments/prod/03-services/main.tf`
+  - finops-query 패키징을 단일 파일에서 디렉터리 ZIP으로 변경
+  - Athena DB/Table/Workgroup 및 추적 시작일 환경변수 연결
+- `tests/unit/test_finops_query.py`
+  - 파티션/Spot 필터 SQL, 기간 제한, 정확한 계산, 데이터 미도착 회귀 테스트
+- 검증: 단위 테스트 4건 통과, Terraform validate 성공
+
+### 4-4 완료 기록 — 결정적 Slack 출력
+
+- `lambda/finops_agent/handler.py`
+  - 단일 `get_spot_savings` 호출은 Claude 후속 생성을 건너뜀
+  - `complete` 응답만 온디맨드 환산액·실제 비용·절감액·절감률로 렌더링
+  - `partial`은 절감액을 숨기고 기준가격 누락 경고
+  - `data_unavailable`은 `$0`, `0%` 대신 CUR 준비 상태 표시
+  - USD→KRW 계산과 Slack 표를 코드에서 결정적으로 생성
+- `tests/unit/test_finops_agent.py`
+  - 정상/부분/데이터 미도착 출력 테스트 3건 추가
+- 검증: FinOps 단위 테스트 총 7건 통과
+
+### 4-5 완료 기록 — 전환 후 누적 조회
+
+- 추적 기준일: `2026-07-01`
+  - 현재 운영 Spot 노드의 최초 생성 시점과 CUR 2.0 최초 수집 가능 월을 기준으로 설정
+  - Terraform 변수 `spot_tracking_start_date`로 변경 가능
+- “Spot 전환 후/전환하고/전환 이후 누적” 질문을 `window=since_tracking`으로 매핑
+- 명시 날짜·최근 N일 요청도 추적 시작일 이전으로 내려가지 않도록 clamp
+- Agent 날짜 계산을 Lambda 기본 UTC에서 `Asia/Seoul`로 수정
+- Spot tool schema에 `start_date`, `end_date`, `group_by` 추가
+- 검증: 누적 기준일·tool schema 테스트를 추가해 총 9건 통과
+
+### 4-6 완료 기록 — 검증·관측성·배포
+
+- `lambda/finops_query/spot_savings.py`
+  - `CURDataAvailable`, `SpotBaselineCoveragePct`, query success/error 커스텀 지표
+- `terraform/environments/prod/03-services/finops_observability.tf` 신규
+  - FinOps Lambda 로그 3종을 Terraform state로 import하고 보존기간 30일 적용
+  - Lambda Errors 3개, Athena 500MiB/5분 스캔, Spot 쿼리 오류 경보 생성
+- `lambda/finops_slack/handler.py`
+  - Slack 서명/response URL/질문이 포함될 수 있는 raw header/body 로그 제거
+  - 사용자명과 질문 길이만 구조화 로그로 남김
+- 프로덕션 배포
+  - finops-query/agent/slack Lambda 코드 및 환경변수 갱신 성공
+  - target plan/apply로 기존 비-FinOps 드리프트를 제외하고 삭제 없이 적용
+  - 적용 후 FinOps target plan `No changes` 확인
+- 실제 호출 검증
+  - `get_spot_savings(window=since_tracking)` → `data_unavailable`, 기간 2026-07-01~2026-07-06(KST) 정상
+  - 자연어 “우리 spot으로 전환하고 얼마 줄었지?” → 숫자를 만들지 않고 CUR 준비 중 메시지 반환
+- CUR 2.0 Export 자체는 `HEALTHY`. 조사 시점에는 execution 0건/S3 Parquet 미도착으로,
+  첫 전달 후 동일 질문이 자동으로 실제 절감액 표로 전환된다.

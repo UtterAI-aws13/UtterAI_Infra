@@ -206,6 +206,10 @@ $RECYCLE.BIN/
 
 **/.claude
 
+# Python bytecode / local test artifacts
+__pycache__/
+*.py[cod]
+
 # 부하 테스트 결과 로그 (로컬 측정값, 버전 관리 불필요)
 docs/dev/results/
 

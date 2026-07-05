@@ -1257,6 +1257,7 @@ data:
             "y": 42
           },
           "id": 16,
+          "description": "CA와 Karpenter를 서로 다른 시각에 순차 테스트한 경우, 더 먼저 측정한 쪽의 offset 변수(karpenter_offset 또는 ca_offset)에 두 테스트 시작 시각 차이(예: 3h20m)를 넣으면 같은 화면 시간대에 겹쳐서 비교할 수 있다.",
           "options": {
             "legend": {
               "calcs": [
@@ -1274,17 +1275,17 @@ data:
           },
           "targets": [
             {
-              "expr": "count(max by (node) (kube_node_labels{label_karpenter_sh_nodepool=\"cpu-worker\"}))",
-              "legendFormat": "Karpenter cpu-worker NodePool",
+              "expr": "count(max by (node) (kube_node_labels{label_karpenter_sh_nodepool=\"cpu-worker\"} offset $karpenter_offset))",
+              "legendFormat": "Karpenter (offset=$karpenter_offset)",
               "refId": "A"
             },
             {
-              "expr": "count(max by (node) (kube_node_labels{label_role=\"worker\"}))",
-              "legendFormat": "CA legacy worker MNG",
+              "expr": "count(max by (node) (kube_node_labels{label_role=\"worker\"} offset $ca_offset))",
+              "legendFormat": "CA legacy MNG (offset=$ca_offset)",
               "refId": "B"
             }
           ],
-          "title": "cpu-worker 노드 수 (Karpenter vs CA)",
+          "title": "노드 수 스케일링 비교 (Karpenter vs CA)",
           "type": "timeseries"
         }
       ],
@@ -1315,6 +1316,34 @@ data:
             "regex": "",
             "skipUrlSync": false,
             "type": "datasource"
+          },
+          {
+            "current": {
+              "selected": false,
+              "text": "0s",
+              "value": "0s"
+            },
+            "hide": 0,
+            "label": "Karpenter offset",
+            "name": "karpenter_offset",
+            "options": [],
+            "query": "0s",
+            "skipUrlSync": false,
+            "type": "textbox"
+          },
+          {
+            "current": {
+              "selected": false,
+              "text": "0s",
+              "value": "0s"
+            },
+            "hide": 0,
+            "label": "CA offset",
+            "name": "ca_offset",
+            "options": [],
+            "query": "0s",
+            "skipUrlSync": false,
+            "type": "textbox"
           }
         ]
       },
