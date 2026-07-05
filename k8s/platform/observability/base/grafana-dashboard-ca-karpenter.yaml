@@ -1280,7 +1280,7 @@ data:
               "refId": "A"
             },
             {
-              "expr": "count(max by (node) (kube_node_labels{label_role=\"worker\"} offset $ca_offset))",
+              "expr": "count(max by (node) (kube_node_labels{label_eks_amazonaws_com_nodegroup=~\".*-worker\"} offset $ca_offset))",
               "legendFormat": "CA legacy MNG (offset=$ca_offset)",
               "refId": "B"
             }
@@ -1320,28 +1320,28 @@ data:
           {
             "current": {
               "selected": false,
-              "text": "0s",
-              "value": "0s"
+              "text": "0",
+              "value": "0"
             },
             "hide": 0,
             "label": "Karpenter offset",
             "name": "karpenter_offset",
             "options": [],
-            "query": "0s",
+            "query": "0",
             "skipUrlSync": false,
             "type": "textbox"
           },
           {
             "current": {
               "selected": false,
-              "text": "0s",
-              "value": "0s"
+              "text": "0",
+              "value": "0"
             },
             "hide": 0,
             "label": "CA offset",
             "name": "ca_offset",
             "options": [],
-            "query": "0s",
+            "query": "0",
             "skipUrlSync": false,
             "type": "textbox"
           }
