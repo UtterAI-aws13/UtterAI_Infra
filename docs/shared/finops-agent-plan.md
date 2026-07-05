@@ -416,7 +416,7 @@ Cost Explorer는 USD로 반환. 매 요청마다 환율 API를 호출하지 않�
 
 ---
 
-## Phase 4 — Spot 절감액 정확도·운영 고도화 (진행 중)
+## Phase 4 — Spot 절감액 정확도·운영 고도화 (구현·배포 완료, CUR 첫 전달 검증 대기)
 
 > 시작일: 2026-07-05
 > 배경: 기존 `get_spot_savings`는 Kubecost Allocation 응답에 존재하지 않는
@@ -578,3 +578,86 @@ Spot 절감률         = Spot 절감액 / 온디맨드 환산 비용 × 100
   - 자연어 “우리 spot으로 전환하고 얼마 줄었지?” → 숫자를 만들지 않고 CUR 준비 중 메시지 반환
 - CUR 2.0 Export 자체는 `HEALTHY`. 조사 시점에는 execution 0건/S3 Parquet 미도착으로,
   첫 전달 후 동일 질문이 자동으로 실제 절감액 표로 전환된다.
+
+### 현재 구현 방향
+
+FinOps Agent는 하나의 데이터소스가 모든 비용 질문에 답하는 구조가 아니라,
+질문 유형에 따라 검증 가능한 원천을 선택하는 구조다.
+
+| 질문 유형 | 데이터소스 | 역할 |
+|---|---|---|
+| 전체 AWS 비용·서비스별 추이·예측 | Cost Explorer | AWS 청구 비용 조회 |
+| EKS 네임스페이스·워크로드·CPU/GPU 비용 | Kubecost | Kubernetes 비용 할당 |
+| Spot 가격 효과 | CUR 2.0 + Athena | 동일 사용량의 Spot 실제 비용과 온디맨드 공개가격 비교 |
+| 자연어 의도·기간 해석 | Claude | tool 선택과 일반 비용 답변 구성 |
+| Spot 금액·표 출력 | Python 코드 | 검증된 tool 필드만 결정적으로 출력 |
+
+Claude는 비용의 원천이나 계산기가 아니다. 특히 Spot 단일 질문은 Claude의 후속
+자유 생성을 건너뛰어 `spot_savings.py` 결과만 Slack에 출력한다.
+
+### 알려진 한계와 수치 해석 주의
+
+1. **Spot 절감액은 실제 전환 전후 청구액 차이가 아니다.**
+   동일한 Spot 사용량을 AWS 온디맨드 공개가격으로 실행했을 때와 비교한
+   반사실적(counterfactual) 가격 효과다. 워크로드 증감, 리소스 구성 변경,
+   EKS/ElastiCache/RDS 등 다른 서비스 변화는 포함하지 않는다.
+2. **조직별 계약 할인과 다를 수 있다.**
+   `pricing/publicOnDemandCost`는 공개 온디맨드 가격 기준이므로 EDP·사설 요금 등
+   계정별 계약 조건을 반영한 실제 대체비용과 차이가 날 수 있다.
+3. **CUR 첫 실데이터 검증이 남아 있다.**
+   코드·인프라·Lambda 배포와 빈 데이터 안전 동작은 검증했지만, 조사 시점에는
+   Export execution 0건/S3 객체 0개였다. 첫 Parquet 도착 후 컬럼 타입, Spot 행 필터,
+   합계와 Slack 표를 실제 청구 데이터로 재검증해야 한다.
+4. **과거 데이터 범위가 제한된다.**
+   조회는 최대 90일이며 `SPOT_TRACKING_START_DATE=2026-07-01` 이전 요청은 해당
+   날짜로 clamp된다. 이 날짜는 현재 운영 전환 추적 기준이며 실제 정책 변경일과
+   다르면 Terraform 변수로 수정해야 한다.
+5. **NodePool 상세는 태그 품질에 의존한다.**
+   CUR `resource_tags`에 Karpenter NodePool 태그가 없거나 Cost Allocation Tag가
+   비활성화되어 있으면 breakdown이 `unallocated`로 표시된다.
+6. **전환 전후 단순 비교로 Spot 인과관계를 단정할 수 없다.**
+   예: 6월 18~19일과 21~22일 총비용 감소는 "비교 구간에서 관측된 감소"이며,
+   Spot 자체 절감액으로 표현하지 않는다. Spot 기여분은 CUR 계산 결과로만 표시한다.
+7. **경보는 현재 CloudWatch 상태만 생성한다.**
+   Lambda 오류, Athena 스캔, Spot 쿼리 오류 Alarm은 있으나 SNS/Slack/PagerDuty
+   action은 연결하지 않았다. 운영 알림이 필요하면 별도 notification target이 필요하다.
+8. **Kubecost endpoint 재현성 문제가 남아 있다.**
+   `kubecost_alb_endpoint`가 git 미추적 `terraform.tfvars`에 있으므로 새 환경에서
+   값을 누락하면 Kubecost 3종 도구(namespace/workload/cluster)가 실패한다.
+
+### Kubecost Savings 해석과 이력 보존 개선 (2026-07-05)
+
+#### Savings 수치의 의미
+
+- Kubecost `Savings`는 이미 실현된 청구 절감액이 아니라, 현재 관측된 사용량과
+  선택한 Profile을 기준으로 추천을 적용했을 때의 **월간 예상 절감 가능액**이다.
+- 합계에는 container request/node/PV right-sizing, abandoned workload 등 활성화된
+  insight가 포함된다. Profile별 목표 사용률은 Production 65%, Development 80%,
+  High Availability 50%이므로 같은 워크로드도 Profile에 따라 값이 달라진다.
+- request를 줄여도 노드가 축소되지 않으면 AWS 청구액은 바로 감소하지 않고 idle
+  allocation만 증가할 수 있다. 따라서 장표에는 `절감 가능액`으로 표기하고, 실제
+  효과는 전후 AWS 비용과 노드 비용을 별도로 비교한다.
+- Spot Commander의 값도 Spot 전환·노드 재구성 시나리오에 대한 예상값이다.
+  FinOps Agent의 CUR 기반 Spot 가격 효과와 같은 수치로 취급하지 않는다.
+
+#### 6월 이력 미표시 원인과 조치
+
+- Kubecost 최초 배포 시각은 `2026-06-22T02:09:08Z`(KST 11:09)다. 그 이전의
+  Kubernetes allocation은 수집되지 않았으므로 Kubecost에서 복원할 수 없다.
+- S3 `utterai-prod-kubecost`에는 6월 22일부터 Federated ETL 파일이 남아 있었지만,
+  Aggregator가 `singlepod`/`emptyDir` 구성이라 Pod 교체 후 로컬 DB가 사라지고
+  Federated Store를 query source로 사용하지 못했다.
+- `kubecostAggregator.deployMethod=statefulset`으로 변경하고 S3 Federated Store를
+  ingestion source로 연결했다. Aggregator DB 20Gi와 config 1Gi PVC는 `gp2`에
+  영속화했으며 일 단위 ETL 보존기간은 14일에서 90일로 늘렸다.
+- 배포 후 로그에서 `Successfully created federated storage`,
+  `Using federated data store as data source` 및 6월 22~30일 derivation을 확인했다.
+  최초 백필 중에는 UI에 날짜가 순차적으로 나타날 수 있다.
+
+#### 확인 기준
+
+1. UI `Allocations`에서 Custom 기간을 6월 22일 이후로 지정한다.
+2. 6월 22일은 설치 시각 이후의 부분 일자이므로 완전한 하루와 직접 비교하지 않는다.
+3. 장기 추세는 Daily 해상도, 최근 이틀 상세 분석은 Hourly 해상도를 사용한다.
+4. `Savings`는 추천 기회, `Allocations`는 Kubernetes 원가 배분, CUR/Cost Explorer는
+   실제 AWS 청구 및 가격 효과라는 역할 구분을 유지한다.

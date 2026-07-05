@@ -61,6 +61,26 @@ idle 비용($54.35/7일)이 `utterai-ai-cpu`보다도 크다는 점은, KEDA+Kar
 "min=0 스케일투제로"가 왜 필요한지를 보여주는 근거로 쓸 수 있다(CA+HPA처럼 항상
 최소 1대 이상 떠있는 구조였다면 이 idle 비용이 구조적으로 더 컸을 것).
 
+#### `__idle__`이 정확히 뭘 뜻하는가
+
+`__idle__`은 실제 네임스페이스가 아니라 Kubecost가 만드는 특수 버킷이다. 계산 방식:
+
+```
+idle 비용 = 노드 전체 비용 - (그 노드 위 파드들이 실제 요청/사용한 만큼의 비용)
+```
+
+즉 노드는 떠 있는데 어떤 파드도 점유하지 않은 CPU/메모리/GPU 몫의 비용이다. 예:
+
+- 노드가 4vCPU인데 파드는 2vCPU만 요청 중 → 나머지 2vCPU 몫이 idle
+- Karpenter가 consolidation 하기 전, 파드가 다 빠진 뒤에도 노드가 잠깐 더 살아있는 구간
+- DaemonSet만 있고 실제 워크로드 파드는 없는 노드(오늘 gpu-worker 테스트 초반 상태와 동일)
+
+오늘 cpu 9대·batch 4대·gpu 4대를 짧게 띄웠다 내린 부하테스트가 이 수치에 영향을 줬을
+가능성이 크다 — 스케줄 대기/컨테이너 기동 중이던 시간, consolidation 전까지 비어있던
+노드 시간이 전부 idle로 집계됐을 것이다. FinOps 관점에서 이 idle 비용을 줄이는 것이
+정확히 Karpenter consolidation(빈 노드 빨리 제거)과 KEDA min=0(안 쓸 때 아예 0으로)이
+하는 역할이라, "왜 이 둘이 필요한가"를 설명할 때 좋은 근거가 된다.
+
 ### 3.2 노드 asset 예시 (`/model/assets?filterTypes=Node`)
 
 ```json
