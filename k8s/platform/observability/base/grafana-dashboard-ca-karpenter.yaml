@@ -1324,7 +1324,7 @@ data:
       },
       "timepicker": {},
       "timezone": "",
-      "title": "UtterAI CA vs Karpenter",
+      "title": "UtterAI CA vs Karpenter 스케일링",
       "uid": "utterai-ca-karpenter",
       "version": 1,
       "weekStart": ""
