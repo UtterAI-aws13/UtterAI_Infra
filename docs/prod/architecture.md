@@ -728,6 +728,7 @@ Kubecost: 내부 ALB Ingress 신규(§11.2) — Prometheus/Grafana는 외부(기
 | **FinOps 모델 ID** | ~~계획 문서는 `sonnet-4-6`, 실제 배포는 `claude-haiku-4-5`~~ → §9.1.2에 3단계 교체 이력·사유 문서화 완료, 계획 문서도 갱신 | (해소됨) |
 | **finops-slack Function URL** | `AuthType=NONE`으로 공개 노출, 인증은 핸들러 내부 HMAC 서명 검증에만 의존 | 서명 검증 로직에 버그 발생 시 누구나 finops-agent(Bedrock 호출 비용 발생)를 트리거 가능 |
 | **finops-slack Secrets** | `utterai-prod/finops-slack` 시크릿이 Terraform 미관리, 콘솔에서 수동 생성 | state/코드만 봐서는 존재 여부·값 형식(`signing_secret` 키)을 알 수 없음, 재현성 낮음 |
+| **`kubecost_alb_endpoint` 변수값** | `*.tfvars`가 `.gitignore:141`로 전체 미추적 — 실배포 Lambda 환경변수는 `KUBECOST_ENDPOINT=http://internal-k8s-kubecostinternal-*.elb.amazonaws.com`로 확인됨(2026-07-05 `aws lambda get-function-configuration` 검증)이나 이 값은 로컬 `terraform.tfvars`에만 존재 | 레포만 clone해서 `terraform apply`하면 변수 기본값(`""`)으로 되돌아가 Kubecost 4종 tool이 `RuntimeError("KUBECOST_ENDPOINT not configured")`로 회귀 — ALB DNS는 §9.1.4 순서대로 재조회해서 tfvars에 수동 재입력해야 함 |
 | **GPU NodePool capacity** | Spot+On-Demand 허용 | "GPU는 On-Demand 전용" 정책이 있었다면 코드와 불일치 |
 | **ArgoCD 동기화** | `ai-service-prod`, `backend-prod` 조사 시점 OutOfSync | Git과 클러스터 상태 드리프트 여부 확인 필요 |
 
