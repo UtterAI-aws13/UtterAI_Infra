@@ -141,6 +141,8 @@
 | `collect_papers` Lambda (Python 3.12, timeout 900s) | ✅ | |
 | EventBridge 월 1회 트리거 (매월 1일 UTC 00:00) | ✅ | |
 | Lambda IAM (SM GetSecretValue, S3 GetObject/PutObject, SQS SendMessage, Bedrock InvokeModel) | ✅ | |
+| FinOps Lambda 3종 (`finops-slack`/`finops-agent`/`finops-query`) | ✅ | 2026-07-03 신규 배포, `main.tf:380-639`. 상세는 [`architecture.md` §9.1](./architecture.md#91-finops-비용-조회-slack-봇--배포가동-중) |
+| `finops-query` `KUBECOST_ENDPOINT` 재현성 | ⚠️ | `kubecost_alb_endpoint` 변수가 `*.tfvars`(git 미추적)에만 값 존재 — clone 후 바로 apply 시 빈 문자열로 회귀 (`architecture.md` 리스크 표 참고) |
 
 ---
 
