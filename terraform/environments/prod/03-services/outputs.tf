@@ -108,23 +108,6 @@ output "finops_slack_function_url" {
   value       = aws_lambda_function_url.finops_slack.function_url
 }
 
-output "finops_cur_export_arn" {
-  description = "CUR 2.0 Data Export ARN used by the FinOps Spot savings calculation"
-  value       = aws_bcmdataexports_export.finops_cur.export[0].export_arn
-}
-
-output "finops_cur_bucket_name" {
-  value = aws_s3_bucket.finops_cur.bucket
-}
-
-output "finops_athena_workgroup" {
-  value = aws_athena_workgroup.finops.name
-}
-
-output "finops_athena_database" {
-  value = aws_glue_catalog_database.finops.name
-}
-
 # ── IRSA ─────────────────────────────────────────────────────────────────────
 
 output "backend_api_role_arn" {

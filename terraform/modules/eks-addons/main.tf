@@ -181,20 +181,6 @@ resource "helm_release" "kube_prometheus_stack" {
                 memory = "3Gi"
               }
             }
-
-            # system NodePool(CriticalAddonsOnly taint)에 고정 — Karpenter가
-            # 워크로드 노드를 대량으로 만들고/정리하는 동안에도 관측성 자체가
-            # 흔들리지 않도록 격리한다.
-            nodeSelector = {
-              role = "system"
-            }
-            tolerations = [
-              {
-                key      = "CriticalAddonsOnly"
-                operator = "Exists"
-                effect   = "NoSchedule"
-              }
-            ]
           },
           var.prometheus_storage_enabled ? {
             storageSpec = {
@@ -212,13 +198,6 @@ resource "helm_release" "kube_prometheus_stack" {
             }
           } : {}
         )
-
-        # Prometheus Operator CRD(spec)에는 없는 필드라 prometheusSpec 안에 두면
-        # 조용히 무시된다 — chart 최상위 prometheus.podDisruptionBudget으로 분리.
-        podDisruptionBudget = {
-          enabled      = true
-          minAvailable = 1
-        }
       }
 
       grafana = merge(
@@ -228,22 +207,6 @@ resource "helm_release" "kube_prometheus_stack" {
             type = "ClusterIP"
           }
           defaultDashboardsTimezone = "Asia/Seoul"
-
-          # Prometheus와 동일하게 system NodePool에 고정 — 이유는 위 prometheusSpec 주석 참고
-          nodeSelector = {
-            role = "system"
-          }
-          tolerations = [
-            {
-              key      = "CriticalAddonsOnly"
-              operator = "Exists"
-              effect   = "NoSchedule"
-            }
-          ]
-          podDisruptionBudget = {
-            enabled      = true
-            minAvailable = 1
-          }
           additionalDataSources = [
             {
               uid       = "loki"
@@ -1135,13 +1098,6 @@ resource "helm_release" "karpenter" {
           requests = { cpu = "100m", memory = "256Mi" }
           limits   = { cpu = "500m", memory = "1Gi" }
         }
-      }
-
-      # cluster-autoscaler/metrics-server와 동일하게 ServiceMonitor를 켜지 않으면
-      # Prometheus가 karpenter_* 메트릭 존재 자체를 모른다 — Grafana의
-      # Karpenter Activity 패널이 계속 No data였던 원인.
-      serviceMonitor = {
-        enabled = true
       }
     })
   ]

@@ -206,10 +206,6 @@ $RECYCLE.BIN/
 
 **/.claude
 
-# Python bytecode / local test artifacts
-__pycache__/
-*.py[cod]
-
 # 부하 테스트 결과 로그 (로컬 측정값, 버전 관리 불필요)
 docs/dev/results/
 
@@ -219,9 +215,3 @@ ct_events.json
 
 # Terraform Lambda zip 빌드 산출물 (Terraform이 로컬에서 자동 생성)
 terraform/**/*.zip
-
-# 아키텍처 다이어그램 편집 중 초안/미리보기 산출물 (로컬 작업용, 버전 관리 불필요)
-docs/prod/*.drawio
-docs/prod/.$*.dtmp
-docs/prod/*-preview.png
-docs/prod/icons/

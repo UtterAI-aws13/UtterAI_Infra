@@ -3,7 +3,6 @@ import os
 import urllib.request
 import boto3
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 
 bedrock = boto3.client("bedrock-runtime", region_name=os.environ.get("BEDROCK_REGION", "ap-northeast-2"))
 lambda_client = boto3.client("lambda")
@@ -22,7 +21,6 @@ AWS 비용 데이터를 조회해서 간결하고 명확하게 한국어로 답�
 - "어제" → start_date={yesterday}, end_date={today}
 - "이번 달", 날짜 미지정 → start_date={month_start}, end_date={tomorrow}
 - "지난 N일" → days=N
-- "Spot 전환 후", "Spot으로 전환하고", "전환 이후 누적" → get_spot_savings의 window=since_tracking
 
 ## 도구 선택 규칙
 - "서비스별 합계" (기간 합산) → get_cost_by_service
@@ -34,9 +32,7 @@ AWS 비용 데이터를 조회해서 간결하고 명확하게 한국어로 답�
 ## 출력 규칙
 - 금액: USD + KRW(환율 1,400원) 함께 표시 (예: $12.34 / 약 17,276원)
 - 증감: 방향(↑/↓)과 퍼센트 함께
-- 서비스 미지정 시 상위 5개만
-- 도구 결과에 없는 금액, 비율, 절감액을 추론하거나 계산해서 만들지 않습니다.
-- 도구가 status=data_unavailable을 반환하면 숫자를 0으로 바꾸지 말고 데이터가 준비되지 않았다고 답합니다.\
+- 서비스 미지정 시 상위 5개만\
 """
 
 TOOL_DEFINITIONS = [
@@ -126,21 +122,11 @@ TOOL_DEFINITIONS = [
     },
     {
         "name": "get_spot_savings",
-        "description": "Spot 절감액 조회. status=data_unavailable이면 숫자를 추론하지 말고 reason을 그대로 안내.",
+        "description": "Kubecost: Spot vs On-Demand 비용 비율 및 Spot 절감액. Spot 전환 효과 확인에 사용.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "window": {
-                    "type": "string",
-                    "description": "조회 기간(예: 7d, 30d). 전환 이후 누적은 since_tracking",
-                },
-                "start_date": {"type": "string", "description": "명시적 시작일 YYYY-MM-DD"},
-                "end_date": {"type": "string", "description": "명시적 종료일 YYYY-MM-DD, exclusive"},
-                "group_by": {
-                    "type": "string",
-                    "enum": ["none", "instance_type", "nodepool"],
-                    "description": "절감액 상세 분류 기준",
-                },
+                "window": {"type": "string", "description": "조회 기간 (예: 7d, 30d)"},
             },
             "required": [],
         },
@@ -159,84 +145,12 @@ TOOL_DEFINITIONS = [
 ]
 
 
-def call_tool(name: str, tool_input: dict) -> dict:
+def call_tool(name: str, tool_input: dict) -> str:
     resp = lambda_client.invoke(
         FunctionName=FINOPS_QUERY_ARN,
         Payload=json.dumps({"tool": name, "params": tool_input}),
     )
-    return json.loads(resp["Payload"].read())
-
-
-def _money(usd: float) -> str:
-    return f"${usd:,.2f} / 약 {round(usd * 1400):,}원"
-
-
-def _format_spot_savings(tool_response: dict) -> str:
-    if tool_response.get("error"):
-        return f":warning: Spot 절감 데이터를 조회하지 못했습니다.\n원인: {tool_response['error']}"
-
-    result = tool_response.get("result") or {}
-    status = result.get("status")
-    period = result.get("period") or {}
-    start = period.get("start", "-")
-    end = period.get("end", "-")
-
-    if status == "data_unavailable":
-        return (
-            ":hourglass_flowing_sand: *Spot 절감 데이터가 아직 준비되지 않았습니다.*\n"
-            f"조회 기간: {start} ~ {end} (종료일 미포함)\n"
-            f"원인: {result.get('reason', 'CUR 데이터 미도착')}\n"
-            "AWS CUR 2.0 데이터가 도착한 뒤 자동으로 조회할 수 있습니다."
-        )
-
-    if status != "complete":
-        return (
-            ":warning: *Spot 절감액을 확정할 수 없습니다.*\n"
-            f"조회 기간: {start} ~ {end} (종료일 미포함)\n"
-            f"원인: {result.get('reason', '일부 기준가격 누락')}\n"
-            f"누락 기준가격 행: {result.get('missing_baseline_items', 0):,}건"
-        )
-
-    actual = float(result["spot_actual_usd"])
-    baseline = float(result["on_demand_equivalent_usd"])
-    savings = float(result["savings_usd"])
-    savings_pct = float(result["savings_pct"])
-
-    lines = [
-        f"*Spot 절감 현황*  `{start} ~ {end}` (종료일 미포함)",
-        "",
-        "```",
-        f"온디맨드 환산 비용  {_money(baseline)}",
-        f"실제 Spot 비용      {_money(actual)}",
-        f"절감액              {_money(savings)}",
-        f"절감률              {savings_pct:.1f}%",
-        "```",
-        f"Spot 사용시간: {float(result.get('spot_node_hours', 0)):.1f}시간 · 리소스 {int(result.get('spot_resource_count', 0))}개",
-    ]
-
-    breakdown = result.get("breakdown") or []
-    if breakdown:
-        lines.extend(["", "*상세 절감액*"])
-        for item in breakdown[:5]:
-            item_savings = item.get("savings_usd")
-            item_pct = item.get("savings_pct")
-            if item_savings is not None and item_pct is not None:
-                lines.append(
-                    f"• {item.get('group', 'unallocated')}: {_money(float(item_savings))} ({float(item_pct):.1f}%)"
-                )
-
-    lines.extend([
-        "",
-        f"기준: AWS CUR 온디맨드 공개가격 · 데이터 갱신: {result.get('data_updated_at') or '확인 불가'}",
-    ])
-    return "\n".join(lines)
-
-
-def _return_answer(answer: str, response_url: str, user_name: str, question: str) -> dict:
-    if response_url:
-        prefix = f"*{user_name}*: _{question}_\n\n" if user_name else ""
-        _post_to_slack(response_url, prefix + answer)
-    return {"answer": answer}
+    return json.dumps(json.loads(resp["Payload"].read()), ensure_ascii=False)
 
 
 def _post_to_slack(response_url: str, text: str) -> None:
@@ -259,7 +173,7 @@ def handler(event, context):
     if not question:
         return {"error": "question 필드가 필요합니다"}
 
-    now = datetime.now(ZoneInfo("Asia/Seoul"))
+    now = datetime.now()
     today = now.strftime("%Y-%m-%d")
     tomorrow = (now + timedelta(days=1)).strftime("%Y-%m-%d")
     yesterday = (now - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -298,21 +212,14 @@ def handler(event, context):
 
         if stop_reason == "tool_use":
             tool_results = []
-            tool_uses = [block for block in content if block.get("type") == "tool_use"]
-            for block in tool_uses:
-                result = call_tool(block["name"], block["input"])
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block["id"],
-                    "content": json.dumps(result, ensure_ascii=False),
-                })
-
-            # Spot 절감액은 재무 수치이므로 Claude의 후속 자유 생성 단계를 거치지 않는다.
-            # 단일 Spot tool 호출일 때 검증된 필드만 코드 템플릿으로 렌더링한다.
-            if len(tool_uses) == 1 and tool_uses[0]["name"] == "get_spot_savings":
-                answer = _format_spot_savings(result)
-                return _return_answer(answer, response_url, user_name, question)
-
+            for block in content:
+                if block.get("type") == "tool_use":
+                    result = call_tool(block["name"], block["input"])
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": block["id"],
+                        "content": result,
+                    })
             messages.append({"role": "user", "content": tool_results})
             continue
 
