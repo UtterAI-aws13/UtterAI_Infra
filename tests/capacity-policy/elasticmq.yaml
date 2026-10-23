@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elasticmq
+  namespace: capacity-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elasticmq
+  template:
+    metadata:
+      labels:
+        app: elasticmq
+    spec:
+      containers:
+      - name: elasticmq
+        image: softwaremill/elasticmq-native:1.6.9
+        ports:
+        - containerPort: 9324
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticmq
+  namespace: capacity-test
+spec:
+  selector:
+    app: elasticmq
+  ports:
+  - port: 9324
+    targetPort: 9324

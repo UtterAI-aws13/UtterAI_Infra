@@ -1,0 +1,3 @@
+# Local ElasticMQ client and YAML render/test helpers; controller itself uses stdlib.
+boto3==1.43.18
+PyYAML==6.0.3
