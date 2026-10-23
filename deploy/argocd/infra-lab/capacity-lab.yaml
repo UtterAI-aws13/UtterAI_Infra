@@ -1,0 +1,66 @@
+# Manual-sync Application for a separately registered test cluster.
+# Existing dev/prod Applications do not reference this file.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: utterai-capacity-lab
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/UtterAI-aws13/UtterAI_Infra
+    targetRevision: eunyoung/infra-lab
+    path: k8s/experiments/capacity-lab
+  destination:
+    name: utterai-infra-lab
+    namespace: default
+  syncPolicy:
+    syncOptions:
+    - RespectIgnoreDifferences=true
+  ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    name: utterai-api-blue
+    namespace: utterai-prod-api
+    jsonPointers:
+    - /spec/replicas
+    - /spec/template/metadata/annotations/capacity.utterai.io~1repair-at
+  - group: apps
+    kind: Deployment
+    name: utterai-api-green
+    namespace: utterai-prod-api
+    jsonPointers:
+    - /spec/replicas
+    - /spec/template/metadata/annotations/capacity.utterai.io~1repair-at
+  - group: apps
+    kind: Deployment
+    name: utterai-ai-service
+    namespace: utterai-ai-service
+    jsonPointers:
+    - /spec/replicas
+    - /spec/template/metadata/annotations/capacity.utterai.io~1repair-at
+  - group: apps
+    kind: Deployment
+    name: utterai-cpu-worker
+    namespace: utterai-ai-cpu
+    jsonPointers:
+    - /spec/replicas
+    - /spec/template/metadata/annotations/capacity.utterai.io~1repair-at
+  - group: apps
+    kind: Deployment
+    name: utterai-ml-gpu-worker
+    namespace: utterai-ai-gpu
+    jsonPointers:
+    - /spec/replicas
+    - /spec/template/metadata/annotations/capacity.utterai.io~1repair-at
+  - group: apps
+    kind: Deployment
+    name: utterai-batch-worker
+    namespace: utterai-batch
+    jsonPointers:
+    - /spec/replicas
+  - group: admissionregistration.k8s.io
+    kind: MutatingWebhookConfiguration
+    name: utterai-capacity-policy
+    jqPathExpressions:
+    - .webhooks[].clientConfig.caBundle

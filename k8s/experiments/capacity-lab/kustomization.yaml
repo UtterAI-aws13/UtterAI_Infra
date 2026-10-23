@@ -1,0 +1,199 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../../apps/backend/overlays/prod
+- ../../apps/ai-service/overlays/prod
+- ../../apps/ai-worker/overlays/prod
+- ../../platform/capacity-policy/cert-manager
+- ../../platform/karpenter/overlays/prod
+- access.yaml
+- burst-nodepools.yaml
+patches:
+- target:
+    kind: Deployment
+    name: utterai-ai-service
+  patch: "- op: replace\n  path: /spec/template/spec/tolerations\n  value: []\n"
+- patch: "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: utterai-api-blue\n\
+    \  namespace: utterai-prod-api\nspec:\n  strategy:\n    type: RollingUpdate\n\
+    \    rollingUpdate:\n      maxUnavailable: 0\n      maxSurge: 1\n  template:\n\
+    \    metadata:\n      labels:\n        capacity.utterai.io/enabled: 'true'\n \
+    \     annotations:\n        capacity.utterai.io/base-replicas: '2'\n        capacity.utterai.io/auto-repair:\
+    \ 'true'\n        capacity.utterai.io/worker: 'false'\n    spec:\n      nodeSelector:\n\
+    \        workload: api\n        karpenter.sh/capacity-type: on-demand\n      \
+    \  capacity.utterai.io/node-tier: base\n      tolerations:\n      - key: dedicated\n\
+    \        operator: Equal\n        value: api\n        effect: NoSchedule\n"
+- patch: "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: utterai-api-green\n\
+    \  namespace: utterai-prod-api\nspec:\n  strategy:\n    type: RollingUpdate\n\
+    \    rollingUpdate:\n      maxUnavailable: 0\n      maxSurge: 1\n  template:\n\
+    \    metadata:\n      labels:\n        capacity.utterai.io/enabled: 'true'\n \
+    \     annotations:\n        capacity.utterai.io/base-replicas: '2'\n        capacity.utterai.io/auto-repair:\
+    \ 'true'\n        capacity.utterai.io/worker: 'false'\n    spec:\n      nodeSelector:\n\
+    \        workload: api\n        karpenter.sh/capacity-type: on-demand\n      \
+    \  capacity.utterai.io/node-tier: base\n      tolerations:\n      - key: dedicated\n\
+    \        operator: Equal\n        value: api\n        effect: NoSchedule\n"
+- patch: "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: utterai-ai-service\n\
+    \  namespace: utterai-ai-service\nspec:\n  strategy:\n    type: RollingUpdate\n\
+    \    rollingUpdate:\n      maxUnavailable: 0\n      maxSurge: 1\n  template:\n\
+    \    metadata:\n      labels:\n        capacity.utterai.io/enabled: 'true'\n \
+    \     annotations:\n        capacity.utterai.io/base-replicas: '2'\n        capacity.utterai.io/auto-repair:\
+    \ 'true'\n        capacity.utterai.io/worker: 'false'\n    spec:\n      nodeSelector:\n\
+    \        workload: api\n        karpenter.sh/capacity-type: on-demand\n      \
+    \  capacity.utterai.io/node-tier: base\n      tolerations:\n      - key: dedicated\n\
+    \        operator: Equal\n        value: api\n        effect: NoSchedule\n   \
+    \   affinity:\n        podAntiAffinity:\n          requiredDuringSchedulingIgnoredDuringExecution:\n\
+    \          - labelSelector:\n              matchLabels:\n                app:\
+    \ utterai-ai-service\n            topologyKey: kubernetes.io/hostname\n  replicas:\
+    \ 2\n"
+- patch: "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: utterai-cpu-worker\n\
+    \  namespace: utterai-ai-cpu\nspec:\n  strategy:\n    type: RollingUpdate\n  \
+    \  rollingUpdate:\n      maxUnavailable: 0\n      maxSurge: 1\n  template:\n \
+    \   metadata:\n      labels:\n        capacity.utterai.io/enabled: 'true'\n  \
+    \    annotations:\n        capacity.utterai.io/base-replicas: '1'\n        capacity.utterai.io/auto-repair:\
+    \ 'true'\n        capacity.utterai.io/worker: 'true'\n    spec:\n      nodeSelector:\n\
+    \        workload: cpu-worker\n        karpenter.sh/capacity-type: on-demand\n\
+    \        capacity.utterai.io/node-tier: base\n      tolerations:\n      - key:\
+    \ dedicated\n        operator: Equal\n        value: worker\n        effect: NoSchedule\n\
+    \      containers:\n      - name: worker\n        ports:\n        - name: worker-health\n\
+    \          containerPort: 9091\n        startupProbe:\n          httpGet:\n  \
+    \          path: /readyz\n            port: 9091\n          periodSeconds: 10\n\
+    \          failureThreshold: 180\n        readinessProbe:\n          httpGet:\n\
+    \            path: /readyz\n            port: 9091\n          periodSeconds: 5\n\
+    \        livenessProbe:\n          httpGet:\n            path: /healthz\n    \
+    \        port: 9091\n          periodSeconds: 10\n        lifecycle:\n       \
+    \   preStop:\n            exec:\n              command:\n              - python\n\
+    \              - -m\n              - app.workers.lifecycle\n"
+- patch: "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: utterai-ml-gpu-worker\n\
+    \  namespace: utterai-ai-gpu\nspec:\n  strategy:\n    type: RollingUpdate\n  \
+    \  rollingUpdate:\n      maxUnavailable: 0\n      maxSurge: 1\n  template:\n \
+    \   metadata:\n      labels:\n        capacity.utterai.io/enabled: 'true'\n  \
+    \    annotations:\n        capacity.utterai.io/base-replicas: '1'\n        capacity.utterai.io/auto-repair:\
+    \ 'true'\n        capacity.utterai.io/worker: 'true'\n    spec:\n      nodeSelector:\n\
+    \        workload: ai-gpu\n        karpenter.sh/capacity-type: on-demand\n   \
+    \     capacity.utterai.io/node-tier: base\n      tolerations:\n      - key: dedicated\n\
+    \        operator: Equal\n        value: ai-gpu\n        effect: NoSchedule\n\
+    \      - key: nvidia.com/gpu\n        operator: Exists\n        effect: NoSchedule\n\
+    \      containers:\n      - name: ml-gpu-worker\n        ports:\n        - name:\
+    \ worker-health\n          containerPort: 9091\n        startupProbe:\n      \
+    \    httpGet:\n            path: /readyz\n            port: 9091\n          periodSeconds:\
+    \ 10\n          failureThreshold: 180\n        readinessProbe:\n          httpGet:\n\
+    \            path: /readyz\n            port: 9091\n          periodSeconds: 5\n\
+    \        livenessProbe:\n          httpGet:\n            path: /healthz\n    \
+    \        port: 9091\n          periodSeconds: 10\n        lifecycle:\n       \
+    \   preStop:\n            exec:\n              command:\n              - python\n\
+    \              - -m\n              - app.workers.lifecycle\n"
+- target:
+    kind: HorizontalPodAutoscaler
+    name: utterai-api-(blue|green)-hpa
+  patch: "- op: replace\n  path: /spec/minReplicas\n  value: 2\n"
+- target:
+    kind: HorizontalPodAutoscaler
+    name: utterai-ai-service-hpa
+  patch: "- op: replace\n  path: /spec/minReplicas\n  value: 2\n"
+- patch: "apiVersion: keda.sh/v1alpha1\nkind: ScaledObject\nmetadata:\n  name: utterai-ml-gpu-worker-scaledobject\n\
+    \  namespace: utterai-ai-gpu\nspec:\n  scaleTargetRef:\n    name: utterai-ml-gpu-worker\n\
+    \  minReplicaCount: 0\n  maxReplicaCount: 4\n  cooldownPeriod: 600\n  advanced:\n\
+    \    horizontalPodAutoscalerConfig:\n      behavior:\n        scaleDown:\n   \
+    \       stabilizationWindowSeconds: 600\n  triggers:\n  - type: aws-sqs-queue\n\
+    \    authenticationRef:\n      name: keda-aws-pod-identity\n      kind: ClusterTriggerAuthentication\n\
+    \    metadata:\n      queueURL: https://sqs.ap-northeast-2.amazonaws.com/032886669461/utterai-prod-gpu-inference-queue\n\
+    \      queueLength: '1'\n      activationQueueLength: '0'\n      awsRegion: ap-northeast-2\n\
+    \      identityOwner: operator\n      scaleOnInFlight: 'true'\n  - type: cron\n\
+    \    metadata:\n      timezone: Asia/Seoul\n      start: 30 8 * * 1-5\n      end:\
+    \ 0 20 * * 1-5\n      desiredReplicas: '1'\n"
+- patch: "apiVersion: karpenter.sh/v1\nkind: NodePool\nmetadata:\n  name: api\nspec:\n\
+    \  template:\n    metadata:\n      labels:\n        role: api\n        workload:\
+    \ api\n        capacity.utterai.io/node-tier: base\n    spec:\n      nodeClassRef:\n\
+    \        group: karpenter.k8s.aws\n        kind: EC2NodeClass\n        name: default\n\
+    \      taints:\n      - key: dedicated\n        value: api\n        effect: NoSchedule\n\
+    \      requirements:\n      - key: karpenter.sh/capacity-type\n        operator:\
+    \ In\n        values:\n        - on-demand\n      - key: kubernetes.io/arch\n\
+    \        operator: In\n        values:\n        - amd64\n      - key: karpenter.k8s.aws/instance-family\n\
+    \        operator: In\n        values:\n        - m5\n        - m5a\n        -\
+    \ m6i\n        - m6a\n      - key: karpenter.k8s.aws/instance-size\n        operator:\
+    \ In\n        values:\n        - large\n        - xlarge\n      terminationGracePeriod:\
+    \ 10m\n  limits:\n    cpu: '32'\n    memory: 64Gi\n  disruption:\n    consolidationPolicy:\
+    \ WhenEmptyOrUnderutilized\n    consolidateAfter: 10m\n    budgets:\n    - nodes:\
+    \ '1'\n    - nodes: '0'\n      reasons:\n      - Underutilized\n      - Drifted\n\
+    \      schedule: 0 0 * * mon-fri\n      duration: 11h\n  weight: 10\n"
+- patch: "apiVersion: karpenter.sh/v1\nkind: NodePool\nmetadata:\n  name: cpu-worker\n\
+    spec:\n  template:\n    metadata:\n      labels:\n        role: worker\n     \
+    \   workload: cpu-worker\n        capacity.utterai.io/node-tier: base\n    spec:\n\
+    \      nodeClassRef:\n        group: karpenter.k8s.aws\n        kind: EC2NodeClass\n\
+    \        name: default\n      taints:\n      - key: dedicated\n        value:\
+    \ worker\n        effect: NoSchedule\n      requirements:\n      - key: karpenter.sh/capacity-type\n\
+    \        operator: In\n        values:\n        - on-demand\n      - key: kubernetes.io/arch\n\
+    \        operator: In\n        values:\n        - amd64\n      - key: karpenter.k8s.aws/instance-family\n\
+    \        operator: In\n        values:\n        - m5\n        - m5a\n        -\
+    \ m6i\n        - m6a\n      - key: karpenter.k8s.aws/instance-size\n        operator:\
+    \ In\n        values:\n        - xlarge\n      terminationGracePeriod: 10m\n \
+    \ limits:\n    cpu: '32'\n    memory: 64Gi\n  disruption:\n    consolidationPolicy:\
+    \ WhenEmpty\n    consolidateAfter: 5m\n    budgets:\n    - nodes: '1'\n    - nodes:\
+    \ '0'\n      reasons:\n      - Underutilized\n      - Drifted\n      schedule:\
+    \ 0 0 * * mon-fri\n      duration: 11h\n  weight: 10\n"
+- patch: "apiVersion: karpenter.sh/v1\nkind: NodePool\nmetadata:\n  name: batch-worker\n\
+    spec:\n  template:\n    metadata:\n      labels:\n        role: worker\n     \
+    \   workload: batch-worker\n        capacity.utterai.io/node-tier: batch\n   \
+    \ spec:\n      nodeClassRef:\n        group: karpenter.k8s.aws\n        kind:\
+    \ EC2NodeClass\n        name: default\n      taints:\n      - key: dedicated\n\
+    \        value: worker\n        effect: NoSchedule\n      requirements:\n    \
+    \  - key: karpenter.sh/capacity-type\n        operator: In\n        values:\n\
+    \        - spot\n      - key: kubernetes.io/arch\n        operator: In\n     \
+    \   values:\n        - amd64\n      - key: karpenter.k8s.aws/instance-family\n\
+    \        operator: In\n        values:\n        - c5\n        - c6i\n        -\
+    \ c6a\n        - m5\n        - m6i\n      - key: karpenter.k8s.aws/instance-size\n\
+    \        operator: In\n        values:\n        - large\n        - xlarge\n  \
+    \    terminationGracePeriod: 10m\n  limits:\n    cpu: '32'\n    memory: 64Gi\n\
+    \  disruption:\n    consolidationPolicy: WhenEmpty\n    consolidateAfter: 5m\n\
+    \    budgets:\n    - nodes: '1'\n  weight: 50\n"
+- patch: "apiVersion: karpenter.sh/v1\nkind: NodePool\nmetadata:\n  name: gpu\nspec:\n\
+    \  template:\n    metadata:\n      labels:\n        role: gpu\n        workload:\
+    \ ai-gpu\n        capacity.utterai.io/node-tier: base\n    spec:\n      nodeClassRef:\n\
+    \        group: karpenter.k8s.aws\n        kind: EC2NodeClass\n        name: gpu\n\
+    \      taints:\n      - key: dedicated\n        value: ai-gpu\n        effect:\
+    \ NoSchedule\n      - key: nvidia.com/gpu\n        value: 'true'\n        effect:\
+    \ NoSchedule\n      requirements:\n      - key: karpenter.sh/capacity-type\n \
+    \       operator: In\n        values:\n        - on-demand\n      - key: kubernetes.io/arch\n\
+    \        operator: In\n        values:\n        - amd64\n      - key: karpenter.k8s.aws/instance-family\n\
+    \        operator: In\n        values:\n        - g4dn\n        - g5\n      -\
+    \ key: karpenter.k8s.aws/instance-size\n        operator: In\n        values:\n\
+    \        - xlarge\n        - 2xlarge\n      terminationGracePeriod: 10m\n  limits:\n\
+    \    cpu: '32'\n    memory: 128Gi\n  disruption:\n    consolidationPolicy: WhenEmpty\n\
+    \    consolidateAfter: 10m\n    budgets:\n    - nodes: '1'\n    - nodes: '0'\n\
+    \      reasons:\n      - Underutilized\n      - Drifted\n      schedule: 0 0 *\
+    \ * mon-fri\n      duration: 11h\n  weight: 10\n"
+- target:
+    kind: Namespace
+    name: utterai-ai-cpu
+  patch: "apiVersion: v1\nkind: Namespace\nmetadata:\n  labels:\n    capacity.utterai.io/enabled:\
+    \ 'true'\n  name: utterai-ai-cpu\n"
+- target:
+    kind: Namespace
+    name: utterai-ai-gpu
+  patch: "apiVersion: v1\nkind: Namespace\nmetadata:\n  labels:\n    capacity.utterai.io/enabled:\
+    \ 'true'\n  name: utterai-ai-gpu\n"
+- target:
+    kind: Namespace
+    name: utterai-ai-service
+  patch: "apiVersion: v1\nkind: Namespace\nmetadata:\n  labels:\n    capacity.utterai.io/enabled:\
+    \ 'true'\n  name: utterai-ai-service\n"
+- target:
+    kind: Namespace
+    name: utterai-prod-api
+  patch: "apiVersion: v1\nkind: Namespace\nmetadata:\n  labels:\n    capacity.utterai.io/enabled:\
+    \ 'true'\n  name: utterai-prod-api\n"
+- patch: "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: utterai-batch-worker\n\
+    \  namespace: utterai-batch\nspec:\n  template:\n    spec:\n      nodeSelector:\n\
+    \        karpenter.sh/capacity-type: spot\n      containers:\n      - name: worker\n\
+    \        startupProbe:\n          httpGet:\n            path: /readyz\n      \
+    \      port: 9091\n          periodSeconds: 10\n          failureThreshold: 180\n\
+    \        readinessProbe:\n          httpGet:\n            path: /readyz\n    \
+    \        port: 9091\n          periodSeconds: 5\n        livenessProbe:\n    \
+    \      httpGet:\n            path: /healthz\n            port: 9091\n        \
+    \  periodSeconds: 10\n        lifecycle:\n          preStop:\n            exec:\n\
+    \              command:\n              - python\n              - -m\n        \
+    \      - app.workers.lifecycle\n"
+images:
+- name: 032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-cpu
+  newTag: infra-lab-review-required
+- name: 032886669461.dkr.ecr.ap-northeast-2.amazonaws.com/utterai-ai-gpu
+  newTag: infra-lab-review-required

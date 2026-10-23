@@ -1,0 +1,158 @@
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: api-burst
+spec:
+  template:
+    metadata:
+      labels:
+        role: api
+        workload: api
+        capacity.utterai.io/node-tier: burst
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
+      taints:
+      - key: dedicated
+        value: api
+        effect: NoSchedule
+      requirements:
+      - key: karpenter.sh/capacity-type
+        operator: In
+        values:
+        - spot
+        - on-demand
+      - key: kubernetes.io/arch
+        operator: In
+        values:
+        - amd64
+      - key: karpenter.k8s.aws/instance-family
+        operator: In
+        values:
+        - m5
+        - m5a
+        - m6i
+        - m6a
+      - key: karpenter.k8s.aws/instance-size
+        operator: In
+        values:
+        - large
+        - xlarge
+      terminationGracePeriod: 10m
+  limits:
+    cpu: '32'
+    memory: 64Gi
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 5m
+    budgets:
+    - nodes: '1'
+  weight: 50
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: cpu-worker-burst
+spec:
+  template:
+    metadata:
+      labels:
+        role: worker
+        workload: cpu-worker
+        capacity.utterai.io/node-tier: burst
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
+      taints:
+      - key: dedicated
+        value: worker
+        effect: NoSchedule
+      requirements:
+      - key: karpenter.sh/capacity-type
+        operator: In
+        values:
+        - spot
+        - on-demand
+      - key: kubernetes.io/arch
+        operator: In
+        values:
+        - amd64
+      - key: karpenter.k8s.aws/instance-family
+        operator: In
+        values:
+        - m5
+        - m5a
+        - m6i
+        - m6a
+      - key: karpenter.k8s.aws/instance-size
+        operator: In
+        values:
+        - xlarge
+      terminationGracePeriod: 10m
+  limits:
+    cpu: '32'
+    memory: 64Gi
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 5m
+    budgets:
+    - nodes: '1'
+  weight: 50
+---
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: gpu-burst
+spec:
+  template:
+    metadata:
+      labels:
+        role: gpu
+        workload: ai-gpu
+        capacity.utterai.io/node-tier: burst
+    spec:
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: gpu
+      taints:
+      - key: dedicated
+        value: ai-gpu
+        effect: NoSchedule
+      - key: nvidia.com/gpu
+        value: 'true'
+        effect: NoSchedule
+      requirements:
+      - key: karpenter.sh/capacity-type
+        operator: In
+        values:
+        - spot
+        - on-demand
+      - key: kubernetes.io/arch
+        operator: In
+        values:
+        - amd64
+      - key: karpenter.k8s.aws/instance-family
+        operator: In
+        values:
+        - g4dn
+        - g5
+      - key: karpenter.k8s.aws/instance-size
+        operator: In
+        values:
+        - xlarge
+        - 2xlarge
+      terminationGracePeriod: 10m
+  limits:
+    cpu: '32'
+    memory: 128Gi
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 10m
+    budgets:
+    - nodes: '1'
+  weight: 50

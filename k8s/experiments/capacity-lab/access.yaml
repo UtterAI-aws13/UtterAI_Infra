@@ -1,0 +1,147 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: capacity-policy
+  namespace: utterai-ai-cpu
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: capacity-policy-write
+subjects:
+- kind: ServiceAccount
+  name: capacity-policy
+  namespace: capacity-system
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-capacity-health
+  namespace: utterai-ai-cpu
+spec:
+  podSelector:
+    matchLabels:
+      capacity.utterai.io/enabled: 'true'
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: capacity-system
+      podSelector:
+        matchLabels:
+          app: capacity-policy
+    ports:
+    - protocol: TCP
+      port: 9091
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: capacity-policy
+  namespace: utterai-ai-gpu
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: capacity-policy-write
+subjects:
+- kind: ServiceAccount
+  name: capacity-policy
+  namespace: capacity-system
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-capacity-health
+  namespace: utterai-ai-gpu
+spec:
+  podSelector:
+    matchLabels:
+      capacity.utterai.io/enabled: 'true'
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: capacity-system
+      podSelector:
+        matchLabels:
+          app: capacity-policy
+    ports:
+    - protocol: TCP
+      port: 9091
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: capacity-policy
+  namespace: utterai-ai-service
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: capacity-policy-write
+subjects:
+- kind: ServiceAccount
+  name: capacity-policy
+  namespace: capacity-system
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-capacity-health
+  namespace: utterai-ai-service
+spec:
+  podSelector:
+    matchLabels:
+      capacity.utterai.io/enabled: 'true'
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: capacity-system
+      podSelector:
+        matchLabels:
+          app: capacity-policy
+    ports:
+    - protocol: TCP
+      port: 9091
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: capacity-policy
+  namespace: utterai-prod-api
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: capacity-policy-write
+subjects:
+- kind: ServiceAccount
+  name: capacity-policy
+  namespace: capacity-system
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-capacity-health
+  namespace: utterai-prod-api
+spec:
+  podSelector:
+    matchLabels:
+      capacity.utterai.io/enabled: 'true'
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: capacity-system
+      podSelector:
+        matchLabels:
+          app: capacity-policy
+    ports:
+    - protocol: TCP
+      port: 9091
