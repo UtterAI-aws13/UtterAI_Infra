@@ -1,0 +1,55 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: capacity-policy
+  namespace: capacity-system
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: capacity-policy
+  endpoints:
+  - port: https
+    path: /metrics
+    scheme: https
+    interval: 15s
+    tlsConfig:
+      serverName: capacity-policy.capacity-system.svc
+      ca:
+        secret:
+          name: capacity-policy-tls
+          key: ca.crt
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: capacity-policy
+  namespace: capacity-system
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+  - name: utterai.capacity
+    rules:
+    - alert: CapacityBaseUnavailable
+      expr: max by (workload) (utterai_capacity_base_target) - max by (workload) (utterai_capacity_base_ready) > 0
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'On-Demand base capacity is below target for {{ $labels.workload }}'
+    - alert: CapacityPolicyReconcileStale
+      expr: time() - utterai_capacity_last_reconcile_timestamp_seconds > 30
+      for: 1m
+      labels:
+        severity: warning
+      annotations:
+        summary: 'Capacity policy reconciliation has stopped progressing'
+    - alert: CapacityWebhookUnavailable
+      expr: kube_deployment_status_replicas_available{namespace="capacity-system",deployment="capacity-policy"} < 1
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: 'Capacity webhook unavailable; new opted-in Pods use On-Demand defaults'

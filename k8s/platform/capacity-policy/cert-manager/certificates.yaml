@@ -1,0 +1,53 @@
+# Requires cert-manager and cainjector; never use the 7-day local test key in EKS.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: capacity-bootstrap
+  namespace: capacity-system
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: capacity-policy-ca
+  namespace: capacity-system
+spec:
+  isCA: true
+  commonName: utterai-capacity-policy-ca
+  secretName: capacity-policy-ca
+  duration: 87600h
+  renewBefore: 8760h
+  privateKey:
+    algorithm: RSA
+    size: 2048
+  issuerRef:
+    name: capacity-bootstrap
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: capacity-policy-ca
+  namespace: capacity-system
+spec:
+  ca:
+    secretName: capacity-policy-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: capacity-policy-serving
+  namespace: capacity-system
+spec:
+  secretName: capacity-policy-tls
+  duration: 2160h
+  renewBefore: 360h
+  dnsNames:
+  - capacity-policy.capacity-system.svc
+  - capacity-policy.capacity-system.svc.cluster.local
+  privateKey:
+    rotationPolicy: Always
+  issuerRef:
+    name: capacity-policy-ca
+    kind: Issuer
