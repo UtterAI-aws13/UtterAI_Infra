@@ -43,6 +43,29 @@ spec:
             description: |
               {{ $labels.namespace }}/{{ $labels.pod }} 이 5분 이상 Pending 상태입니다.
               Karpenter 노드 프로비저닝 실패 또는 리소스 부족일 수 있습니다.
+              노드에 배치됐는데 ContainerCreating이면 Events의 FailedCreatePodSandBox와
+              aws-node ipamd.log(InsufficientCidr 등 Pod IP 할당 실패)를 확인하세요.
+              kubectl describe pod {{ $labels.pod }} -n {{ $labels.namespace }}
+
+        # Pod IP 할당 실패는 시스템 Pod도 함께 멈춘다(2026-06-20 promtail 사례).
+        # utterai-* 는 위 Pending 알림이 담당하므로 중복 알림을 피한다.
+        - alert: UtterAISystemPodContainerCreatingTooLong
+          expr: |
+            kube_pod_container_status_waiting_reason{
+              reason="ContainerCreating",
+              namespace!~"utterai-.*"
+            } == 1
+          for: 5m
+          labels:
+            severity: warning
+            team: utterai
+          annotations:
+            summary: "시스템 Pod ContainerCreating 5분 초과: {{ $labels.pod }}"
+            description: |
+              {{ $labels.namespace }}/{{ $labels.pod }} 컨테이너 {{ $labels.container }}가
+              5분 이상 ContainerCreating 상태입니다.
+              Events의 FailedCreatePodSandBox와 aws-node ipamd.log(InsufficientCidr 등
+              Pod IP 할당 실패), 또는 볼륨 마운트·이미지 다운로드 지연을 확인하세요.
               kubectl describe pod {{ $labels.pod }} -n {{ $labels.namespace }}
 
         - alert: UtterAIGPUWorkerOOMKilled
