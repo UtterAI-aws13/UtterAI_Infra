@@ -1,0 +1,58 @@
+{
+  "utc": "2026-10-23T00:49:12.004937+00:00",
+  "branch": "eunyoung/infra-lab",
+  "infra_unit_http_render_repair_gate_tests": 30,
+  "ai_lifecycle_worker_boundary_tests": 9,
+  "kubernetes_integration_scenarios": 8,
+  "keda_elasticmq_scenarios": 5,
+  "visibility_redelivery_test": true,
+  "promotion_gate_cases": 2,
+  "karpenter_schema_resources": 11,
+  "aws_resources_created": 0,
+  "aws_cost_or_gpu_inference_measured": false,
+  "local_cluster_cleanup": "completed; no kind clusters remain",
+  "commits_created": 0,
+  "prs_created": 0,
+  "issues_created": 0,
+  "policy_repeated": {
+    "path": "repeated/20261022T225353Z",
+    "scenarios": 7,
+    "trials_per_scenario": 30,
+    "passed": 210,
+    "failed": 0,
+    "admission_samples": 750
+  },
+  "keda_repeated": {
+    "path": "keda-repeated/20261022T232500Z",
+    "scenarios": 4,
+    "trials_by_scenario": {
+      "sqs_6_messages_scale_2_to_6": 20,
+      "queue_completed_returns_to_scheduled_2": 20,
+      "off_hours_message_wakes_1": 10,
+      "off_hours_empty_queue_returns_to_0": 10
+    },
+    "passed": 60,
+    "failed": 0
+  },
+  "repeated_measurement_total_passed": 310,
+  "repeated_measurement_total_failed": 0,
+  "raw_summary_csv_crosscheck": "passed; independent nearest-rank p95 and median recalculation",
+  "final_unit_tests": {
+    "infra": 30,
+    "ai_lifecycle": 6,
+    "ai_worker_loop_boundaries": 3
+  },
+  "ab_redelivery": {
+    "path": "ab-redelivery/20261023T001725Z",
+    "before_trials": 20,
+    "after_trials": 20,
+    "passed": 40,
+    "failed": 0,
+    "before_p95_seconds": 1798.056684,
+    "after_p95_seconds": 120.024486,
+    "p95_reduction_percent": 93.32476628417572,
+    "raw_statistics_crosscheck": "passed",
+    "aws": false,
+    "local_container_cleanup": "completed"
+  }
+}

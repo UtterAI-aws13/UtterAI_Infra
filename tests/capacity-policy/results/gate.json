@@ -1,0 +1,26 @@
+{
+  "scope": "read-only promotion gate on local deployment",
+  "passed": true,
+  "cases": [
+    {
+      "required": 2,
+      "expected_exit": 0,
+      "actual_exit": 0,
+      "output": {
+        "ready_on_demand_base": 2,
+        "required": 2,
+        "deployment_observed": true
+      }
+    },
+    {
+      "required": 3,
+      "expected_exit": 1,
+      "actual_exit": 1,
+      "output": {
+        "ready_on_demand_base": 2,
+        "required": 3,
+        "deployment_observed": true
+      }
+    }
+  ]
+}

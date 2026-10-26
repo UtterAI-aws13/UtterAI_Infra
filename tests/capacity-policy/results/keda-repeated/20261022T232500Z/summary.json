@@ -1,0 +1,87 @@
+{
+  "scope": "local kind Kubernetes; synthetic HTTP Pods; simulated capacity labels; no EC2, GPU inference or cloud API",
+  "completed": true,
+  "requested_trials_per_scenario": {
+    "sqs_6_messages_scale_2_to_6": 20,
+    "queue_completed_returns_to_scheduled_2": 20,
+    "off_hours_message_wakes_1": 10,
+    "off_hours_empty_queue_returns_to_0": 10
+  },
+  "poll_sleep_seconds": 0.25,
+  "latency_start": "immediately before local SQS SDK send/receive-delete calls; includes client/API round-trip",
+  "latency_end": "first observed state satisfying scenario predicate; excludes later cleanup",
+  "percentile": "nearest rank for p95; median for p50; successful trials only with failures counted separately",
+  "synthetic_termination_grace_seconds": 1,
+  "base_floor_interpretation": "minimum observed Ready base, not continuous availability guarantee",
+  "scenarios": {
+    "off_hours_empty_queue_returns_to_0": {
+      "trials": 10,
+      "passed": 10,
+      "failed": 0,
+      "latency_seconds_successful_trials": {
+        "min": 4.432897,
+        "p50": 4.5730705,
+        "p95_nearest_rank": 5.049172,
+        "max": 5.049172
+      },
+      "min_observed_ready_base": 0,
+      "min_observed_ready_on_demand": 0,
+      "observed_deficit_seconds_p95": 5.0491,
+      "observation_intervals": 160
+    },
+    "off_hours_message_wakes_1": {
+      "trials": 10,
+      "passed": 10,
+      "failed": 0,
+      "latency_seconds_successful_trials": {
+        "min": 1.878606,
+        "p50": 2.759594,
+        "p95_nearest_rank": 3.124916,
+        "max": 3.124916
+      },
+      "min_observed_ready_base": 0,
+      "min_observed_ready_on_demand": 0,
+      "observed_deficit_seconds_p95": 3.124823,
+      "observation_intervals": 99
+    },
+    "queue_completed_returns_to_scheduled_2": {
+      "trials": 20,
+      "passed": 20,
+      "failed": 0,
+      "latency_seconds_successful_trials": {
+        "min": 12.169716,
+        "p50": 13.389279,
+        "p95_nearest_rank": 13.879275,
+        "max": 14.094082
+      },
+      "min_observed_ready_base": 2,
+      "min_observed_ready_on_demand": 2,
+      "observed_deficit_seconds_p95": 0,
+      "observation_intervals": 870
+    },
+    "sqs_6_messages_scale_2_to_6": {
+      "trials": 20,
+      "passed": 20,
+      "failed": 0,
+      "latency_seconds_successful_trials": {
+        "min": 12.647904,
+        "p50": 13.473835999999999,
+        "p95_nearest_rank": 14.965951,
+        "max": 16.684241
+      },
+      "min_observed_ready_base": 2,
+      "min_observed_ready_on_demand": 2,
+      "observed_deficit_seconds_p95": 0,
+      "observation_intervals": 903
+    }
+  },
+  "admission": {
+    "samples": 92,
+    "p50_ms": 32.001999999999995,
+    "p95_ms": 87.995,
+    "max_ms": 104.048
+  },
+  "wall_seconds": 715.556,
+  "aws_resources_created": 0,
+  "off_hours_deficit_field": "Common raw field uses base target 2; not an outage metric when the scheduled floor is 0."
+}

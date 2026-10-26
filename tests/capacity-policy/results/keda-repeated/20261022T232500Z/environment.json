@@ -1,0 +1,21 @@
+{
+  "utc": "2026-10-22T23:25:03.548946+00:00",
+  "context": "kind-utterai-capacity-lab",
+  "keda": "2.16.1",
+  "elasticmq": "1.6.9",
+  "trials_up_down": 20,
+  "trials_off_hours": 10,
+  "polling_seconds": 2,
+  "hpa_scale_down_stabilization": 0,
+  "cooldown_seconds": 5,
+  "production_gpu_cooldown_seconds": 600,
+  "scheduled_floor": 2,
+  "max_replicas": 6,
+  "queue_target": 1,
+  "in_flight_included": true,
+  "message_completion": "harness receives and deletes synthetic messages",
+  "audio_inference": false,
+  "aws": false,
+  "policy_sha256": "5fbe291aec9c9f904bf54bf1c719431fa99a7d736effe1d23435cb39b34b9c0d",
+  "measurement_sha256": "318242256596e5a206a406a37fd3b9c8ca60d41b88821551244610fdd078a59d"
+}

@@ -1,0 +1,194 @@
+{
+  "deployment_spec": {
+    "progressDeadlineSeconds": 600,
+    "replicas": 2,
+    "revisionHistoryLimit": 10,
+    "selector": {
+      "matchLabels": {
+        "app": "capacity-policy"
+      }
+    },
+    "strategy": {
+      "rollingUpdate": {
+        "maxSurge": 0,
+        "maxUnavailable": 1
+      },
+      "type": "RollingUpdate"
+    },
+    "template": {
+      "metadata": {
+        "creationTimestamp": null,
+        "labels": {
+          "app": "capacity-policy"
+        }
+      },
+      "spec": {
+        "affinity": {
+          "podAntiAffinity": {
+            "requiredDuringSchedulingIgnoredDuringExecution": [
+              {
+                "labelSelector": {
+                  "matchLabels": {
+                    "app": "capacity-policy"
+                  }
+                },
+                "topologyKey": "kubernetes.io/hostname"
+              }
+            ]
+          }
+        },
+        "containers": [
+          {
+            "image": "utterai-capacity-policy:lab",
+            "imagePullPolicy": "Never",
+            "livenessProbe": {
+              "failureThreshold": 3,
+              "httpGet": {
+                "path": "/healthz",
+                "port": 8443,
+                "scheme": "HTTPS"
+              },
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "timeoutSeconds": 1
+            },
+            "name": "webhook",
+            "ports": [
+              {
+                "containerPort": 8443,
+                "protocol": "TCP"
+              }
+            ],
+            "readinessProbe": {
+              "failureThreshold": 3,
+              "httpGet": {
+                "path": "/readyz",
+                "port": 8443,
+                "scheme": "HTTPS"
+              },
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "timeoutSeconds": 1
+            },
+            "resources": {
+              "limits": {
+                "cpu": "500m",
+                "memory": "128Mi"
+              },
+              "requests": {
+                "cpu": "100m",
+                "memory": "64Mi"
+              }
+            },
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              },
+              "readOnlyRootFilesystem": true
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "volumeMounts": [
+              {
+                "mountPath": "/tls",
+                "name": "tls",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "nodeSelector": {
+          "karpenter.sh/capacity-type": "on-demand"
+        },
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler",
+        "securityContext": {
+          "runAsNonRoot": true,
+          "runAsUser": 65532,
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "serviceAccount": "capacity-policy",
+        "serviceAccountName": "capacity-policy",
+        "terminationGracePeriodSeconds": 30,
+        "tolerations": [
+          {
+            "effect": "NoSchedule",
+            "operator": "Exists"
+          }
+        ],
+        "volumes": [
+          {
+            "name": "tls",
+            "secret": {
+              "defaultMode": 420,
+              "secretName": "capacity-policy-tls"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "deployment_status": {
+    "availableReplicas": 2,
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-10-22T22:52:21Z",
+        "lastUpdateTime": "2026-10-22T22:52:23Z",
+        "message": "ReplicaSet \"capacity-policy-65886fd8c6\" has successfully progressed.",
+        "reason": "NewReplicaSetAvailable",
+        "status": "True",
+        "type": "Progressing"
+      },
+      {
+        "lastTransitionTime": "2026-10-22T23:22:50Z",
+        "lastUpdateTime": "2026-10-22T23:22:50Z",
+        "message": "Deployment has minimum availability.",
+        "reason": "MinimumReplicasAvailable",
+        "status": "True",
+        "type": "Available"
+      }
+    ],
+    "observedGeneration": 61,
+    "readyReplicas": 2,
+    "replicas": 2,
+    "updatedReplicas": 2
+  },
+  "pods": [
+    {
+      "name": "capacity-policy-65886fd8c6-pfjck",
+      "node": "utterai-capacity-lab-worker",
+      "containers": [
+        {
+          "name": "webhook",
+          "image": "docker.io/library/utterai-capacity-policy:lab",
+          "imageID": "sha256:f83645bb9827f4682a6fe457c6947bc9c7843a36392c657f1d3e880d0e002fad",
+          "ready": true
+        }
+      ]
+    },
+    {
+      "name": "capacity-policy-65886fd8c6-xjbwl",
+      "node": "utterai-capacity-lab-control-plane",
+      "containers": [
+        {
+          "name": "webhook",
+          "image": "docker.io/library/utterai-capacity-policy:lab",
+          "imageID": "sha256:f83645bb9827f4682a6fe457c6947bc9c7843a36392c657f1d3e880d0e002fad",
+          "ready": true
+        }
+      ]
+    }
+  ],
+  "source_sha256": {
+    "components/capacity-policy/policy.py": "5fbe291aec9c9f904bf54bf1c719431fa99a7d736effe1d23435cb39b34b9c0d",
+    "tests/capacity-policy/repeated_measurement.py": "efbc21598955b5fabc498c06de998fe8a80b28019617816bbd7a15e28caf2b78",
+    "tests/capacity-policy/integration.py": "628c1aef456add30ddcfa8ed229f0444e662fadeb15dcc3c10c6803edd3c1cbc",
+    "scripts/capacity-policy/local_cluster.py": "af9268783c05ef241d42b76bb1bfb4241c545e88e4f3d60e9e7d9c894039b67c"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "utc": "2026-10-22T22:41:14.336533+00:00",
+  "context": "kind-utterai-capacity-lab",
+  "scope": "local API admission only; includes failure/dry-run if present",
+  "admission_samples": 12,
+  "admission_p50_ms": 28.764,
+  "admission_p95_ms": 84.523,
+  "aws_resources_created": 0,
+  "aws_cost_measured": false,
+  "gpu_inference_measured": false
+}

@@ -1,0 +1,126 @@
+{
+  "scope": "local kind Kubernetes; synthetic HTTP Pods; simulated capacity labels; no EC2, GPU inference or cloud API",
+  "completed": true,
+  "requested_trials_per_scenario": 30,
+  "poll_sleep_seconds": 0.25,
+  "latency_start": "immediately before API mutation command; includes client/API round-trip",
+  "latency_end": "first observed state satisfying scenario predicate; excludes later cleanup",
+  "percentile": "nearest rank for p95; median for p50; successful trials only with failures counted separately",
+  "synthetic_termination_grace_seconds": 1,
+  "base_floor_interpretation": "minimum observed Ready base, not continuous availability guarantee",
+  "scenarios": {
+    "base_pod_replacement": {
+      "trials": 30,
+      "passed": 30,
+      "failed": 0,
+      "latency_seconds_successful_trials": {
+        "min": 1.008836,
+        "p50": 1.4574850000000001,
+        "p95_nearest_rank": 1.908133,
+        "max": 1.980268
+      },
+      "min_observed_ready_base": 1,
+      "min_observed_ready_on_demand": 1,
+      "observed_deficit_seconds_p95": 1.813958,
+      "observation_intervals": 190
+    },
+    "policy_label_repair": {
+      "trials": 30,
+      "passed": 30,
+      "failed": 0,
+      "latency_seconds_successful_trials": {
+        "min": 3.041848,
+        "p50": 4.869715,
+        "p95_nearest_rank": 7.689901,
+        "max": 7.904373
+      },
+      "min_observed_ready_base": 0,
+      "min_observed_ready_on_demand": 2,
+      "observed_deficit_seconds_p95": 7.492483,
+      "observation_intervals": 535
+    },
+    "rolling_update_8_pods": {
+      "trials": 30,
+      "passed": 30,
+      "failed": 0,
+      "latency_seconds_successful_trials": {
+        "min": 8.225186,
+        "p50": 10.286512,
+        "p95_nearest_rank": 11.825009,
+        "max": 12.263879
+      },
+      "min_observed_ready_base": 2,
+      "min_observed_ready_on_demand": 2,
+      "observed_deficit_seconds_p95": 0,
+      "observation_intervals": 1004
+    },
+    "scale_in_8_to_2": {
+      "trials": 30,
+      "passed": 30,
+      "failed": 0,
+      "latency_seconds_successful_trials": {
+        "min": 0.092846,
+        "p50": 0.0977155,
+        "p95_nearest_rank": 0.13047,
+        "max": 0.155184
+      },
+      "min_observed_ready_base": 2,
+      "min_observed_ready_on_demand": 2,
+      "observed_deficit_seconds_p95": 0,
+      "observation_intervals": 60
+    },
+    "scale_out_2_to_8": {
+      "trials": 30,
+      "passed": 30,
+      "failed": 0,
+      "latency_seconds_successful_trials": {
+        "min": 1.091761,
+        "p50": 1.686966,
+        "p95_nearest_rank": 2.797293,
+        "max": 3.875561
+      },
+      "min_observed_ready_base": 2,
+      "min_observed_ready_on_demand": 2,
+      "observed_deficit_seconds_p95": 0,
+      "observation_intervals": 215
+    },
+    "webhook_outage_create_4": {
+      "trials": 30,
+      "passed": 30,
+      "failed": 0,
+      "latency_seconds_successful_trials": {
+        "min": 1.0784,
+        "p50": 3.2511065,
+        "p95_nearest_rank": 4.5298,
+        "max": 6.937211
+      },
+      "min_observed_ready_base": 0,
+      "min_observed_ready_on_demand": 0,
+      "observed_deficit_seconds_p95": 4.52973,
+      "observation_intervals": 312
+    },
+    "webhook_restore_and_adopt": {
+      "trials": 30,
+      "passed": 30,
+      "failed": 0,
+      "latency_seconds_successful_trials": {
+        "min": 1.319203,
+        "p50": 1.358015,
+        "p95_nearest_rank": 3.600783,
+        "max": 17.500371
+      },
+      "min_observed_ready_base": 0,
+      "min_observed_ready_on_demand": 4,
+      "observed_deficit_seconds_p95": 3.600693,
+      "observation_intervals": 206
+    }
+  },
+  "admission": {
+    "samples": 750,
+    "p50_ms": 31.390500000000003,
+    "p95_ms": 105.99600000000001,
+    "max_ms": 696.566
+  },
+  "wall_seconds": 1751.896,
+  "aws_resources_created": 0
+}

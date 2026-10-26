@@ -1,0 +1,78 @@
+{
+  "utc": "2026-10-22T22:38:15.316514+00:00",
+  "context": "kind-utterai-capacity-lab",
+  "results": [
+    {
+      "test": "concurrent-placement",
+      "passed": true,
+      "seconds": 3.094,
+      "details": {
+        "base": 2,
+        "burst": 6,
+        "actual_scheduler": true,
+        "ec2": false
+      }
+    },
+    {
+      "test": "burst-first-scale-in",
+      "passed": true,
+      "seconds": 0.12,
+      "details": {
+        "remaining_base": 2
+      }
+    },
+    {
+      "test": "base-replacement",
+      "passed": true,
+      "seconds": 1.613,
+      "details": {
+        "replacement_base": true
+      }
+    },
+    {
+      "test": "rolling-update",
+      "passed": true,
+      "seconds": 2.202,
+      "details": {
+        "new_generation_base": 2
+      }
+    },
+    {
+      "test": "webhook-outage",
+      "passed": true,
+      "seconds": 13.561,
+      "details": {
+        "pods_after_outage": 4,
+        "on_demand": 4
+      }
+    },
+    {
+      "test": "fallback-placement",
+      "passed": true,
+      "seconds": 1.639,
+      "details": {
+        "burst_on_demand_allowed": 3,
+        "simulation": "node labels only; not EC2 Fleet fallback"
+      }
+    },
+    {
+      "test": "failopen-adoption",
+      "passed": true,
+      "seconds": 4.492,
+      "details": {
+        "adopted_on_demand_pods": 2,
+        "rollout_required": false
+      }
+    },
+    {
+      "test": "base-deficit-repair",
+      "passed": true,
+      "seconds": 7.454,
+      "details": {
+        "fault": "base classification removed with desired replicas already satisfied",
+        "recovered_base": 2,
+        "replicas_owned_by_hpa": true
+      }
+    }
+  ]
+}

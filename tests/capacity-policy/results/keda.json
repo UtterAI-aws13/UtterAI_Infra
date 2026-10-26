@@ -1,0 +1,35 @@
+{
+  "scope": "KEDA 2.16.1 + HPA + ElasticMQ, synthetic messages",
+  "results": [
+    {
+      "test": "scheduled-minimum-with-empty-queue",
+      "replicas": 2,
+      "seconds": 16.7,
+      "passed": true
+    },
+    {
+      "test": "six-sqs-messages-scale-to-six",
+      "replicas": 6,
+      "seconds": 15.553,
+      "passed": true
+    },
+    {
+      "test": "empty-queue-returns-to-scheduled-minimum",
+      "replicas": 2,
+      "seconds": 13.872,
+      "passed": true
+    },
+    {
+      "test": "off-hours-idle-scales-to-zero",
+      "replicas": 0,
+      "seconds": 4.229,
+      "passed": true
+    },
+    {
+      "test": "off-hours-request-wakes-worker",
+      "replicas": 1,
+      "seconds": 3.542,
+      "passed": true
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "scope": "actual original and changed heartbeat functions; SIGKILL; localhost ElasticMQ; no AWS/ML",
+  "completed": true,
+  "requested_trials_per_profile": 20,
+  "profiles": {
+    "before": {
+      "attempted": 20,
+      "passed": 20,
+      "failed": 0,
+      "redelivery_seconds": {
+        "n": 20,
+        "min": 1798.001899,
+        "p50": 1798.0447115000002,
+        "p95": 1798.056684,
+        "max": 1798.064916
+      }
+    },
+    "after": {
+      "attempted": 20,
+      "passed": 20,
+      "failed": 0,
+      "redelivery_seconds": {
+        "n": 20,
+        "min": 119.945392,
+        "p50": 120.01552799999999,
+        "p95": 120.024486,
+        "max": 120.024509
+      }
+    }
+  },
+  "wall_seconds": 1800.301,
+  "p95_reduction_percent": 93.32476628417572
+}

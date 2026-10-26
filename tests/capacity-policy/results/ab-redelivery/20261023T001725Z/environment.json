@@ -1,0 +1,32 @@
+{
+  "utc": "2026-10-23T00:17:25.989709+00:00",
+  "baseline_git_head": "35802e8b0dc479f868f21d5770cc4ac4bbf42abb",
+  "baseline_function": "_extend_visibility",
+  "baseline_source_sha256": "5683abd7ec660fb0058c1fb0e472148bfdfcaf2d0b574b662102807fd89b76aa",
+  "changed_source_sha256": "0545b457c2381e1bf78b4a39f7134c407a830a060926b477ec646441b036784c",
+  "measurement_sha256": "22b27272569d9df00bf78a7bbc8c90194b67ff3abbab900eac24340d83acbd27",
+  "trials_per_profile": 20,
+  "fault": "SIGKILL immediately after successful first visibility extension",
+  "intervals_seconds": {
+    "before": 240,
+    "after": 30
+  },
+  "visibility_seconds": {
+    "before": 1800,
+    "after": 120
+  },
+  "time_acceleration": false,
+  "message_workload": "one synthetic message per isolated queue; no model/inference",
+  "parallelism": "all paired samples overlap in one server run; not independent server-day repetitions",
+  "aws": false,
+  "endpoint": "http://127.0.0.1:19327",
+  "elasticmq_image": "softwaremill/elasticmq:1.6.9",
+  "elasticmq_image_id": "sha256:cf8e1dc006c68a69e84a1b298c94979d6d7f59263aad8ff9412a0874f979c789",
+  "docker": {
+    "ServerVersion": "29.8.2",
+    "NCPU": 10,
+    "MemTotal": 8214851584,
+    "Architecture": "aarch64",
+    "OperatingSystem": "Docker Desktop"
+  }
+}

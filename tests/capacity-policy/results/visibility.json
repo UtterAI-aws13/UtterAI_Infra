@@ -1,0 +1,8 @@
+{
+  "scope": "ElasticMQ; one production heartbeat followed by no further extension",
+  "configured_visibility_seconds": 120,
+  "observed_redelivery_seconds": 120.02,
+  "old_visibility_setting_seconds": 1800,
+  "old_setting_measured": false,
+  "passed": true
+}

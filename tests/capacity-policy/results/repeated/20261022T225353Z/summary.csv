@@ -1,0 +1,8 @@
+scenario,trials,passed,failed,p50_seconds,p95_seconds,max_seconds,min_observed_ready_base,min_observed_ready_on_demand
+base_pod_replacement,30,30,0,1.4574850000000001,1.908133,1.980268,1,1
+policy_label_repair,30,30,0,4.869715,7.689901,7.904373,0,2
+rolling_update_8_pods,30,30,0,10.286512,11.825009,12.263879,2,2
+scale_in_8_to_2,30,30,0,0.0977155,0.13047,0.155184,2,2
+scale_out_2_to_8,30,30,0,1.686966,2.797293,3.875561,2,2
+webhook_outage_create_4,30,30,0,3.2511065,4.5298,6.937211,0,0
+webhook_restore_and_adopt,30,30,0,1.358015,3.600783,17.500371,0,4
