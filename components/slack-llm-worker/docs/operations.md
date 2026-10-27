@@ -2,13 +2,13 @@
 
 ## 준비된 것과 실행하지 않은 것
 
-실행 준비물: Lambda 핸들러, 장기 실행 SQS consumer, Bedrock Converse와 Slack 어댑터, Dockerfile, 고정 의존성, Slack manifest, 검토용 CloudFormation.
+실행 준비물: Lambda 핸들러, 장기 실행 SQS consumer, Bedrock Converse와 Slack 어댑터, Dockerfile, 고정 의존성, Slack manifest, Terraform 모듈(`infra/terraform/modules/slack_worker`)과 환경 두 개(`envs/local`: LocalStack 적용, `envs/aws`: 검증만).
 
-실행하지 않은 것: AWS 자격증명 조회, 외부 Slack/Bedrock 요청, 리소스 생성·변경, 이미지 빌드·업로드, GitHub 저장소 생성·push. 템플릿은 JSON 구문과 내부 참조만 로컬 검사했습니다. AWS ValidateTemplate·change set·배포 또는 Docker 실행으로 검증하지 않았습니다.
+실행하지 않은 것: AWS 자격증명 조회, 외부 Slack/Bedrock 요청, 리소스 생성·변경, 이미지 빌드·업로드, GitHub 저장소 생성·push. `envs/aws`는 `terraform validate`만 실행했고 plan·apply는 하지 않았습니다. 같은 모듈을 LocalStack에 적용해 동작을 확인했지만 LocalStack은 IAM과 리소스 정책을 강제하지 않습니다.
 
 ## 권한과 비밀정보
 
-별도 Secrets Manager secret 둘을 준비합니다. 수신용은 `{"signing_secret":"..."}`, 워커용은 `{"bot_token":"xoxb-..."}` 형식입니다. 템플릿에 비밀값을 넣지 않고 ARN만 전달합니다. worker token은 시작 시 읽으므로 회전 후 워커를 재시작해야 합니다. 수신 secret은 5분 캐시가 있어 회전 직후 재시도가 필요할 수 있습니다. 구·신 secret 동시 검증은 구현하지 않았습니다.
+별도 Secrets Manager secret 둘을 준비합니다. 수신용은 `{"signing_secret":"..."}`, 워커용은 `{"bot_token":"xoxb-..."}` 형식입니다. Terraform 모듈에는 비밀값을 넣지 않고 ARN만 전달합니다. worker token은 시작 시 읽으므로 회전 후 워커를 재시작해야 합니다. 수신 secret은 5분 캐시가 있어 회전 직후 재시도가 필요할 수 있습니다. 구·신 secret 동시 검증은 구현하지 않았습니다.
 
 | 역할 | 필요한 권한 | 제공하지 않는 권한 |
 |---|---|---|
@@ -17,7 +17,7 @@
 | ExecutionRole | 해당 ECR 이미지 pull·로그 쓰기, ECR 토큰 요청 | 애플리케이션 데이터 접근 |
 | 운영자 별도 | DLQ 조회/정상 상태 대조/승인된 복구 | 워커 task role에 부여하지 않음 |
 
-`ecr:GetAuthorizationToken`만 AWS 특성상 Resource `*`입니다. Function URL은 Slack이 SigV4를 보내지 않으므로 AuthType NONE과 공개 호출 정책이 필요하고, 앱 내부 Slack 서명을 필수로 확인합니다. 2025년 10월 이후 새 URL의 두 invoke 권한을 템플릿에 포함했습니다. [AWS URL 인증](https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html), [CloudFormation permission](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-lambda-permission.html).
+`ecr:GetAuthorizationToken`만 AWS 특성상 Resource `*`입니다. Function URL은 Slack이 SigV4를 보내지 않으므로 AuthType NONE과 공개 호출 정책이 필요하고, 앱 내부 Slack 서명을 필수로 확인합니다. 2025년 10월 이후 새 URL에 필요한 두 invoke 권한을 `aws_lambda_permission`으로 포함했습니다(Terraform 이전 과정에서 빠졌다가 복구, [사례](aws-deployment.md#로컬-에뮬레이션이-숨긴-문제를-찾은-사례)). [AWS URL 인증](https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html), [Terraform aws_lambda_permission](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lambda_permission).
 
 초기 reserved concurrency=2는 부하와 일부 비용을 제한하지만 공개 endpoint 남용 비용을 완전히 막지는 않습니다. API Gateway HTTP API는 스테이지 throttling 등 운영 제어가 필요할 때 대안이며 비용과 추가 구성이 생깁니다. WAF 연계까지 필요하면 지원되는 API/edge 구성을 별도 확인해야 합니다.
 
@@ -27,12 +27,12 @@ SQS는 관리형 SSE, DynamoDB는 SSE·온디맨드·TTL을 설정합니다. 고
 
 ## 리소스와 실행 순서: 승인 후에만
 
-검토용 템플릿은 SQS 2개, DynamoDB 1개, Lambda와 공개 URL, IAM 역할 3개, 로그 그룹 2개, CloudWatch alarm 2개, ECS TaskDefinition을 만듭니다. 외부 알림 발송 대상은 연결하지 않습니다. **ECS Service·VPC·NAT·secret·ECR·S3 bucket은 생성하지 않습니다.**
+Terraform 모듈은 SQS 2개, DynamoDB 1개, Lambda와 공개 URL·호출 권한 2개, IAM 역할 3개, 로그 그룹 2개, CloudWatch alarm 2개, ECS TaskDefinition을 만듭니다. 외부 알림 발송 대상은 연결하지 않습니다. **ECS Service·VPC·NAT·secret·ECR·S3 bucket은 생성하지 않습니다.**
 
 1. 독립 sandbox 계정/리전과 테스트 Slack workspace/channel/user를 확정. 실제 bot user ID를 포함해 allowlist 입력.
 2. 승인된 model ID와 필요한 모든 정확한 foundation-model / inference-profile ARN을 확정. cross-region profile의 대상 리전도 승인 필요.
 3. secret을 비공개로 저장. sandbox의 버전 관리 S3 bucket에 Lambda 패키지 업로드. object version으로 고정. 패키지 생성은 `python tools/package_lambda.py`로 로컬에서 수행할 수 있음.
-4. change set을 만들고 IAM·공개 URL·삭제 범위를 검토한 뒤 실행. 이번 작업에서는 change set도 만들지 않음.
+4. `terraform plan`으로 IAM·공개 URL·삭제 범위를 검토한 뒤 적용. 이번 작업에서는 plan도 실행하지 않음.
 5. Slack manifest의 URL을 실제 URL로 변경하고 설치. bot을 허용 채널에 초대. url_verification, 서명 음성 테스트와 큐 적재 smoke test부터 진행.
 6. Docker 이미지 빌드·검사·ECR 업로드 후 digest로 고정. 베이스 이미지 태그는 현재 Dockerfile에서 고정 digest가 아니므로 배포 전에 실제 digest를 기록.
 7. worker task는 기본 `ENABLE_PAID_MODEL=disabled`. 승인 후 해당 실행의 환경 변수 override로 `approved`를 지정. 단일 Fargate task 또는 승인된 sandbox 머신에서 실행. task definition만 등록해도 소비자가 자동 시작되지 않음.
@@ -77,8 +77,8 @@ Lambda 패키지에는 고정 SDK를 포함할 수 있습니다. 런타임에 �
 
 ## 알림·장애·정리
 
-템플릿은 DLQ visible >0, oldest queue age >180초 alarm을 만듭니다. 알림 수신자는 아직 없으므로 console alarm만으로 운영 감시가 완료됐다고 주장할 수 없습니다. 실행 로그의 `job_outcome`·`job_retry`를 수집하되 오류 세부 원인을 안전하게 분류하는 지표·ACK p95·model usage 합계·AMBIGUOUS 집계·workspace 429·실행시간 대시보드는 추가 운영 작업입니다.
+Terraform 모듈은 DLQ visible >0, oldest queue age >180초 alarm을 만듭니다. 알림 수신자는 아직 없으므로 console alarm만으로 운영 감시가 완료됐다고 주장할 수 없습니다. 실행 로그의 `job_outcome`·`job_retry`를 수집하되 오류 세부 원인을 안전하게 분류하는 지표·ACK p95·model usage 합계·AMBIGUOUS 집계·workspace 429·실행시간 대시보드는 추가 운영 작업입니다.
 
 AMBIGUOUS: 워커를 멈추고 마지막 전송 시점/Slack thread를 확인합니다. 기존 요청 완료 가능성이 사라질 때까지 기다린 후, 답글이 있으면 운영자가 SENT로 확정하고 없으면 명시적으로 재실행을 승인합니다. 자동 초기화·자동 redrive로 이 상태를 지우지 않습니다. FAILED도 원인·권한·비용 상한을 확인한 뒤 새 요청으로 복구합니다. 이 구현에는 수동 상태 수정 CLI를 제공하지 않으므로 오조작하기 쉬운 일괄 복구를 자동화하지 않았습니다.
 
-종료: Slack request URL/커맨드를 비활성화 → 소비자 task 중단 → in-flight·DLQ 증거 저장 여부 결정 → 공개 URL 삭제 또는 Lambda reserved concurrency 0 → 검토한 stack 삭제 → S3 버전·ECR 이미지·secret을 정리합니다. 템플릿은 데이터를 Retain하지 않으므로 stack 삭제 시 queue/state/log도 사라질 수 있습니다. 기존 cluster/VPC·UtterAI 리소스는 이 stack 소유가 아니며 삭제 대상이 아닙니다.
+종료: Slack request URL/커맨드를 비활성화 → 소비자 task 중단 → in-flight·DLQ 증거 저장 여부 결정 → 공개 URL 삭제 또는 Lambda reserved concurrency 0 → `terraform destroy` → S3 버전·ECR 이미지·secret을 정리합니다. 모듈은 데이터 보존(`prevent_destroy`)을 설정하지 않으므로 destroy 시 queue/state/log도 사라집니다. 기존 cluster/VPC·UtterAI 리소스는 이 Terraform 상태에 없으므로 삭제 대상이 아닙니다.

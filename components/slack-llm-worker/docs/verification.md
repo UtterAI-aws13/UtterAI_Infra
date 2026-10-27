@@ -48,5 +48,5 @@ python tools/package_lambda.py --output dist/lambda.zip
 - fake model 출력은 결정적 문자열입니다. Bedrock의 실제 응답·tokenizer·모델 품질·단가·리전 지원은 미검증입니다.
 - POSTING 후 실제 전송 전에 죽으면 답글이 0개일 수 있습니다. 중복 자동 전송을 피하는 정책의 대가입니다.
 - 실제 Slack 앱 설치·scope·콜백 URL·response_url 만료·채널 rate limit·권한은 별도 sandbox 시험이 필요합니다.
-- Dockerfile·CI·CloudFormation은 준비했으나 컨테이너 빌드·GitHub CI 실행·AWS 배포는 수행하지 않았습니다.
+- Dockerfile·CI·인프라 정의는 준비했으나 컨테이너 빌드·GitHub CI 실행·AWS 배포는 수행하지 않았습니다. (이 문서는 0단계 기록이다. 이후 CloudFormation은 Terraform으로 바뀌었고 LocalStack 검증이 추가됐다. [README](../README.md#검증-결과) 참고)
 - 운영 수준의 알림 수신자, 중앙 예산 hard cap, 다중 replica 전역 모델 rate limit, 세션 순서 보장, vector RAG, UtterAI agent 연계는 완료 범위가 아닙니다.
