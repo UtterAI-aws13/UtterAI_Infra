@@ -9,6 +9,20 @@ from pathlib import Path
 from .worker import ModelNotExecuted, ModelRejected
 
 
+def retrieve(corpus, query, k=2):
+    """Lexical overlap over approved .md files. Returns [(name, content)], best first."""
+    words = set(re.findall(r"\w+", query.lower()))
+    scored = []
+    for p in sorted(Path(corpus).glob("*.md")) if corpus else []:
+        if p.is_symlink() or p.stat().st_size > 100000:
+            continue
+        content = p.read_text(encoding="utf-8")
+        score = len(words & set(re.findall(r"\w+", content.lower())))
+        if score:
+            scored.append((score, p.name, content))
+    return [(name, body) for _, name, body in sorted(scored, reverse=True)[:k]]
+
+
 class Pipeline:
     def __init__(self, model, corpus=None):
         self.model = model
@@ -21,19 +35,10 @@ class Pipeline:
         context = ""
         if text.startswith("kb "):
             query = text[3:]
-            words = set(re.findall(r"\w+", query.lower()))
-            scored = []
-            for p in sorted(self.corpus.glob("*.md")) if self.corpus else []:
-                if p.is_symlink() or p.stat().st_size > 100000:
-                    continue
-                content = p.read_text(encoding="utf-8")
-                score = len(words & set(re.findall(r"\w+", content.lower())))
-                if score:
-                    scored.append((score, p.name, content))
-            chosen = sorted(scored, reverse=True)[:2]
+            chosen = retrieve(self.corpus, query)
             if not chosen:
                 return {"text": "승인된 문서에서 관련 근거를 찾지 못했습니다.", "usage": {}}
-            context = "\n".join(f"[{name}]\n{body}" for _, name, body in chosen)[:6000]
+            context = "\n".join(f"[{name}]\n{body}" for name, body in chosen)[:6000]
             text = query
         # The job key lets the gateway attribute tokens and spend to this job.
         result = self.model.generate(text, context, user=job["key"])
@@ -73,11 +78,13 @@ class OpenAICompatModel:
     No SDK retries: the worker owns the attempt budget, so a hidden client retry would
     multiply model calls behind the worker's back.
     """
-    def __init__(self, base_url, model, api_key="", max_tokens=700, timeout=60, opener=None, health_url=""):
+    def __init__(self, base_url, model, api_key="", max_tokens=700, timeout=60, opener=None, health_url="",
+                 system=SYSTEM_PROMPT, temperature=None):
         if not base_url or not model or not 1 <= max_tokens <= 700:
             raise ValueError("base_url, model and max_tokens <= 700 required")
         self.url = base_url.rstrip("/") + "/chat/completions"
         self.model, self.api_key, self.max_tokens, self.timeout = model, api_key, max_tokens, timeout
+        self.system, self.temperature = system, temperature
         self.opener = opener or urllib.request.build_opener()
         # After a connection-level failure, probe readiness before the next model call. A probe
         # never runs a model, so a failed probe can be refunded; a restarting gateway whose port
@@ -107,8 +114,10 @@ class OpenAICompatModel:
 
     def _call(self, text, context, user):
         payload = {"model": self.model, "max_tokens": self.max_tokens, "stream": False,
-                   "messages": [{"role": "system", "content": SYSTEM_PROMPT},
+                   "messages": [{"role": "system", "content": self.system},
                                 {"role": "user", "content": "질문:\n" + text + "\n참고 문서:\n" + context}]}
+        if self.temperature is not None:
+            payload["temperature"] = self.temperature
         if user:
             payload["user"] = user
         headers = {"Content-Type": "application/json"}

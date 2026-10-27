@@ -1,0 +1,144 @@
+{
+  "scope": "LocalStack + kind Kubernetes (RBAC-scoped ServiceAccount token) + loopback mock Slack; advisor model 'quality' via http://127.0.0.1:4000/v1. Not AWS, EKS or real Slack.",
+  "date": "2026-10-27T22:43:02+0900",
+  "model_call_outcomes": {
+    "ok": 14,
+    "not_executed": 1
+  },
+  "results": {
+    "status_command": {
+      "http_status": 200,
+      "posted": true,
+      "seconds": 0.36,
+      "text_head": "api (utterai/api) Ready 2/2, 최신 2, generation 5",
+      "patched": false
+    },
+    "approval_flow": {
+      "generation": [
+        5,
+        5,
+        5,
+        6
+      ],
+      "generation_labels": [
+        "start",
+        "after_request",
+        "after_self_and_viewer_approval",
+        "after_ops2_approval"
+      ],
+      "denials_shown": [
+        "요청자 본인은 승인할 수 없습니다. 다른 팀원의 승인이 필요합니다.",
+        "운영 권한이 없습니다."
+      ],
+      "message_updated": [
+        "재시작 완료: api, 요청 <@U_OPS1>, 승인 <@U_OPS2>, generation 6"
+      ],
+      "pods_replaced": true
+    },
+    "double_click": {
+      "concurrent_approvals": 6,
+      "http_status": {
+        "200": 6
+      },
+      "generation_increase": 1,
+      "message_updates": 1,
+      "already_handled_notices": 5
+    },
+    "reject_and_expire": {
+      "rejected_update": [
+        "재시작 거절: api, 요청 <@U_OPS1>, 거절 <@U_OPS2>"
+      ],
+      "expired_update": [
+        "재시작 요청 만료: api, 요청 <@U_OPS1>"
+      ],
+      "approval_ttl_seconds": 20,
+      "generation_increase": 0
+    },
+    "rbac_denied": {
+      "app_allowlist_allowed": true,
+      "update": [
+        "재시작 실패: db, 요청 <@U_OPS1>, 사유 k8s_forbidden"
+      ],
+      "db_generation_increase": 0
+    },
+    "alert_flow": {
+      "wrong_token_status": 401,
+      "deliveries": [
+        200,
+        200,
+        200
+      ],
+      "posts_for_three_deliveries": 1,
+      "seconds_to_post": 2.21,
+      "buttons": [
+        "ops_status"
+      ],
+      "alerts_until_restart_proposal": [
+        false,
+        true
+      ],
+      "status_reply_in_thread": true,
+      "alert_to_restart": {
+        "request_in_alert_thread": true,
+        "generation_increase": 1,
+        "seconds_from_alert": 3.5
+      }
+    },
+    "advice_quality": {
+      "crashloop_no_recent_deploy": {
+        "alerts": 5,
+        "expected": "restart",
+        "proposals": {
+          "none": 1,
+          "restart": 4
+        },
+        "matches_runbook": 4
+      },
+      "crashloop_right_after_deploy": {
+        "alerts": 3,
+        "expected": "none",
+        "proposals": {
+          "restart": 3
+        },
+        "matches_runbook": 0
+      },
+      "queue_backlog": {
+        "alerts": 5,
+        "expected": "none",
+        "proposals": {
+          "none": 5
+        },
+        "matches_runbook": 5
+      }
+    },
+    "crash_after_patch": {
+      "worker_exited_after_patch": true,
+      "exit_code": 1,
+      "generation": [
+        7,
+        8,
+        8
+      ],
+      "restarted_at_unchanged_on_reapply": true,
+      "recovered_and_updated": true,
+      "recovery_seconds": 92.7,
+      "message_updates": 1
+    },
+    "model_down": {
+      "posted": true,
+      "seconds_to_post": 0.3,
+      "buttons": [
+        "ops_status"
+      ]
+    }
+  },
+  "rerun": {
+    "scenarios": [
+      "alert_flow"
+    ],
+    "date": "2026-10-27T22:44:33+0900",
+    "model_call_outcomes": {
+      "ok": 3
+    }
+  }
+}

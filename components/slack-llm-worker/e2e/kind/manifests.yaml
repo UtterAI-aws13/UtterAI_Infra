@@ -1,0 +1,99 @@
+# Restart targets for the ChatOps scenarios, and the worker's identity.
+# The Role is the real permission boundary: the worker can read Deployments and Pods in
+# this namespace and patch exactly one Deployment (api). db is deliberately not patchable,
+# so an application allowlist mistake still stops at Kubernetes RBAC.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: utterai
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: utterai
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: api}
+  template:
+    metadata:
+      labels: {app: api}
+    spec:
+      containers:
+        - name: api
+          image: registry.k8s.io/pause:3.10
+          resources: {requests: {cpu: 5m, memory: 8Mi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db
+  namespace: utterai
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: db}
+  template:
+    metadata:
+      labels: {app: db}
+    spec:
+      containers:
+        - name: db
+          image: registry.k8s.io/pause:3.10
+          resources: {requests: {cpu: 5m, memory: 8Mi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stt-worker
+  namespace: utterai
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: stt-worker}
+  template:
+    metadata:
+      labels: {app: stt-worker}
+    spec:
+      containers:
+        - name: stt-worker
+          image: registry.k8s.io/pause:3.10
+          resources: {requests: {cpu: 5m, memory: 8Mi}}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: slack-ops
+  namespace: utterai
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: slack-ops
+  namespace: utterai
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["api"]
+    verbs: ["patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: slack-ops
+  namespace: utterai
+subjects:
+  - kind: ServiceAccount
+    name: slack-ops
+    namespace: utterai
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: slack-ops

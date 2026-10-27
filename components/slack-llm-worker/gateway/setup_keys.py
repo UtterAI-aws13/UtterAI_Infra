@@ -17,6 +17,8 @@ SERVICES = {
     "slack-bot": {"models": ["fast"], "rpm_limit": 120, "max_budget": 1.0},
     # Nightly digest job: may use the larger model, but with a smaller share.
     "batch": {"models": ["quality"], "rpm_limit": 20, "max_budget": 0.5},
+    # Alert advisor: needs the larger model to follow runbooks; low volume, so a low limit.
+    "ops-advisor": {"models": ["quality"], "rpm_limit": 30, "max_budget": 0.5},
 }
 
 

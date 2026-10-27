@@ -12,3 +12,4 @@ dist/
 credentials*
 secrets*.json
 .keys.local.json
+.kube.local/

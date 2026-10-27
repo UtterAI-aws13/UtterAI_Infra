@@ -16,6 +16,8 @@ locals {
     SLACK_CHANNELS = join(",", var.slack.channels)
     SLACK_USERS    = join(",", var.slack.users)
     SLACK_BOT_ID   = var.slack.bot_id
+    # Alerts are only accepted for this channel; it must also be in channels for button clicks.
+    SLACK_ALERT_CHANNEL = var.slack.alert_channel
   }
 }
 
@@ -96,7 +98,7 @@ data "aws_iam_policy_document" "ingress" {
   }
   statement {
     actions   = ["secretsmanager:GetSecretValue"]
-    resources = [var.signing_secret_arn]
+    resources = compact([var.signing_secret_arn, var.alert_token_secret_arn])
   }
   statement {
     actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
@@ -125,6 +127,7 @@ resource "aws_lambda_function" "ingress" {
     variables = merge(local.slack_env, {
       SLACK_SIGNING_SECRET_ARN = var.signing_secret_arn
       QUEUE_URL                = aws_sqs_queue.jobs.url
+      ALERT_TOKEN_SECRET_ARN   = var.alert_token_secret_arn
     })
   }
 

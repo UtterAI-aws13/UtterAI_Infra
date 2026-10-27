@@ -18,6 +18,12 @@ variable "bot_secret_arn" {
   type        = string
 }
 
+variable "alert_token_secret_arn" {
+  description = "Secrets Manager secret holding {\"alert_token\": ...} for the Alertmanager webhook. Empty disables /alertmanager."
+  type        = string
+  default     = ""
+}
+
 variable "slack" {
   description = "Single-workspace allowlist passed to the ingress Lambda and worker."
   type = object({
@@ -26,6 +32,8 @@ variable "slack" {
     channels = list(string)
     users    = list(string)
     bot_id   = string
+    # Channel that receives Alertmanager notifications; empty disables alerts.
+    alert_channel = optional(string, "")
   })
 }
 

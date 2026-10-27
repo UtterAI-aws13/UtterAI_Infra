@@ -14,12 +14,14 @@ from .pipeline import BedrockModel, OpenAICompatModel, Pipeline
 from .store import DynamoStore
 from .worker import ModelNotExecuted, ModelRejected, Worker
 
+OPS_KINDS = ("alert", "ops", "ops_click")
+
 
 def policy_from_env():
     return Policy(os.environ["SLACK_APP_ID"], os.environ["SLACK_TEAM_ID"],
                   frozenset(filter(None, os.environ["SLACK_CHANNELS"].split(","))),
                   frozenset(filter(None, os.environ["SLACK_USERS"].split(","))),
-                  os.environ["SLACK_BOT_ID"])
+                  os.environ["SLACK_BOT_ID"], alert_channel=os.environ.get("SLACK_ALERT_CHANNEL", ""))
 
 
 def sdk_config(connect=1, read=1):
@@ -40,7 +42,11 @@ def lambda_handler(event, context):
             secret = json.loads(boto3.client("secretsmanager", config=sdk_config(.3, .4)).get_secret_value(
                 SecretId=os.environ["SLACK_SIGNING_SECRET_ARN"])["SecretString"])["signing_secret"]
             queue = SQSQueue(boto3.client("sqs", config=sdk_config(.3, .6)), os.environ["QUEUE_URL"])
-            _ingress = Ingress(secret, queue, policy_from_env())
+            alert_token = ""
+            if os.environ.get("ALERT_TOKEN_SECRET_ARN"):
+                alert_token = json.loads(boto3.client("secretsmanager", config=sdk_config(.3, .4)).get_secret_value(
+                    SecretId=os.environ["ALERT_TOKEN_SECRET_ARN"])["SecretString"])["alert_token"]
+            _ingress = Ingress(secret, queue, policy_from_env(), alert_token=alert_token)
             _loaded = time.monotonic()
         return _ingress.handle(event)
     except Exception:
@@ -90,6 +96,53 @@ def model_from_env(env, bedrock_client=None):
             raise SystemExit("Paid execution disabled: approve infrastructure, access and budget first.")
         return LoggedModel(BedrockModel(bedrock_client(), env["BEDROCK_MODEL_ID"]), env["BEDROCK_MODEL_ID"])
     raise SystemExit("MODEL_PROVIDER must be bedrock or openai_compat")
+
+
+class Router:
+    """Q&A jobs go to the Worker, ChatOps jobs to Ops. Both keep owner/until on the job record,
+    so one heartbeat implementation serves both."""
+    def __init__(self, worker, ops=None):
+        self.worker, self.ops = worker, ops
+
+    def handle(self, job, owner=None, healthy=lambda: True):
+        if job.get("kind") in OPS_KINDS:
+            if not self.ops:
+                return "retry", 90
+            return self.ops.handle(job, owner or str(uuid.uuid4()), healthy)
+        return self.worker.handle(job, owner, healthy)
+
+    def heartbeat(self, key, owner):
+        self.worker.heartbeat(key, owner)
+
+
+def ops_from_env(env, store, slack, policy):
+    """ChatOps is off unless OPS_TARGETS is set. The Kubernetes token decides what it can do."""
+    if not env.get("OPS_TARGETS"):
+        return None
+    from .k8s import Kube
+    from .ops import Advisor, Ops, OpsPolicy
+    targets = json.loads(env["OPS_TARGETS"])
+    if not isinstance(targets, dict) or not all({"namespace", "deployment"} <= set(t) for t in targets.values()):
+        raise SystemExit("OPS_TARGETS must map name -> {namespace, deployment}")
+    operators = frozenset(filter(None, env.get("OPS_OPERATORS", "").split(",")))
+    if not operators or not operators <= policy.users:
+        raise SystemExit("OPS_OPERATORS must be a non-empty subset of SLACK_USERS")
+    advisor = None
+    if env.get("ADVISOR_MODEL_NAME"):
+        base = env["MODEL_BASE_URL"]
+        local = urllib.parse.urlsplit(base).hostname in ("127.0.0.1", "localhost")
+        if not local and env.get("ENABLE_PAID_MODEL") != "approved":
+            raise SystemExit("Remote model endpoint disabled: approve access and budget first.")
+        # Short budget: an alert must not wait a minute for enrichment.
+        # Its own gateway key (ADVISOR_API_KEY) so alert enrichment has its own model, limit and budget.
+        model = OpenAICompatModel(base, env["ADVISOR_MODEL_NAME"], env.get("ADVISOR_API_KEY", env.get("MODEL_API_KEY", "")),
+                                  max_tokens=300, timeout=30, health_url=env.get("MODEL_HEALTH_URL", ""),
+                                  system=Advisor.SYSTEM, temperature=0)
+        advisor = Advisor(LoggedModel(model, env["ADVISOR_MODEL_NAME"]))
+    after_patch = (lambda: os._exit(1)) if env.get("OPS_FAULT") == "exit_after_patch" else None
+    return Ops(store, Kube(env["K8S_API"], env["K8S_TOKEN_FILE"], env["K8S_CA_FILE"]), slack, policy,
+               OpsPolicy(targets, operators, int(env.get("OPS_APPROVAL_TTL", "600"))),
+               advisor=advisor, runbooks=env.get("OPS_RUNBOOKS"), after_patch=after_patch)
 
 
 def process_message(queue, worker, raw):
@@ -144,9 +197,10 @@ def main():
     state_client = boto3.client("dynamodb", config=sdk_config(2, 3))
     token = json.loads(boto3.client("secretsmanager", config=sdk_config(2, 3)).get_secret_value(
         SecretId=os.environ["SLACK_BOT_SECRET_ARN"])["SecretString"])["bot_token"]
-    worker = Worker(DynamoStore(state_client, os.environ["STATE_TABLE"]),
-                    Pipeline(model, os.environ.get("APPROVED_CORPUS")),
-                    Slack(token, api_base=os.environ.get("SLACK_API_BASE", SLACK_API)), policy)
+    store = DynamoStore(state_client, os.environ["STATE_TABLE"])
+    slack = Slack(token, api_base=os.environ.get("SLACK_API_BASE", SLACK_API))
+    worker = Router(Worker(store, Pipeline(model, os.environ.get("APPROVED_CORPUS")), slack, policy),
+                    ops_from_env(os.environ, store, slack, policy))
     stopping = threading.Event()
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, lambda *_: stopping.set())

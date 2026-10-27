@@ -14,15 +14,17 @@ terraform {
 locals {
   endpoint = "http://localhost:4566"
   slack = {
-    app_id   = "A_LOCAL"
-    team_id  = "T_LOCAL"
-    channels = ["C_LOCAL1", "C_LOCAL2", "C_LOCAL3", "C_LOCAL4", "C_LOCAL5"]
-    users    = ["U_LOCAL"]
-    bot_id   = "B_LOCAL"
+    app_id        = "A_LOCAL"
+    team_id       = "T_LOCAL"
+    channels      = ["C_LOCAL1", "C_LOCAL2", "C_LOCAL3", "C_LOCAL4", "C_LOCAL5", "C_ALERT"]
+    users         = ["U_LOCAL", "U_OPS1", "U_OPS2", "U_VIEWER"]
+    bot_id        = "B_LOCAL"
+    alert_channel = "C_ALERT"
   }
   # Test-only values for the emulator. Real secrets are never written by Terraform.
   signing_secret = "local-test-signing-secret"
   bot_token      = "xoxb-local-test-only"
+  alert_token    = "local-alert-token-test-only"
 }
 
 provider "aws" {
@@ -72,6 +74,16 @@ resource "aws_secretsmanager_secret_version" "bot" {
   secret_string = jsonencode({ bot_token = local.bot_token })
 }
 
+resource "aws_secretsmanager_secret" "alert" {
+  name                    = "slack-worker-local/alert"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "alert" {
+  secret_id     = aws_secretsmanager_secret.alert.id
+  secret_string = jsonencode({ alert_token = local.alert_token })
+}
+
 module "slack_worker" {
   source = "../../modules/slack_worker"
 
@@ -80,9 +92,11 @@ module "slack_worker" {
   signing_secret_arn = aws_secretsmanager_secret.signing.arn
   bot_secret_arn     = aws_secretsmanager_secret.bot.arn
   slack              = local.slack
-  create_worker_task = false
 
-  depends_on = [aws_secretsmanager_secret_version.signing]
+  alert_token_secret_arn = aws_secretsmanager_secret.alert.arn
+  create_worker_task     = false
+
+  depends_on = [aws_secretsmanager_secret_version.signing, aws_secretsmanager_secret_version.alert]
 }
 
 output "function_url" {
@@ -111,5 +125,10 @@ output "slack" {
 
 output "signing_secret" {
   value     = local.signing_secret
+  sensitive = true
+}
+
+output "alert_token" {
+  value     = local.alert_token
   sensitive = true
 }
