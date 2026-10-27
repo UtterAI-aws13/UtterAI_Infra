@@ -2,7 +2,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.80"
+      version = "~> 6.40"
     }
   }
 }
@@ -137,6 +137,23 @@ resource "aws_lambda_function_url" "ingress" {
   authorization_type = "NONE" # Slack cannot sign SigV4; the handler verifies the Slack HMAC signature.
 }
 
+# Public URLs need both statements since Oct 2025; LocalStack does not enforce them.
+resource "aws_lambda_permission" "url_invoke" {
+  statement_id           = "SlackPublicUrl"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.ingress.function_name
+  principal              = "*"
+  function_url_auth_type = "NONE"
+}
+
+resource "aws_lambda_permission" "url_function_invoke" {
+  statement_id             = "SlackPublicUrlInvoke"
+  action                   = "lambda:InvokeFunction"
+  function_name            = aws_lambda_function.ingress.function_name
+  principal                = "*"
+  invoked_via_function_url = true
+}
+
 # ── Worker task (ECS Fargate in AWS; host process in local emulation) ────────
 
 resource "aws_cloudwatch_log_group" "worker" {
@@ -220,7 +237,7 @@ resource "aws_ecs_task_definition" "worker" {
     stopTimeout            = 120
     readonlyRootFilesystem = true
     environment = [for k, v in merge(local.slack_env, {
-      AWS_DEFAULT_REGION   = data.aws_region.current.name
+      AWS_DEFAULT_REGION   = data.aws_region.current.region
       QUEUE_URL            = aws_sqs_queue.jobs.url
       STATE_TABLE          = aws_dynamodb_table.state.name
       SLACK_BOT_SECRET_ARN = var.bot_secret_arn
@@ -231,7 +248,7 @@ resource "aws_ecs_task_definition" "worker" {
       logDriver = "awslogs"
       options = {
         awslogs-group         = aws_cloudwatch_log_group.worker[0].name
-        awslogs-region        = data.aws_region.current.name
+        awslogs-region        = data.aws_region.current.region
         awslogs-stream-prefix = "worker"
       }
     }

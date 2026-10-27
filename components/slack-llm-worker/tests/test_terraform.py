@@ -30,3 +30,9 @@ def test_local_env_cannot_target_real_aws():
     assert all("local.endpoint" in line for line in endpoints.strip().splitlines())
     assert 'endpoint = "http://localhost:4566"' in LOCAL
 
+
+
+def test_public_function_url_has_both_invoke_statements():
+    # LocalStack accepts a URL without these; real AWS answers 403 since Oct 2025.
+    assert 'function_url_auth_type = "NONE"' in MODULE
+    assert "invoked_via_function_url = true" in MODULE
