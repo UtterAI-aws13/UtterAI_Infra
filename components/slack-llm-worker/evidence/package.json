@@ -1,0 +1,9 @@
+{
+  "artifact": "dist/lambda.zip",
+  "sha256": "f8ea338dd4b71ca239d42b67f5dd56ae9d67788ab25916660bc2349889df3306",
+  "files": 2163,
+  "sdk_import_verified": true,
+  "boto3": "1.43.18",
+  "botocore": "1.43.18",
+  "live_deployed": false
+}

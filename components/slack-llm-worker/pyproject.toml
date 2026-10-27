@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "slack-llm-worker"
+version = "0.1.0"
+description = "Slack signed ingress and durable asynchronous worker"
+requires-python = ">=3.11"
+dependencies = ["boto3>=1.35,<2"]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<9"]
+
+[tool.setuptools.packages.find]
+include = ["slack_worker*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

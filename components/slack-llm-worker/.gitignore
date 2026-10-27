@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.env
+*.db
+*.egg-info/
+build/
+dist/
+*.tfstate*
+*.tfvars
+credentials*
+secrets*.json

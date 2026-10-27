@@ -1,0 +1,22 @@
+{
+  "environment": "3.12.2",
+  "mode": "loopback HTTP + SQLite CAS + simulated SQS + fake model/Slack",
+  "unique_events": 100,
+  "http_deliveries": 200,
+  "enqueued": 200,
+  "model_calls": 100,
+  "slack_posts": 100,
+  "dlq": 0,
+  "ack_http_ms": {
+    "p50": 0.274,
+    "p95": 0.403,
+    "max": 5.15
+  },
+  "simulated_processing_elapsed_seconds": 198,
+  "limitations": [
+    "No external service called",
+    "No real LLM output evaluated",
+    "No AWS cold start, SQS throughput or live Slack latency measured",
+    "Ingress load is sequential HTTP requests before worker drain, not 100 simultaneous clients"
+  ]
+}
