@@ -4,12 +4,13 @@ import os
 import signal
 import threading
 import time
+import urllib.parse
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
-from .adapters import SQSQueue, Slack
+from .adapters import SLACK_API, SQSQueue, Slack
 from .ingress import Ingress, Policy
-from .pipeline import BedrockModel, Pipeline
+from .pipeline import BedrockModel, OpenAICompatModel, Pipeline
 from .store import DynamoStore
 from .worker import Worker
 
@@ -44,6 +45,40 @@ def lambda_handler(event, context):
         return _ingress.handle(event)
     except Exception:
         return {"statusCode": 503, "body": "unavailable"}
+
+
+class LoggedModel:
+    """Emits one structured line per model call so tests can count calls without a fake."""
+    def __init__(self, model, name):
+        self.model, self.name = model, name
+
+    def generate(self, text, context):
+        started = time.monotonic()
+        outcome, usage = "error", {}
+        try:
+            result = self.model.generate(text, context)
+            outcome, usage = "ok", result.get("usage", {})
+            return result
+        finally:
+            print(json.dumps({"event": "model_call", "model": self.name, "outcome": outcome,
+                              "seconds": round(time.monotonic() - started, 3), "usage": usage}))
+
+
+def model_from_env(env, bedrock_client=None):
+    """Paid models need explicit approval; a loopback OpenAI-compatible endpoint does not."""
+    provider = env.get("MODEL_PROVIDER", "bedrock")
+    if provider == "openai_compat":
+        base = env["MODEL_BASE_URL"]
+        local = urllib.parse.urlsplit(base).hostname in ("127.0.0.1", "localhost")
+        if not local and env.get("ENABLE_PAID_MODEL") != "approved":
+            raise SystemExit("Remote model endpoint disabled: approve access and budget first.")
+        return LoggedModel(OpenAICompatModel(base, env["MODEL_NAME"], env.get("MODEL_API_KEY", "")),
+                           env["MODEL_NAME"])
+    if provider == "bedrock":
+        if env.get("ENABLE_PAID_MODEL") != "approved":
+            raise SystemExit("Paid execution disabled: approve infrastructure, access and budget first.")
+        return LoggedModel(BedrockModel(bedrock_client(), env["BEDROCK_MODEL_ID"]), env["BEDROCK_MODEL_ID"])
+    raise SystemExit("MODEL_PROVIDER must be bedrock or openai_compat")
 
 
 def process_message(queue, worker, raw):
@@ -87,21 +122,20 @@ def process_message(queue, worker, raw):
 
 
 def main():
-    if os.environ.get("ENABLE_PAID_MODEL") != "approved":
-        raise SystemExit("Paid execution disabled: approve infrastructure, access and budget first.")
     import boto3
+    model = model_from_env(os.environ, lambda: boto3.client("bedrock-runtime", config=sdk_config(2, 60)))
     count = int(os.environ.get("WORKER_CONCURRENCY", "2"))
     if not 1 <= count <= 8:
         raise SystemExit("concurrency must be 1..8")
     policy = policy_from_env()
-    queue = SQSQueue(boto3.client("sqs", config=sdk_config(2, 25)), os.environ["QUEUE_URL"])
+    queue = SQSQueue(boto3.client("sqs", config=sdk_config(2, 25)), os.environ["QUEUE_URL"],
+                     int(os.environ.get("RECEIVE_VISIBILITY", "90")))
     state_client = boto3.client("dynamodb", config=sdk_config(2, 3))
     token = json.loads(boto3.client("secretsmanager", config=sdk_config(2, 3)).get_secret_value(
         SecretId=os.environ["SLACK_BOT_SECRET_ARN"])["SecretString"])["bot_token"]
-    model = BedrockModel(boto3.client("bedrock-runtime", config=sdk_config(2, 60)),
-                         os.environ["BEDROCK_MODEL_ID"])
     worker = Worker(DynamoStore(state_client, os.environ["STATE_TABLE"]),
-                    Pipeline(model, os.environ.get("APPROVED_CORPUS")), Slack(token), policy)
+                    Pipeline(model, os.environ.get("APPROVED_CORPUS")),
+                    Slack(token, api_base=os.environ.get("SLACK_API_BASE", SLACK_API)), policy)
     stopping = threading.Event()
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, lambda *_: stopping.set())

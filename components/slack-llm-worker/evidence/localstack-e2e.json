@@ -1,0 +1,65 @@
+{
+  "scope": "LocalStack AWS emulator + Ollama local model + loopback mock Slack. Not AWS: no real Lambda cold start, IAM enforcement, Slack retries or Bedrock.",
+  "date": "2026-10-27T17:18:44+0900",
+  "environment": {
+    "localstack": "2026.10.3",
+    "model": "llama3.2:1b",
+    "python": "3.12.2",
+    "machine": "arm64",
+    "worker_concurrency": 4
+  },
+  "results": {
+    "burst": {
+      "events": 100,
+      "client_concurrency": 10,
+      "http_status": {
+        "200": 100
+      },
+      "first_wave_ack_seconds": {
+        "p50": 0.464,
+        "p95": 0.472,
+        "max": 0.472
+      },
+      "ack_seconds": {
+        "p50": 0.284,
+        "p95": 1.046,
+        "max": 1.119
+      },
+      "all_answered": true,
+      "slack_posts": 100,
+      "max_posts_per_event": 1,
+      "model_calls": 100,
+      "sent_state": 100
+    },
+    "duplicate_delivery": {
+      "unique_events": 20,
+      "http_deliveries": 60,
+      "accepted": 60,
+      "slack_posts": 20,
+      "max_posts_per_event": 1,
+      "model_calls": 20
+    },
+    "slack_429": {
+      "rejected_with_429": 1,
+      "slack_posts": 1,
+      "model_calls": 1,
+      "final_phase": "SENT"
+    },
+    "slack_accepted_then_timeout": {
+      "phase_after_timeout": "AMBIGUOUS",
+      "observed_seconds": 100,
+      "slack_posts": 1,
+      "model_calls": 1,
+      "final_phase": "AMBIGUOUS"
+    },
+    "worker_sigterm_exit_code": 0,
+    "malformed_to_dlq": {
+      "malformed_messages": 3,
+      "moved_to_dlq": 3,
+      "within_seconds": 23.4,
+      "ok": true,
+      "max_receive_count": 8,
+      "receive_visibility_seconds": 2
+    }
+  }
+}

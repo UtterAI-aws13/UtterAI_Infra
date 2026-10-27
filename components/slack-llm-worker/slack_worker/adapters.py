@@ -1,6 +1,7 @@
 import json
 import html
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from .ingress import callback_allowed
@@ -8,15 +9,15 @@ from .worker import AmbiguousDelivery, PermanentDelivery, RateLimited
 
 
 class SQSQueue:
-    def __init__(self, client, url):
-        self.client, self.url = client, url
+    def __init__(self, client, url, visibility=90):
+        self.client, self.url, self.receive_visibility = client, url, visibility
 
     def send(self, job):
         return self.client.send_message(QueueUrl=self.url, MessageBody=json.dumps(job, ensure_ascii=False))
 
     def receive(self):
         return self.client.receive_message(QueueUrl=self.url, MaxNumberOfMessages=1,
-                                          WaitTimeSeconds=20, VisibilityTimeout=90,
+                                          WaitTimeSeconds=20, VisibilityTimeout=self.receive_visibility,
                                           MessageSystemAttributeNames=["ApproximateReceiveCount"]).get("Messages", [])
 
     def visibility(self, receipt, seconds):
@@ -32,9 +33,22 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+SLACK_API = "https://slack.com/api"
+
+
+def api_base_allowed(url):
+    """Real Slack, or a loopback mock for local integration tests. Nothing else."""
+    if url == SLACK_API:
+        return True
+    p = urllib.parse.urlsplit(url)
+    return p.scheme == "http" and p.hostname in ("127.0.0.1", "localhost") and not p.username
+
+
 class Slack:
-    def __init__(self, token, opener=None):
-        self.token = token
+    def __init__(self, token, opener=None, api_base=SLACK_API):
+        if not api_base_allowed(api_base):
+            raise ValueError("Slack API base must be slack.com or a loopback mock")
+        self.token, self.api_base = token, api_base
         self.opener = opener or urllib.request.build_opener(NoRedirect())
 
     def send(self, job, text):
@@ -49,7 +63,7 @@ class Slack:
         else:
             if not job["thread_ts"]:
                 raise PermanentDelivery()
-            url = "https://slack.com/api/chat.postMessage"
+            url = self.api_base + "/chat.postMessage"
             payload = {"channel": job["channel"], "thread_ts": job["thread_ts"], "text": text,
                        "mrkdwn": False, "parse": "none", "unfurl_links": False, "unfurl_media": False}
             headers = {"Content-Type": "application/json", "Authorization": "Bearer " + self.token}
