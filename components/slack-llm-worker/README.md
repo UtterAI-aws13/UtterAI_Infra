@@ -1,8 +1,8 @@
 # Slack 비동기 LLM 워커
 
-Slack 요청 수신과 오래 걸리는 LLM 실행을 큐로 분리하고, 여러 서비스가 함께 쓰는 LLM 게이트웨이를 앞에 둔 구성입니다. 재전달, 워커 중단, 답글 전송 실패, 게이트웨이·Redis 장애를 재현해 동작을 확인했습니다.
+Slack 요청 수신과 오래 걸리는 LLM 실행을 큐로 분리하고, 여러 서비스가 함께 쓰는 LLM 게이트웨이를 앞에 둔 구성입니다. 그 위에 장애 알림을 받아 상태를 조회하고, 다른 팀원의 승인을 받아 재시작하는 ChatOps 기능을 붙였습니다. 재전달, 워커 중단, 답글 전송 실패, 게이트웨이·Redis 장애, 승인 버튼 연타, 실행 중 워커 종료를 재현해 동작을 확인했습니다.
 
-**현재 상태:** AWS 리소스는 Terraform으로 정의하고 LocalStack에 적용해 끝까지 검증했습니다. LLM 게이트웨이(LiteLLM)는 로컬 컨테이너로 검증했습니다. **실제 AWS·Slack·Bedrock에는 배포하거나 호출하지 않았습니다.** AWS에서 쓸 리소스와 비용 가정은 [AWS 배포 구성](docs/aws-deployment.md)에 정리했습니다.
+**현재 상태:** AWS 리소스는 Terraform으로 정의하고 LocalStack에 적용해 끝까지 검증했습니다. LLM 게이트웨이(LiteLLM)는 로컬 컨테이너로, ChatOps 실행 대상은 kind 로컬 Kubernetes 클러스터로 검증했습니다. **실제 AWS·Slack·Bedrock에는 배포하거나 호출하지 않았습니다.** AWS에서 쓸 리소스와 비용 가정은 [AWS 배포 구성](docs/aws-deployment.md)에 정리했습니다.
 
 ## 구성
 
@@ -19,6 +19,8 @@ flowchart LR
     G --- P[(PostgreSQL<br/>키·사용량)]
     G --> M[모델<br/>로컬: Ollama / AWS: Bedrock]
     W -->|thread_ts / response_url| S
+    AM[Alertmanager] -->|Bearer 토큰| L
+    W -->|승인된 재시작만<br/>RBAC 제한 토큰| K[Kubernetes API]
 ```
 
 | 계층 | 로컬 검증 | AWS 대응 |
@@ -27,15 +29,17 @@ flowchart LR
 | 워커 | 호스트 프로세스 | ECS Fargate |
 | 게이트웨이 | LiteLLM ×2 + PostgreSQL + Redis(docker compose) | Fargate ×2 + 내부 ALB + RDS + ElastiCache |
 | 모델 | Ollama(`fast`, `quality`, `embed` 별칭) | Bedrock. 별칭만 바꿈 |
+| ChatOps 실행 대상 | kind 클러스터 + ServiceAccount 토큰 | EKS + access entry(워커 태스크 역할 → Kubernetes 그룹) |
 
 ## 검증 결과
 
 | 단계 | 내용 | 기록 |
 |---|---|---|
-| 0 | 모의 SQS·SQLite·테스트 대역으로 상태 전이와 실패 처리 검증. 단위 테스트 88개 | [verification.md](docs/verification.md) |
+| 0 | 모의 SQS·SQLite·테스트 대역으로 상태 전이와 실패 처리 검증. 단위 테스트 110개(현재 기준) | [verification.md](docs/verification.md) |
 | 1 | LocalStack + Terraform으로 수신부터 답글까지 연결. 100건 burst, 중복 전달, Slack 429, 전송 후 timeout, DLQ | [localstack-verification.md](docs/localstack-verification.md) |
 | 2 | LiteLLM 게이트웨이: 서비스별 키, 인스턴스 간 공유 호출 제한, Redis 장애, 예산, 게이트웨이 중단 중 재시도 | [gateway-verification.md](docs/gateway-verification.md) |
 | 3 | AWS 리소스 대응, 비용 가정, 로컬로 증명하지 못한 것 | [aws-deployment.md](docs/aws-deployment.md) |
+| 4 | ChatOps: 알림 연동, 상태 조회, 2인 승인 재시작, RBAC, LLM 제안 검증 | [chatops-verification.md](docs/chatops-verification.md) |
 
 주요 수치(모두 로컬 환경 기준):
 
@@ -43,6 +47,8 @@ flowchart LR
 - 같은 이벤트 3회 전달 × 20건 → 답글 20개, 모델 호출 20회
 - 분당 10회 키로 게이트웨이 2대에 30회 요청 → 10회만 통과
 - 게이트웨이 45초 중단 → 5개 작업 모두 답변, 시도 소모 오류 5건 → 0건(준비 상태 확인 추가 후)
+- 승인 버튼 6회 동시 클릭 → 재시작 1회. 재시작 직후 워커 강제 종료 → 대체 워커가 다시 적용해도 롤아웃 1회
+- LLM 조치 제안 13건 중 9건이 런북과 일치. 배포 직후 크래시 3건은 모두 잘못된 재시작 제안 → 사람 승인 없이는 실행하지 않음
 
 ## 실패에 대한 동작
 
@@ -80,7 +86,12 @@ docker compose -f gateway/compose.yaml --profile scale up -d
 .venv/bin/python e2e/run_gateway.py
 .venv/bin/python scripts/batch_digest.py "요약할 문장"
 
+# 4단계: ChatOps(1·2단계 환경이 떠 있어야 함)
+scripts/kind_up.sh
+.venv/bin/python e2e/run_chatops.py
+
 # 정리
+kind delete cluster --name slack-ops
 docker compose -f gateway/compose.yaml --profile scale down
 lstk stop
 ```
@@ -89,6 +100,8 @@ lstk stop
 
 - `@bot help`, `/ask help`: 모델 없이 도움말
 - `@bot kb 질문`: 승인된 `.md` 문서에서 키워드로 최대 두 문서를 찾아 모델에 전달. 임베딩·벡터 DB는 구현하지 않음
+- `/ops status <대상>`: Deployment·Pod 상태 조회. `/ops restart <대상>`: 다른 운영자의 승인 후 재시작
+- Alertmanager 알림: 알림 채널에 게시, 런북 근거의 LLM 요약과 조치 제안. 제안은 버튼일 뿐 실행은 승인 후
 - 그 외: 모델 1회 호출, 최대 출력 700토큰. 입력 4,000자, 문서 문맥 6,000자, 답글 3,000자 제한
 - workspace·channel·user 허용 목록을 수신과 워커 양쪽에서 확인. 봇 이벤트 무시
 - 멘션은 스레드에 답글, 슬래시 커맨드는 `response_url`로 비공개 답변

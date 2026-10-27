@@ -17,6 +17,8 @@
 | 모델 | Ollama(llama3.2:1b, qwen2.5:3b, nomic-embed-text) | Bedrock(예: Claude Haiku 4.5, Titan Embeddings) | 별칭(`fast`, `quality`, `embed`)만 바꾼다. 애플리케이션 코드는 그대로 |
 | Slack API | loopback 모의 Slack(429·timeout 주입) | slack.com(NAT 또는 기존 외부 경로) | `SLACK_API_BASE`만 다름. 허용 주소는 slack.com과 loopback뿐 |
 | 감시 | evidence JSON, 구조화 로그 | CloudWatch Logs, DLQ·대기 시간 알람 2개 | 알람은 모듈에 있음. 알림 대상은 미연결 |
+| ChatOps 실행 대상 | kind 클러스터, ServiceAccount 토큰 파일 | 기존 EKS. 워커 태스크 역할을 access entry로 Kubernetes 그룹에 연결하고, 같은 Role(`api`만 patch)을 바인딩 | 워커 코드는 같음. 토큰 공급 방식만 다름(STS 서명 토큰). 미구현 |
+| Alertmanager 연동 | 테스트 스크립트가 webhook 호출 | 기존 Alertmanager의 webhook receiver → Function URL `/alertmanager` | Bearer 토큰은 Secrets Manager. 모듈에 반영 |
 
 워커와 게이트웨이의 AWS용 ECS 서비스·ALB·RDS·ElastiCache는 Terraform으로 작성하지 않았다. 비용과 리소스 범위를 보여 주는 설계 단계다.
 
@@ -101,6 +103,8 @@ flowchart LR
 | Redis 장애 | 전체 중단 시 fail-open | ElastiCache 장애 조치 중 동작 |
 | 네트워크 | loopback | private subnet에서 slack.com·Bedrock까지 경로(NAT 또는 VPC 엔드포인트) |
 | 비용 | 테스트 단가로 예산 동작만 확인 | 실제 토큰 수와 청구 금액 |
+| ChatOps 권한 | kind RBAC으로 `db` patch 거부 확인 | EKS access entry와 IAM 역할을 거친 같은 RBAC 동작, Fargate에서 EKS API까지 네트워크 경로 |
+| Slack 버튼 | 서명한 block_actions 요청을 직접 전송 | 실제 Slack 화면, 상호작용 요청 재시도 |
 
 ### 로컬 에뮬레이션이 숨긴 문제를 찾은 사례
 

@@ -39,6 +39,11 @@ Lambda · SQS · DynamoDB · ECS Fargate · LiteLLM · Redis · PostgreSQL · Te
 | Redis 장애 시 20회 모두 통과 | 같은 파일 `redis_outage` |
 | 예산 1.5~4.3배 초과 후 422 | 3회 실행 값. evidence 파일에는 3차만 남음. [gateway-verification.md](gateway-verification.md) |
 | 월 약 $172, 게이트웨이 87% | [aws-deployment.md](aws-deployment.md)의 가정 기반 계산. 측정값 아님 |
+| 승인 버튼 6회 동시 클릭 → 재시작 1회 | `evidence/chatops-e2e.json` `double_click` |
+| 재시작 직후 워커 종료 → 다시 적용해도 롤아웃 1회 | 같은 파일 `crash_after_patch` (generation 7 → 8 → 8) |
+| 앱 허용 대상이어도 RBAC이 차단 | 같은 파일 `rbac_denied` |
+| LLM 제안 13건 중 9건 런북 일치, 배포 직후 3건 모두 오답 | 같은 파일 `advice_quality`. 로컬 3B 모델, 작은 표본 |
+| 알림 수신부터 승인 재시작까지 3.5초 | 같은 파일 `alert_flow.alert_to_restart`. 모의 Slack이라 사람의 클릭 지연은 없음 |
 
 ## 면접에서 꺼낼 만한 이야기
 
@@ -48,6 +53,13 @@ Lambda · SQS · DynamoDB · ECS Fargate · LiteLLM · Redis · PostgreSQL · Te
 - **측정된 한계를 남긴 것:** Redis가 멈추면 호출 제한이 풀리고(fail-open), LiteLLM 예산은 소프트 상한이다. 그래서 비용 상한을 게이트웨이 하나에 맡기지 않고 Bedrock 할당량, AWS Budgets, 동시성 제한과 함께 둔다.
 - **클라우드에서 검증하지 않은 이유:** 핵심 동작(큐, 조건부 쓰기, 재시도 분류)은 AWS 호환 API로 재현할 수 있어 로컬에서 반복 검증했다. 로컬로 증명할 수 없는 것(cold start, IAM, 실제 Slack 재시도, Bedrock 품질)은 따로 목록으로 두고, 1시간·1달러 미만 AWS 확인 시험 계획을 세웠다.
 
+## ChatOps 확장에서 나온 이야기
+
+- **LLM에게 실행 권한을 주지 않은 근거:** 배포 직후 크래시 루프처럼 재시작이 오히려 해로운 경우에 모델이 3건 모두 재시작을 제안했다. 그래서 LLM은 버튼을 띄울 수만 있고, 실행은 다른 운영자의 승인으로만 이뤄진다.
+- **"결과를 모르면 멈춘다"와 "결과를 모르면 다시 한다"의 차이:** 답글 게시는 두 번 하면 중복이라 멈추고(AMBIGUOUS), 재시작은 승인 시각을 고정해 두 번 보내도 결과가 같게 만들어 다시 실행한다. 대상의 성질에 따라 재시도 정책을 다르게 설계했다.
+- **방어를 두 겹으로:** 앱의 허용 목록에 실수가 있어도 Kubernetes Role이 `api` 하나만 patch를 허용해 막는다. LocalStack의 IAM과 달리 kind의 RBAC은 실제로 강제되므로 이 동작을 직접 확인했다.
+- **ChatOps라고 부를 수 있는 이유와 한계:** 채팅에서 조회와 실행이 일어나고 팀 전체가 기록을 본다. 롤백, 스케일 조정, 실행 후 롤아웃 추적은 없다.
+
 ## 주장하면 안 되는 것
 
 - "AWS에서 100건 동시 처리", "운영 ACK p95 1초", "cold start 포함 3초 보장": AWS에 배포하지 않았다.
@@ -56,3 +68,5 @@ Lambda · SQS · DynamoDB · ECS Fargate · LiteLLM · Redis · PostgreSQL · Te
 - "LiteLLM 예산으로 비용 차단": 측정 결과 소프트 상한이다.
 - "IAM 최소 권한 검증 완료": LocalStack은 IAM을 강제하지 않는다.
 - "벡터 RAG", "Bedrock 품질 검증": 구현·검증하지 않았다.
+- "EKS에서 ChatOps 운영", "실제 Slack 버튼 검증": kind와 모의 Slack 기준이다.
+- "LLM 제안 정확도 69%": 13건짜리 표본이라 비율로 일반화하지 않는다.
