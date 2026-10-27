@@ -12,7 +12,7 @@ from .adapters import SLACK_API, SQSQueue, Slack
 from .ingress import Ingress, Policy
 from .pipeline import BedrockModel, OpenAICompatModel, Pipeline
 from .store import DynamoStore
-from .worker import Worker
+from .worker import ModelNotExecuted, ModelRejected, Worker
 
 
 def policy_from_env():
@@ -52,16 +52,27 @@ class LoggedModel:
     def __init__(self, model, name):
         self.model, self.name = model, name
 
-    def generate(self, text, context):
+    def generate(self, text, context, user=""):
         started = time.monotonic()
-        outcome, usage = "error", {}
+        outcome, usage, error = "error", {}, None
         try:
-            result = self.model.generate(text, context)
+            result = self.model.generate(text, context, user=user)
             outcome, usage = "ok", result.get("usage", {})
             return result
+        except ModelNotExecuted:
+            outcome = "not_executed"
+            raise
+        except ModelRejected as e:
+            outcome, error = "rejected", e.reason
+            raise
+        except Exception as e:
+            # Class and HTTP status only: never the message, which can echo prompts or URLs.
+            error = type(e).__name__ + (f":{e.code}" if hasattr(e, "code") else "")
+            raise
         finally:
-            print(json.dumps({"event": "model_call", "model": self.name, "outcome": outcome,
-                              "seconds": round(time.monotonic() - started, 3), "usage": usage}))
+            print(json.dumps({"event": "model_call", "model": self.name, "outcome": outcome, "job": user,
+                              "error": error, "seconds": round(time.monotonic() - started, 3),
+                              "usage": usage}))
 
 
 def model_from_env(env, bedrock_client=None):
@@ -72,8 +83,8 @@ def model_from_env(env, bedrock_client=None):
         local = urllib.parse.urlsplit(base).hostname in ("127.0.0.1", "localhost")
         if not local and env.get("ENABLE_PAID_MODEL") != "approved":
             raise SystemExit("Remote model endpoint disabled: approve access and budget first.")
-        return LoggedModel(OpenAICompatModel(base, env["MODEL_NAME"], env.get("MODEL_API_KEY", "")),
-                           env["MODEL_NAME"])
+        return LoggedModel(OpenAICompatModel(base, env["MODEL_NAME"], env.get("MODEL_API_KEY", ""),
+                                             health_url=env.get("MODEL_HEALTH_URL", "")), env["MODEL_NAME"])
     if provider == "bedrock":
         if env.get("ENABLE_PAID_MODEL") != "approved":
             raise SystemExit("Paid execution disabled: approve infrastructure, access and budget first.")

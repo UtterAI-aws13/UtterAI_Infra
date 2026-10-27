@@ -11,3 +11,4 @@ dist/
 *.tfvars
 credentials*
 secrets*.json
+.keys.local.json

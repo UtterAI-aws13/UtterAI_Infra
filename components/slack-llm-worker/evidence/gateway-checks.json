@@ -1,0 +1,161 @@
+{
+  "scope": "Local LiteLLM v1.104.2 (2 instances, PostgreSQL, Redis) over Ollama; LocalStack worker run. Budget figures use test prices, not Bedrock prices.",
+  "date": "2026-10-27T18:34:50+0900",
+  "results": {
+    "access_control_http_status": {
+      "slack-bot→fast": 200,
+      "slack-bot→quality": 403,
+      "batch→quality": 200,
+      "batch→fast": 403
+    },
+    "shared_rate_limit": {
+      "rpm_limit": 10,
+      "requests": 30,
+      "instances": 2,
+      "status": {
+        "200": 10,
+        "429": 20
+      }
+    },
+    "redis_outage": {
+      "rpm_limit": 10,
+      "requests": 20,
+      "status": {
+        "200": 20
+      },
+      "seconds": 0.7
+    },
+    "budget": {
+      "max_budget_test_units": 0.0005,
+      "accepted_before_block": 18,
+      "block_status": 422,
+      "block_error": {
+        "type": "budget_exceeded",
+        "code": "422",
+        "mentions_budget": true
+      },
+      "recorded_spend_test_units": 0.002059
+    },
+    "worker_through_gateway_no_probe": {
+      "events": 5,
+      "gateway_outage_seconds": 45,
+      "all_answered": true,
+      "slack_posts": 5,
+      "model_call_outcomes": {
+        "not_executed": 8,
+        "error": 5,
+        "ok": 5
+      },
+      "error_types": {
+        "RemoteDisconnected": 5
+      },
+      "per_job_call_sequence": {
+        "event:T_LOCAL:Eva1f20f5000001": [
+          "not_executed",
+          "error(RemoteDisconnected)",
+          "ok"
+        ],
+        "event:T_LOCAL:Eva1f20f5000002": [
+          "not_executed",
+          "not_executed",
+          "error(RemoteDisconnected)",
+          "ok"
+        ],
+        "event:T_LOCAL:Eva1f20f5000003": [
+          "not_executed",
+          "not_executed",
+          "error(RemoteDisconnected)",
+          "ok"
+        ],
+        "event:T_LOCAL:Eva1f20f5000004": [
+          "not_executed",
+          "error(RemoteDisconnected)",
+          "ok"
+        ],
+        "event:T_LOCAL:Eva1f20f5000005": [
+          "not_executed",
+          "not_executed",
+          "error(RemoteDisconnected)",
+          "ok"
+        ]
+      },
+      "final_attempts": {
+        "2": 5
+      },
+      "jobs_that_waited_out_outage": 5,
+      "per_job_attribution": {
+        "event:T_LOCAL:Eva1f20f5000001": {
+          "worker_logged_tokens": 111,
+          "gateway_end_user_spend_test_units": "http_404"
+        },
+        "event:T_LOCAL:Eva1f20f5000002": {
+          "worker_logged_tokens": 111,
+          "gateway_end_user_spend_test_units": "http_404"
+        },
+        "event:T_LOCAL:Eva1f20f5000003": {
+          "worker_logged_tokens": 111,
+          "gateway_end_user_spend_test_units": "http_404"
+        }
+      }
+    },
+    "worker_through_gateway_with_probe": {
+      "events": 5,
+      "gateway_outage_seconds": 45,
+      "all_answered": true,
+      "slack_posts": 5,
+      "model_call_outcomes": {
+        "not_executed": 13,
+        "ok": 5
+      },
+      "error_types": {},
+      "per_job_call_sequence": {
+        "event:T_LOCAL:Eva1f20f5000007": [
+          "not_executed",
+          "not_executed",
+          "not_executed",
+          "ok"
+        ],
+        "event:T_LOCAL:Eva1f20f5000006": [
+          "not_executed",
+          "not_executed",
+          "ok"
+        ],
+        "event:T_LOCAL:Eva1f20f5000008": [
+          "not_executed",
+          "not_executed",
+          "ok"
+        ],
+        "event:T_LOCAL:Eva1f20f5000009": [
+          "not_executed",
+          "not_executed",
+          "not_executed",
+          "ok"
+        ],
+        "event:T_LOCAL:Eva1f20f5000010": [
+          "not_executed",
+          "not_executed",
+          "not_executed",
+          "ok"
+        ]
+      },
+      "final_attempts": {
+        "1": 5
+      },
+      "jobs_that_waited_out_outage": 5,
+      "per_job_attribution": {
+        "event:T_LOCAL:Eva1f20f5000006": {
+          "worker_logged_tokens": 111,
+          "gateway_end_user_spend_test_units": 0.000155
+        },
+        "event:T_LOCAL:Eva1f20f5000007": {
+          "worker_logged_tokens": 111,
+          "gateway_end_user_spend_test_units": "http_404"
+        },
+        "event:T_LOCAL:Eva1f20f5000008": {
+          "worker_logged_tokens": 111,
+          "gateway_end_user_spend_test_units": 0.000155
+        }
+      }
+    }
+  }
+}

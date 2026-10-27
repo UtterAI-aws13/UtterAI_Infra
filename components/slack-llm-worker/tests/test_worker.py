@@ -7,7 +7,7 @@ import pytest
 from slack_worker.local import Clock, FakeSlack, LocalQueue
 from slack_worker.pipeline import FakeModel, Pipeline
 from slack_worker.store import SQLiteStore
-from slack_worker.worker import Busy, LostLease, RateLimited, Worker
+from slack_worker.worker import Busy, LostLease, ModelNotExecuted, ModelRejected, RateLimited, Worker
 
 
 @pytest.fixture
@@ -106,6 +106,49 @@ def test_model_failure_has_hard_attempt_cap(setup, job):
         w.handle(job); clock.advance(2)
     assert len(calls) == 2
     assert store.get(job["key"])["phase"] == "FAILED"
+
+
+def test_undelivered_model_request_does_not_spend_attempts(setup, job):
+    w, clock, store, model, slack = setup
+    real = w.pipeline.run
+    outage = {"left": 5}
+    def gateway_down(j):
+        if outage["left"]:
+            outage["left"] -= 1
+            raise ModelNotExecuted()
+        return real(j)
+    w.pipeline.run = gateway_down
+    delays = [w.handle(job) for _ in range(5)]
+    assert [d for _, d in delays] == [15, 30, 60, 120, 240]
+    s = store.get(job["key"])
+    assert s["phase"] == "MODEL" and s["attempts"] == 0 and s["unavailable"] == 5
+    assert w.handle(job)[0] == "ack"  # gateway back: the job still has its full attempt budget
+    assert model.calls == len(slack.messages) == 1
+
+
+def test_gateway_retry_after_is_honored(setup, job):
+    w, *_ = setup
+    def limited(_): raise ModelNotExecuted(retry_after=7)
+    w.pipeline.run = limited
+    assert w.handle(job) == ("retry", 7)
+
+
+def test_permanent_gateway_refusal_fails_fast(setup, job):
+    w, _, store, model, slack = setup
+    def denied(_): raise ModelRejected("model_access_denied")
+    w.pipeline.run = denied
+    assert w.handle(job)[0] == "quarantine"
+    s = store.get(job["key"])
+    assert s["phase"] == "FAILED" and s["reason"] == "model_access_denied"
+    assert not slack.messages
+
+
+def test_lost_response_keeps_spent_attempt(setup, job):
+    w, clock, store, *_ = setup
+    def lost(_): raise TimeoutError()  # request left; the model may have run
+    w.pipeline.run = lost
+    w.handle(job)
+    assert store.get(job["key"])["attempts"] == 1
 
 
 def test_local_queue_redrive_after_receives(setup, job):
