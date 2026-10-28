@@ -98,7 +98,7 @@ data "aws_iam_policy_document" "ingress" {
   }
   statement {
     actions   = ["secretsmanager:GetSecretValue"]
-    resources = compact([var.signing_secret_arn, var.alert_token_secret_arn])
+    resources = compact([var.signing_secret_arn, var.alert_token_secret_arn, var.git_webhook_secret_arn])
   }
   statement {
     actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
@@ -128,6 +128,7 @@ resource "aws_lambda_function" "ingress" {
       SLACK_SIGNING_SECRET_ARN = var.signing_secret_arn
       QUEUE_URL                = aws_sqs_queue.jobs.url
       ALERT_TOKEN_SECRET_ARN   = var.alert_token_secret_arn
+      GIT_WEBHOOK_SECRET_ARN   = var.git_webhook_secret_arn
     })
   }
 

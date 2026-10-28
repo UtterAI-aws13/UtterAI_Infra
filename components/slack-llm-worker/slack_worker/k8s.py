@@ -77,6 +77,50 @@ class Kube:
                         "restarts": sum(s.get("restartCount", 0) for s in statuses)})
         return out
 
+    def owner_deployment(self, namespace, pod):
+        """Pod -> ReplicaSet -> Deployment, from ownerReferences. Alerts name pods; actions need the Deployment."""
+        p = self._request("GET", f"/api/v1/namespaces/{q(namespace)}/pods/{q(pod)}")
+        rs = next((o["name"] for o in p["metadata"].get("ownerReferences", []) if o["kind"] == "ReplicaSet"), None)
+        if not rs:
+            return None
+        r = self._request("GET", f"/apis/apps/v1/namespaces/{q(namespace)}/replicasets/{q(rs)}")
+        return next((o["name"] for o in r["metadata"].get("ownerReferences", []) if o["kind"] == "Deployment"), None)
+
+    def pod_states(self, namespace, match_labels):
+        """Why each container is unhealthy, in the words Kubernetes uses (CrashLoopBackOff, exit code...)."""
+        selector = ",".join(f"{k}={v}" for k, v in sorted(match_labels.items()))
+        items = self._request("GET", f"/api/v1/namespaces/{q(namespace)}/pods?labelSelector={q(selector)}")["items"]
+        out = []
+        for p in items:
+            # The image the Pod was asked to run. status.image is what the runtime resolved and can
+            # show another tag of the same build, which made a recovered rollout look unrecovered.
+            spec = {c["name"]: c.get("image", "") for c in p.get("spec", {}).get("containers", [])}
+            for c in p.get("status", {}).get("containerStatuses", []):
+                waiting = (c.get("state") or {}).get("waiting") or {}
+                last = (c.get("lastState") or {}).get("terminated") or {}
+                out.append({"pod": p["metadata"]["name"], "phase": p.get("status", {}).get("phase"),
+                            "image": spec.get(c["name"]) or c.get("image", ""), "ready": bool(c.get("ready")),
+                            "restarts": c.get("restartCount", 0), "waiting": waiting.get("reason"),
+                            "last_exit": last.get("exitCode"), "last_reason": last.get("reason")})
+            if not p.get("status", {}).get("containerStatuses"):
+                out.append({"pod": p["metadata"]["name"], "phase": p.get("status", {}).get("phase"),
+                            "image": next(iter(spec.values()), ""), "ready": False, "restarts": 0, "waiting": None,
+                            "last_exit": None, "last_reason": None})
+        return out
+
+    def warning_events(self, namespace, involved, limit=5):
+        items = self._request("GET", f"/api/v1/namespaces/{q(namespace)}/events?fieldSelector="
+                              + q(f"involvedObject.name={involved},type=Warning"))["items"]
+        items.sort(key=lambda e: e.get("lastTimestamp") or e.get("eventTime") or "", reverse=True)
+        return [{"reason": e.get("reason"), "message": (e.get("message") or "")[:200], "count": e.get("count", 1)}
+                for e in items[:limit]]
+
+    def argocd_app(self, name, namespace="argocd"):
+        a = self._request("GET", f"/apis/argoproj.io/v1alpha1/namespaces/{q(namespace)}/applications/{q(name)}")
+        st = a.get("status", {})
+        return {"sync": st.get("sync", {}).get("status"), "revision": st.get("sync", {}).get("revision"),
+                "health": st.get("health", {}).get("status")}
+
     def restart(self, namespace, name, stamp):
         """Same mechanism as `kubectl rollout restart`, with a caller-fixed timestamp.
 

@@ -25,6 +25,7 @@ locals {
   signing_secret = "local-test-signing-secret"
   bot_token      = "xoxb-local-test-only"
   alert_token    = "local-alert-token-test-only"
+  git_secret     = "local-git-webhook-secret-test-only"
 }
 
 provider "aws" {
@@ -74,6 +75,16 @@ resource "aws_secretsmanager_secret_version" "bot" {
   secret_string = jsonencode({ bot_token = local.bot_token })
 }
 
+resource "aws_secretsmanager_secret" "git" {
+  name                    = "slack-worker-local/git-webhook"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "git" {
+  secret_id     = aws_secretsmanager_secret.git.id
+  secret_string = jsonencode({ webhook_secret = local.git_secret })
+}
+
 resource "aws_secretsmanager_secret" "alert" {
   name                    = "slack-worker-local/alert"
   recovery_window_in_days = 0
@@ -114,10 +125,12 @@ module "slack_worker" {
   slack              = local.slack
 
   alert_token_secret_arn = aws_secretsmanager_secret.alert.arn
+  git_webhook_secret_arn = aws_secretsmanager_secret.git.arn
   pipeline_queue_arns    = concat([for q in aws_sqs_queue.stage : q.arn], [for q in aws_sqs_queue.stage_dlq : q.arn])
   create_worker_task     = false
 
-  depends_on = [aws_secretsmanager_secret_version.signing, aws_secretsmanager_secret_version.alert]
+  depends_on = [aws_secretsmanager_secret_version.signing, aws_secretsmanager_secret_version.alert,
+  aws_secretsmanager_secret_version.git]
 }
 
 output "function_url" {
@@ -161,4 +174,9 @@ output "pipeline" {
     dlq    = aws_sqs_queue.stage_dlq[s].url
     target = "${s}-worker"
   }]
+}
+
+output "git_webhook_secret" {
+  value     = local.git_secret
+  sensitive = true
 }

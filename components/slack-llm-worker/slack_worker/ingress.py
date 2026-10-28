@@ -25,7 +25,7 @@ class Policy:
             raise ValueError("explicit single-workspace allowlists required")
 
     def allows(self, job):
-        if job["kind"] == "alert":
+        if job["kind"] in ("alert", "git_event"):
             # Alerts come from Alertmanager, not a Slack user; they may only reach the alert channel.
             return bool(self.alert_channel) and job["team"] == self.team and job["channel"] == self.alert_channel
         return (job["team"] == self.team and job["channel"] in self.channels
@@ -56,9 +56,9 @@ def callback_allowed(url):
         return False
 
 
-OPS_ACTIONS = frozenset({"ops_approve", "ops_reject", "ops_request", "ops_status"})
+OPS_ACTIONS = frozenset({"ops_approve", "ops_reject", "ops_request", "ops_status", "ops_rollback"})
 ALERT_LABELS = ("alertname", "severity", "namespace", "deployment", "service", "pod", "container")
-ALERT_ANNOTATIONS = ("summary", "description", "runbook")
+ALERT_ANNOTATIONS = ("summary", "description", "runbook", "runbook_url")
 
 
 def alert_text(status, alerts):
@@ -82,24 +82,28 @@ def reply(code, text=""):
 
 
 class Ingress:
-    def __init__(self, secret, queue, policy, clock=time.time, alert_token=""):
+    def __init__(self, secret, queue, policy, clock=time.time, alert_token="", git_secret="", git_branch="main"):
         self.secret, self.queue, self.policy, self.clock = secret, queue, policy, clock
-        self.alert_token = alert_token
+        self.alert_token, self.git_secret, self.git_branch = alert_token, git_secret, git_branch
 
     def handle(self, event):
         method = event.get("requestContext", {}).get("http", {}).get("method", "POST")
         if method != "POST":
             return reply(405)
         try:
+            path = event.get("rawPath", "/")
+            limit = 65536 if path == "/git" else 16384   # push payloads carry commit lists
             raw = event.get("body") or ""
             # Check encoded length before allocation/decoding.
-            if not isinstance(raw, str) or len(raw) > 32768:
+            if not isinstance(raw, str) or len(raw) > 2 * limit:
                 return reply(413)
             body = base64.b64decode(raw, validate=True) if event.get("isBase64Encoded") else raw.encode()
-            if len(body) > 16384:
+            if len(body) > limit:
                 return reply(413)
             headers = {k.lower(): v for k, v in (event.get("headers") or {}).items()}
-            if event.get("rawPath", "/") == "/alertmanager":
+            if path == "/git":
+                job = self.git_job(headers, body)
+            elif path == "/alertmanager":
                 job = self.alert_job(headers, body)
             else:
                 job = self.slack_job(headers, body)
@@ -198,6 +202,40 @@ class Ingress:
         key = "alert:" + hashlib.sha256(ident.encode()).hexdigest()
         return Job(key, self.policy.team, self.policy.alert_channel, "alertmanager",
                    alert_text(status, alerts), int(self.clock()), "alert")
+
+    def git_job(self, headers, body):
+        """Deploy-repository webhook (Gitea, GitHub-compatible signature). Only merged/closed pull
+        requests and pushes to the deploy branch matter: they drive rollback PR follow-up."""
+        if not self.git_secret:
+            return reply(404)
+        expected = hmac.new(self.git_secret.encode(), body, hashlib.sha256).hexdigest()
+        if not (hmac.compare_digest(headers.get("x-hub-signature-256", ""), "sha256=" + expected)
+                or hmac.compare_digest(headers.get("x-gitea-signature", ""), expected)):
+            return reply(401)
+        event = headers.get("x-github-event") or headers.get("x-gitea-event") or ""
+        delivery = headers.get("x-github-delivery") or headers.get("x-gitea-delivery") or ""
+        if not delivery:
+            return reply(400)
+        p = json.loads(body)
+        if event == "pull_request":
+            pr = p["pull_request"]
+            if p.get("action") != "closed":
+                return reply(200)
+            text = {"event": "pull_request", "number": int(pr["number"]), "merged": bool(pr.get("merged")),
+                    "merge_sha": str(pr.get("merge_commit_sha") or "")[:64], "head_ref": str(pr["head"]["ref"])[:200]}
+        elif event == "push":
+            if p.get("ref") != "refs/heads/" + self.git_branch:
+                return reply(200)
+            files = sorted({f for c in p.get("commits", []) for k in ("added", "modified", "removed")
+                            for f in c.get(k) or []})
+            text = {"event": "push", "after": str(p["after"])[:64], "files": files[:50],
+                    "pusher": str((p.get("pusher") or {}).get("login") or (p.get("pusher") or {}).get("username") or "")[:80]}
+        else:
+            return reply(200)
+        # Deliveries are retried by the forge with the same id; the id is the dedupe key.
+        key = "git:" + hashlib.sha256(delivery.encode()).hexdigest()
+        return Job(key, self.policy.team, self.policy.alert_channel, "git", json.dumps(text), int(self.clock()),
+                   "git_event")
 
     def click_job(self, a, stamp):
         """Slack block_actions (button click). Signed like any other Slack request."""

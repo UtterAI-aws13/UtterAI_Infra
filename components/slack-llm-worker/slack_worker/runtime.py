@@ -14,7 +14,7 @@ from .pipeline import BedrockModel, OpenAICompatModel, Pipeline
 from .store import DynamoStore
 from .worker import ModelNotExecuted, ModelRejected, Worker
 
-OPS_KINDS = ("alert", "ops", "ops_click")
+OPS_KINDS = ("alert", "ops", "ops_click", "git_event")
 
 
 def policy_from_env():
@@ -42,11 +42,15 @@ def lambda_handler(event, context):
             secret = json.loads(boto3.client("secretsmanager", config=sdk_config(.3, .4)).get_secret_value(
                 SecretId=os.environ["SLACK_SIGNING_SECRET_ARN"])["SecretString"])["signing_secret"]
             queue = SQSQueue(boto3.client("sqs", config=sdk_config(.3, .6)), os.environ["QUEUE_URL"])
-            alert_token = ""
-            if os.environ.get("ALERT_TOKEN_SECRET_ARN"):
-                alert_token = json.loads(boto3.client("secretsmanager", config=sdk_config(.3, .4)).get_secret_value(
-                    SecretId=os.environ["ALERT_TOKEN_SECRET_ARN"])["SecretString"])["alert_token"]
-            _ingress = Ingress(secret, queue, policy_from_env(), alert_token=alert_token)
+            def optional(arn_env, field):
+                if not os.environ.get(arn_env):
+                    return ""
+                return json.loads(boto3.client("secretsmanager", config=sdk_config(.3, .4)).get_secret_value(
+                    SecretId=os.environ[arn_env])["SecretString"])[field]
+            _ingress = Ingress(secret, queue, policy_from_env(),
+                               alert_token=optional("ALERT_TOKEN_SECRET_ARN", "alert_token"),
+                               git_secret=optional("GIT_WEBHOOK_SECRET_ARN", "webhook_secret"),
+                               git_branch=os.environ.get("GIT_DEPLOY_BRANCH", "main"))
             _loaded = time.monotonic()
         return _ingress.handle(event)
     except Exception:
@@ -120,14 +124,16 @@ def ops_from_env(env, store, slack, policy, sqs_client=None):
     if not env.get("OPS_TARGETS"):
         return None
     from .k8s import Kube
-    from .ops import Advisor, Ops, OpsPolicy
+    from .forge import GiteaForge
+    from .gitops import GitOpsPolicy
+    from .ops import Advisor, Ops, OpsPolicy, Summarizer
     targets = json.loads(env["OPS_TARGETS"])
     if not isinstance(targets, dict) or not all({"namespace", "deployment"} <= set(t) for t in targets.values()):
         raise SystemExit("OPS_TARGETS must map name -> {namespace, deployment}")
     operators = frozenset(filter(None, env.get("OPS_OPERATORS", "").split(",")))
     if not operators or not operators <= policy.users:
         raise SystemExit("OPS_OPERATORS must be a non-empty subset of SLACK_USERS")
-    advisor = None
+    advisor = summarizer = None
     if env.get("ADVISOR_MODEL_NAME"):
         base = env["MODEL_BASE_URL"]
         local = urllib.parse.urlsplit(base).hostname in ("127.0.0.1", "localhost")
@@ -139,6 +145,18 @@ def ops_from_env(env, store, slack, policy, sqs_client=None):
                                   max_tokens=300, timeout=30, health_url=env.get("MODEL_HEALTH_URL", ""),
                                   system=Advisor.SYSTEM, temperature=0)
         advisor = Advisor(LoggedModel(model, env["ADVISOR_MODEL_NAME"]))
+        summarizer = Summarizer(LoggedModel(OpenAICompatModel(
+            base, env["ADVISOR_MODEL_NAME"], env.get("ADVISOR_API_KEY", env.get("MODEL_API_KEY", "")), max_tokens=300,
+            timeout=30, health_url=env.get("MODEL_HEALTH_URL", ""), system=Summarizer.SYSTEM, temperature=0),
+            env["ADVISOR_MODEL_NAME"]))
+    forge = gitops = None
+    if env.get("OPS_GITOPS"):
+        g = json.loads(env["OPS_GITOPS"])
+        if not all({"path", "namespace", "deployment", "argocd_app"} <= set(a) for a in g["apps"].values()):
+            raise SystemExit("OPS_GITOPS apps need path, namespace, deployment and argocd_app")
+        forge = GiteaForge(g["base"], g["repo"], env["GITOPS_TOKEN_FILE"], web_base=g.get("web_base", ""))
+        gitops = GitOpsPolicy(g["apps"], g.get("branch", "main"), tuple(g.get("rollback_alerts", GitOpsPolicy.rollback_alerts)),
+                              int(g.get("change_window", 7200)))
     pipeline = tuple(json.loads(env.get("OPS_PIPELINE", "[]")))
     if not all({"stage", "queue", "target"} <= set(st) and st["target"] in targets for st in pipeline):
         raise SystemExit("OPS_PIPELINE stages need stage, queue and a target from OPS_TARGETS")
@@ -151,7 +169,8 @@ def ops_from_env(env, store, slack, policy, sqs_client=None):
                          verify_interval=int(env.get("OPS_VERIFY_INTERVAL", "60")), verify_checks=verify_checks,
                          backlog_warn=int(env.get("OPS_BACKLOG_WARN", "100"))),
                advisor=advisor, runbooks=env.get("OPS_RUNBOOKS"), after_patch=after_patch,
-               queues=QueueStats(sqs_client) if pipeline and sqs_client else None)
+               queues=QueueStats(sqs_client) if pipeline and sqs_client else None,
+               forge=forge, gitops=gitops, summarizer=summarizer)
 
 
 def process_message(queue, worker, raw):

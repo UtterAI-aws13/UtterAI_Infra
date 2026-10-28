@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cpu-worker
+  namespace: utterai-ai-cpu
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: cpu-worker}
+  template:
+    metadata:
+      labels: {app: cpu-worker}
+    spec:
+      containers:
+        - name: worker
+          image: utterai/batch-worker:prod-aa314fc
+          imagePullPolicy: Never
+          # Larger than the kind node, like a burst that outgrows the NodePool limits.
+          resources: {requests: {cpu: "64", memory: 8Mi}}

@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: batch-worker
+  namespace: utterai-batch
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: batch-worker}
+  template:
+    metadata:
+      labels: {app: batch-worker}
+    spec:
+      containers:
+        - name: worker
+          image: utterai/batch-worker
+          imagePullPolicy: Never
+          resources: {requests: {cpu: 5m, memory: 8Mi}}

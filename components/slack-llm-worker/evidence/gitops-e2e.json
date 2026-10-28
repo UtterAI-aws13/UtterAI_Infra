@@ -1,0 +1,68 @@
+{
+  "scope": "kind + Argo CD v2.14 (core) + Gitea 1.22 + LocalStack + loopback mock Slack; summarizer 'quality' (qwen2.5:3b) via local LiteLLM. Incident modelled on the 6/30 batch-worker outage. Not EKS, GitHub or real Slack.",
+  "date": "2026-10-28T17:14:28+0900",
+  "model_call_outcomes": {
+    "ok": 2
+  },
+  "results": {
+    "bad_deploy_rollback": {
+      "ci_commit": "1336286",
+      "seconds_commit_to_alert": 30.6,
+      "alert_posted": true,
+      "seconds_alert_to_post": 6.6,
+      "evidence": [
+        "utterai-batch/batch-worker: Pod 2/3 Ready(목표 2), 재시작 합계 1, 상태 CrashLoopBackOff, 마지막 종료 exit 1(Error), 실행 중 이미지 prod-6e134f1, prod-aa314fc",
+        "이벤트 BackOff(x2): Back-off restarting failed container worker in pod batch-worker-844fb8567-mrqx7_utterai-batch(4d9e4391-fa22-471d-ad49-f5c96d8947fc)",
+        "최근 배포: 10/28 17:12 이미지 prod-aa314fc → prod-6e134f1 (ops-admin, \"ci(ai): update prod image tag to prod-6e134f1 (#355)\"), 알림 0분 전",
+        "Argo CD: Synced / Progressing, 리비전 1336286"
+      ],
+      "llm_summary": "LLM 요약(검증 필요): UtterAIPodCrashLoopBackOff는 이미지 업데이트 후 발생한 문제로, 이미지 업데이트가 성공적으로 이루어졌으나, 이미지 업데이트 후 Pod가 CrashLoopBackOff 상태를 유지하고 있습니다.\n원인 후보: 업데이트된 이미지와 기존 이미지 간의 호환성 문제 / Pod의 리소스 배분 문제 / 업데이트된 이미지에 포함된 새로운 런타임 라이브러리의 호환성 문제",
+      "rollback_offered": true,
+      "concurrent_clicks": 3,
+      "open_rollback_prs": 1,
+      "announcements": 1,
+      "private_notices": 2,
+      "pr": 12,
+      "pr_author": "slackops",
+      "pr_changes_tag_to": "prod-aa314fc",
+      "required_status": [
+        "success"
+      ],
+      "bot_merge_attempt_http": 405,
+      "human_merge_http": 200,
+      "recovery_report": "복구 확인: PR #12 반영 16초 후 Argo CD Synced/Healthy (리비전 4da37eb), Pod 2/2 Ready, 이미지 prod-aa314fc, 새 Pod 재시작 0회.",
+      "seconds_merge_to_report": 30.3,
+      "argocd_after": "Synced/Healthy",
+      "running_tags": [
+        "prod-aa314fc"
+      ],
+      "seconds_alert_to_recovered": 53.0
+    },
+    "stale_at_click": {
+      "rollback_offered_at_alert": true,
+      "notice": [
+        "진단 이후 배포 브랜치가 바뀌었습니다. 상태를 다시 확인한 뒤 요청하세요."
+      ],
+      "prs_opened": 0
+    },
+    "stale_after_pr": {
+      "pr": 13,
+      "hold_notice": "되돌리기 PR #13 보류: 진단 이후 main에 새 변경(882d0a8, ops-admin)이 생겼습니다. 상태를 다시 확인한 뒤 새로 요청하세요.",
+      "seconds_push_to_notice": 1.4,
+      "status_after_push": [
+        "failure"
+      ],
+      "merge_attempt_http": 405
+    },
+    "pending_no_rollback": {
+      "posted": true,
+      "evidence": [
+        "utterai-ai-cpu/cpu-worker: Pod 0/1 Ready(목표 1), 재시작 합계 0, 실행 중 이미지 prod-aa314fc",
+        "이벤트 FailedScheduling(x2): 0/1 nodes are available: 1 Insufficient cpu. no new claims to deallocate, preemption: 0/1 nodes are available: 1 Preemption is not helpful for scheduling.",
+        "Argo CD: Synced / Degraded, 리비전 c3b446c"
+      ],
+      "llm_summary": "LLM 요약(검증 필요): Pod이 너무 오래 동안 대기하여 경고가 발생했습니다. 또한, 노드가 부족한 CPU를 제공하지 않아서 Pod이 재시작되었습니다.\n원인 후보: Pod이 너무 오래 대기하여 경고가 발생했습니다. / 노드가 부족한 CPU를 제공하지 않아서 Pod이 재시작되었습니다. / Pod이 이미지 prod-aa314fc를 실행하고 있습니다.",
+      "rollback_offered": false
+    }
+  }
+}

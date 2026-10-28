@@ -24,6 +24,12 @@ variable "alert_token_secret_arn" {
   default     = ""
 }
 
+variable "git_webhook_secret_arn" {
+  description = "Secrets Manager secret holding {\"webhook_secret\": ...} for deploy-repository webhooks. Empty disables /git."
+  type        = string
+  default     = ""
+}
+
 variable "slack" {
   description = "Single-workspace allowlist passed to the ingress Lambda and worker."
   type = object({
