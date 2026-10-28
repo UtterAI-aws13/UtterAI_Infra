@@ -63,7 +63,7 @@ class MockSlack:
 
             def do_POST(self):
                 method = self.path.removeprefix("/api/")
-                if method not in ("chat.postMessage", "chat.update", "chat.postEphemeral"):
+                if method not in ("chat.postMessage", "chat.update", "chat.postEphemeral", "reactions.add"):
                     return self._reply(404, {"ok": False, "error": "unknown_method"})
                 if self.headers.get("Authorization") != "Bearer " + mock.token:
                     return self._reply(200, {"ok": False, "error": "invalid_auth"})
@@ -71,6 +71,8 @@ class MockSlack:
                 with mock.lock:
                     ts = f"{time.time():.6f}"
                     mock.calls.append({"method": method, "body": body, "ts": ts, "at": time.time()})
+                if method == "reactions.add":
+                    return self._reply(200, {"ok": True})
                 if method == "chat.update":
                     return self._reply(200, {"ok": True, "ts": body["ts"]})
                 if method == "chat.postEphemeral":

@@ -102,6 +102,7 @@ class Worker:
             if state["phase"] in ("AMBIGUOUS", "FAILED"):
                 return "quarantine", 90
             if "result" not in state:
+                self.mark_progress(job, state)
                 def attempt(s):
                     if s["attempts"] >= self.max_attempts:
                         s.update(phase="FAILED", reason="model_attempt_limit")
@@ -178,6 +179,15 @@ class Worker:
             # Never expose raw prompts, response URLs, SDK exception strings or tokens in logs.
             self.release(job, owner)
             return "retry", 90
+
+    def mark_progress(self, job, state):
+        # Best effort, before the first model attempt only. It must never fail or delay the job.
+        if state.get("attempts") or not job.get("message_ts") or not hasattr(self.slack, "react"):
+            return
+        try:
+            self.slack.react(job["channel"], job["message_ts"])
+        except Exception:
+            pass
 
     def finish(self, key, owner, phase, **extra):
         def update(s):

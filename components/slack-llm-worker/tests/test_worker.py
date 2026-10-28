@@ -211,3 +211,16 @@ def test_crash_after_post_before_checkpoint_is_quarantined(setup, job):
     clock.advance(61); store.cas = real_cas
     assert w.handle(job)[0] == "quarantine"
     assert model.calls == len(slack.messages) == 1
+
+
+def test_progress_reaction_once_and_never_blocking(setup, job):
+    w, clock, store, model, slack = setup
+    marks = []
+    slack.react = lambda channel, ts, name="eyes": marks.append((channel, ts))
+    job = {**job, "message_ts": "1800000000.002"}
+    assert w.handle(job)[0] == "ack" and w.handle(job)[0] == "ack"
+    assert marks == [("C1", "1800000000.002")]
+    def broken(*a, **k):
+        raise TimeoutError()
+    slack.react = broken
+    assert w.handle({**job, "key": "event:T1:Ev2"})[0] == "ack"

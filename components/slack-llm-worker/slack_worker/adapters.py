@@ -85,6 +85,13 @@ class Slack:
             payload["blocks"] = blocks
         return self.api("chat.postMessage", payload)
 
+    def react(self, channel, ts, name="eyes"):
+        """Progress marker from the design: the request was picked up and is being worked on."""
+        try:
+            return self.api("reactions.add", {"channel": channel, "timestamp": ts, "name": name})
+        except AmbiguousDelivery:
+            return None  # includes already_reacted on a redelivery; a reaction is cosmetic
+
     def update(self, channel, ts, text, blocks=None):
         """chat.update replaces a message with the same content on every call: safe to repeat."""
         return self.api("chat.update", {"channel": channel, "ts": ts, "text": text, "blocks": blocks or []})

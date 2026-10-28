@@ -155,7 +155,9 @@ def burst(h, n, concurrency):
             "slack_posts": sum(len(h.slack.posts_for(e["ts"])) for e in events),
             "max_posts_per_event": max(len(h.slack.posts_for(e["ts"])) for e in events),
             "model_calls": h.model_calls() - calls0,
-            "sent_state": sum(1 for e in events if (h.state(e) or {}).get("phase") == "SENT")}
+            "sent_state": sum(1 for e in events if (h.state(e) or {}).get("phase") == "SENT"),
+            "progress_reactions": len({c["body"]["timestamp"] for c in h.slack.calls_for("reactions.add")
+                                       if c["body"]["timestamp"] in {e["ts"] for e in events}})}
 
 
 def duplicates(h, n):

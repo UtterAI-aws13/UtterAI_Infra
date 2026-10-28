@@ -44,6 +44,7 @@ class Job:
     thread_ts: str = ""
     response_url: str = ""
     version: int = 1
+    message_ts: str = ""   # the mention itself, for the progress reaction (thread_ts may be the parent)
 
 
 def callback_allowed(url):
@@ -140,7 +141,7 @@ class Ingress:
             text = re.sub(r"^\s*<@" + re.escape(self.policy.bot) + r">\s*", "", e["text"]).strip()
             job = Job("event:" + self.policy.team + ":" + p["event_id"], p["team_id"],
                       e["channel"], e["user"], text, int(origin), "mention",
-                      e.get("thread_ts") or e["ts"])
+                      e.get("thread_ts") or e["ts"], message_ts=e["ts"])
         elif kind == "application/x-www-form-urlencoded":
             fields = parse_qs(body.decode(), keep_blank_values=True, strict_parsing=True,
                               max_num_fields=40)
