@@ -10,6 +10,8 @@
 |---|---|
 | 알림 연동 | Alertmanager webhook → 알림 채널에 게시. 버튼: [상태 보기], (LLM이 재시작을 제안하면) [재시작 요청] |
 | 조회 | `/ops status <대상>`: Deployment Ready 수, Pod 상태, 재시작 횟수. LLM을 거치지 않는 결정적 조회 |
+| 파이프라인 한눈에 보기 | `/ops pipeline`: 음성 처리 단계(stt → analysis → report)마다 큐 대기 수, 처리 중 수, DLQ, Ready Pod, 재시작 횟수를 한 메시지로. 알림 메시지에도 같은 요약을 붙임 |
+| 복구 확인 | 파이프라인 단계의 워커를 재시작하면, Pod Ready가 아니라 **그 단계의 큐가 줄어드는지**를 확인해 스레드에 "처리 재개 확인" 또는 "처리 재개 안 됨"을 남김 |
 | 실행 | `/ops restart <대상>` 또는 [재시작 요청] → 요청 메시지에 [승인] [거절] → **다른 운영자**가 승인하면 rollout restart |
 | LLM의 역할 | 알림 요약과 런북 근거의 조치 제안까지. 실행 권한 없음. 제안은 허용된 두 값(`restart`, `none`) 외에는 버림 |
 
@@ -35,6 +37,7 @@ Slack /ops, 버튼 ─(서명)─┴→ Lambda Function URL → SQS → 워커 �
 | Alertmanager 위조 요청 | Slack 서명을 쓸 수 없어 별도 Bearer 토큰(Secrets Manager) 확인 |
 | 같은 알림 반복(repeat_interval, webhook 재시도) | groupKey + 상태 + (fingerprint, startsAt)로 키를 만들어 한 번만 게시. 다시 발생한 알림은 startsAt이 달라 새로 게시 |
 | 모델 장애로 알림이 늦어짐 | 알림 게시는 LLM을 기다리지 않음. 모델 실패 시 요약 없이 바로 게시 |
+| Pod는 살아났는데 처리가 멈춰 있음 | 재시작 뒤 같은 SQS 메시지를 일정 간격으로 다시 받아 큐 대기 수를 확인. 별도 스케줄러 없이 SQS 재전달로 구현 |
 
 **답글 게시와 실행의 차이:** 질의응답 봇은 Slack 전송 결과를 모르면 중복 답글을 피하려고 자동 재전송을 멈춘다(AMBIGUOUS). 재시작은 같은 값으로 다시 보내도 결과가 같도록(멱등) 만들었기 때문에, 결과를 모를 때 다시 실행하는 쪽을 택한다. 메시지 갱신(`chat.update`)도 같은 내용을 덮어쓰므로 재시도한다.
 
@@ -53,6 +56,19 @@ kind 로컬 클러스터의 실제 Kubernetes API 서버에 대해 실행했다.
 | 알림 | 잘못된 토큰 401. 같은 알림 3회 전달 → 게시 1건(2.2초). [상태 보기] → 알림 스레드에 상태 답글 |
 | 알림 → 재시작 | 재시작 제안 알림에서 [재시작 요청] → 알림 스레드에 승인 요청 → 다른 운영자 승인 → generation +1, 알림 수신부터 3.5초 |
 | 모델 중단 중 알림 | 요약 없이 0.3초 만에 게시, [상태 보기] 버튼 유지 |
+
+### 파이프라인 가시성과 복구 확인
+
+단계별 큐는 LocalStack SQS, 단계별 워커는 kind의 Deployment다. **큐 소비는 테스트 하네스의 시뮬레이터가 대신한다.** 시뮬레이터는 "재시작하면 회복하는 멈춘 소비자"와 "재시작해도 계속 멈춘 소비자"를 흉내 낸다. 확인 간격 10초, 최대 5회로 시험했다(기본값 60초, 5회).
+
+| 시나리오 | 결과 |
+|---|---|
+| analysis 단계 소비 멈춤 + `/ops pipeline` | 4.96초 후 게시. `[!] analysis: 대기 300, 처리 중 0, DLQ 0, Pod 1/1 (소비 멈춤 의심)`, 나머지 두 단계는 `[ok]` |
+| 재시작하면 회복하는 소비자 | 승인 11.1초 후 "처리 재개 확인: analysis 대기 300 → 10, 롤아웃 완료" |
+| 재시작해도 멈춘 소비자 | Pod는 정상으로 롤아웃됐지만 대기 300 → 300. 54초 관찰 후 "처리 재개 안 됨, 담당자 확인 필요" |
+| 알림 → 복구 확인까지 | QueueConsumerStalled 알림에 파이프라인 상태가 붙고 analysis가 표시됨 → LLM이 런북에 따라 재시작 제안 → 승인 → 알림 수신 18.3초 후 같은 스레드에 "처리 재개 확인" |
+
+두 번째와 세 번째 시나리오는 Pod 상태만 보면 똑같이 "재시작 성공"이다. 큐 대기 수를 기준으로 판단해야 둘을 구분할 수 있다.
 
 (알림 → 재시작 흐름은 첫 실행에서 모델이 재시작을 제안하지 않아 진행되지 않았다. 해당 시나리오만 다시 실행했고, 두 번째 알림에서 재시작 제안이 나왔다. evidence의 `rerun` 항목에 기록했다.)
 
@@ -75,7 +91,10 @@ kind 로컬 클러스터의 실제 Kubernetes API 서버에 대해 실행했다.
 - **EKS가 아니다.** kind의 Kubernetes API와 RBAC은 실제 구현이지만, EKS의 인증(IAM → access entry → Kubernetes 그룹)은 검증하지 않았다. 워커는 kind ServiceAccount 토큰을 파일로 받았다.
 - **Slack 버튼은 모의 서버다.** 버튼 클릭 요청은 Slack과 같은 서명 방식으로 직접 만들어 보냈다. 실제 Slack 화면, Block Kit 렌더링, 상호작용 재시도 동작은 확인하지 않았다.
 - **승인 만료는 클릭할 때 판정한다.** 만료된 요청 메시지는 누군가 버튼을 누를 때까지 버튼이 남아 있다. 별도 정리 작업은 만들지 않았다.
-- **재시작 후 상태 확인은 하지 않는다.** 실행 후 롤아웃이 성공했는지 추적해 알리는 기능은 없다. 운영자가 `/ops status`로 확인한다.
+- **복구 판단 기준은 단순하다.** 큐 대기 수가 승인 시점의 절반 이하 또는 0이 되면 "재개"로 본다. 유입이 많으면 소비가 재개돼도 절반 아래로 내려가지 않을 수 있다. AWS에서는 CloudWatch의 `NumberOfMessagesDeleted`와 `ApproximateAgeOfOldestMessage`를 함께 보는 편이 정확하다.
+- **확인 횟수는 SQS 수신 횟수를 쓴다.** 확인 1회가 수신 1회라, 확인 횟수(최대 6)와 처음 처리를 합쳐 DLQ 기준(maxReceiveCount 8)보다 작게 제한했다.
+- **큐 소비는 시뮬레이션이다.** 실제 음성 처리 워커가 멈추고 회복하는 원인을 재현하지는 않았다. 재시작 대상과 큐 조회는 실제 Kubernetes API와 LocalStack SQS다.
+- **재시작 대상이 아닌 Deployment는 복구 확인을 하지 않는다.** 파이프라인 단계로 등록한 워커만 확인한다.
 - **모델 결과는 로컬 3B 모델 기준이다.** Bedrock의 큰 모델이라면 결과가 다를 수 있다. 그래도 실행 권한을 주지 않는 설계는 유지한다.
 
 ## 재현
@@ -85,7 +104,7 @@ scripts/local_up.sh --burst 5 --duplicates 2 --observe 5   # LocalStack + Terraf
 scripts/kind_up.sh                                          # kind 클러스터, RBAC, 워커 토큰(별도 kubeconfig)
 docker compose -f gateway/compose.yaml --profile scale up -d
 .venv/bin/python gateway/setup_keys.py                      # slack-bot, batch, ops-advisor 키
-.venv/bin/python e2e/run_chatops.py                         # 약 6분
+.venv/bin/python e2e/run_chatops.py                         # 약 9분
 .venv/bin/python e2e/run_chatops.py --only alert_flow       # 시나리오 하나만 다시 실행
 kind delete cluster --name slack-ops                        # 정리
 ```

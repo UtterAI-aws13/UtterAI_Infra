@@ -39,7 +39,7 @@ flowchart LR
 | 1 | LocalStack + Terraform으로 수신부터 답글까지 연결. 100건 burst, 중복 전달, Slack 429, 전송 후 timeout, DLQ | [localstack-verification.md](docs/localstack-verification.md) |
 | 2 | LiteLLM 게이트웨이: 서비스별 키, 인스턴스 간 공유 호출 제한, Redis 장애, 예산, 게이트웨이 중단 중 재시도 | [gateway-verification.md](docs/gateway-verification.md) |
 | 3 | AWS 리소스 대응, 비용 가정, 로컬로 증명하지 못한 것 | [aws-deployment.md](docs/aws-deployment.md) |
-| 4 | ChatOps: 알림 연동, 상태 조회, 2인 승인 재시작, RBAC, LLM 제안 검증 | [chatops-verification.md](docs/chatops-verification.md) |
+| 4 | ChatOps: 알림 연동, 파이프라인 상태, 2인 승인 재시작, 복구 확인, RBAC, LLM 제안 검증 | [chatops-verification.md](docs/chatops-verification.md) |
 
 주요 수치(모두 로컬 환경 기준):
 
@@ -48,6 +48,7 @@ flowchart LR
 - 분당 10회 키로 게이트웨이 2대에 30회 요청 → 10회만 통과
 - 게이트웨이 45초 중단 → 5개 작업 모두 답변, 시도 소모 오류 5건 → 0건(준비 상태 확인 추가 후)
 - 승인 버튼 6회 동시 클릭 → 재시작 1회. 재시작 직후 워커 강제 종료 → 대체 워커가 다시 적용해도 롤아웃 1회
+- 재시작 후 큐 대기 수로 복구 판단: 회복하는 소비자는 승인 11초 후 "처리 재개 확인", 계속 멈춘 소비자는 Pod가 정상이어도 "처리 재개 안 됨"
 - LLM 조치 제안 13건 중 9건이 런북과 일치. 배포 직후 크래시 3건은 모두 잘못된 재시작 제안 → 사람 승인 없이는 실행하지 않음
 
 ## 실패에 대한 동작
@@ -100,7 +101,8 @@ lstk stop
 
 - `@bot help`, `/ask help`: 모델 없이 도움말
 - `@bot kb 질문`: 승인된 `.md` 문서에서 키워드로 최대 두 문서를 찾아 모델에 전달. 임베딩·벡터 DB는 구현하지 않음
-- `/ops status <대상>`: Deployment·Pod 상태 조회. `/ops restart <대상>`: 다른 운영자의 승인 후 재시작
+- `/ops pipeline`: 음성 처리 단계별 큐 대기·처리 중·DLQ·Pod 상태를 한 메시지로
+- `/ops status <대상>`: Deployment·Pod 상태 조회. `/ops restart <대상>`: 다른 운영자의 승인 후 재시작, 파이프라인 단계면 큐 소비 재개까지 확인
 - Alertmanager 알림: 알림 채널에 게시, 런북 근거의 LLM 요약과 조치 제안. 제안은 버튼일 뿐 실행은 승인 후
 - 그 외: 모델 1회 호출, 최대 출력 700토큰. 입력 4,000자, 문서 문맥 6,000자, 답글 3,000자 제한
 - workspace·channel·user 허용 목록을 수신과 워커 양쪽에서 확인. 봇 이벤트 무시

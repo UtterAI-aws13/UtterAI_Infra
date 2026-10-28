@@ -42,6 +42,9 @@ Lambda · SQS · DynamoDB · ECS Fargate · LiteLLM · Redis · PostgreSQL · Te
 | 승인 버튼 6회 동시 클릭 → 재시작 1회 | `evidence/chatops-e2e.json` `double_click` |
 | 재시작 직후 워커 종료 → 다시 적용해도 롤아웃 1회 | 같은 파일 `crash_after_patch` (generation 7 → 8 → 8) |
 | 앱 허용 대상이어도 RBAC이 차단 | 같은 파일 `rbac_denied` |
+| `/ops pipeline`이 멈춘 단계만 표시 | 같은 파일 `pipeline_overview` |
+| 복구 판단: 재개 11.1초 확인 / 계속 멈춤은 54초 관찰 후 "재개 안 됨" | 같은 파일 `verify_resumed`, `verify_not_resumed`. 큐 소비는 시뮬레이터 |
+| 알림부터 처리 재개 확인까지 18.3초 | 같은 파일 `alert_pipeline`. 모의 Slack이라 사람의 클릭 지연 없음 |
 | LLM 제안 13건 중 9건 런북 일치, 배포 직후 3건 모두 오답 | 같은 파일 `advice_quality`. 로컬 3B 모델, 작은 표본 |
 | 알림 수신부터 승인 재시작까지 3.5초 | 같은 파일 `alert_flow.alert_to_restart`. 모의 Slack이라 사람의 클릭 지연은 없음 |
 

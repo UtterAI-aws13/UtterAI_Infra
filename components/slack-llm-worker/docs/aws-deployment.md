@@ -18,6 +18,7 @@
 | Slack API | loopback 모의 Slack(429·timeout 주입) | slack.com(NAT 또는 기존 외부 경로) | `SLACK_API_BASE`만 다름. 허용 주소는 slack.com과 loopback뿐 |
 | 감시 | evidence JSON, 구조화 로그 | CloudWatch Logs, DLQ·대기 시간 알람 2개 | 알람은 모듈에 있음. 알림 대상은 미연결 |
 | ChatOps 실행 대상 | kind 클러스터, ServiceAccount 토큰 파일 | 기존 EKS. 워커 태스크 역할을 access entry로 Kubernetes 그룹에 연결하고, 같은 Role(`api`만 patch)을 바인딩 | 워커 코드는 같음. 토큰 공급 방식만 다름(STS 서명 토큰). 미구현 |
+| 파이프라인 큐 조회 | LocalStack의 단계별 큐(stt, analysis, report), 소비는 시뮬레이터 | UtterAI 파이프라인의 기존 SQS. 워커 역할에 해당 큐의 `sqs:GetQueueAttributes`만 부여(`pipeline_queue_arns`) | 모듈에 반영. 복구 판단에 CloudWatch 지표를 더하면 더 정확함 |
 | Alertmanager 연동 | 테스트 스크립트가 webhook 호출 | 기존 Alertmanager의 webhook receiver → Function URL `/alertmanager` | Bearer 토큰은 Secrets Manager. 모듈에 반영 |
 
 워커와 게이트웨이의 AWS용 ECS 서비스·ALB·RDS·ElastiCache는 Terraform으로 작성하지 않았다. 비용과 리소스 범위를 보여 주는 설계 단계다.
