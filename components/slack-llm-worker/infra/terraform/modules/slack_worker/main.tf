@@ -202,6 +202,14 @@ data "aws_iam_policy_document" "worker" {
       resources = var.bedrock_model_arns
     }
   }
+  # ChatOps reads the depth of the pipeline's queues. Read-only: no receive, delete or purge.
+  dynamic "statement" {
+    for_each = length(var.pipeline_queue_arns) > 0 ? [1] : []
+    content {
+      actions   = ["sqs:GetQueueAttributes"]
+      resources = var.pipeline_queue_arns
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "worker" {

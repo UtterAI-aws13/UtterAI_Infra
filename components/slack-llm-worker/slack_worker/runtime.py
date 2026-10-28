@@ -8,7 +8,7 @@ import urllib.parse
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
-from .adapters import SLACK_API, SQSQueue, Slack
+from .adapters import SLACK_API, QueueStats, SQSQueue, Slack
 from .ingress import Ingress, Policy
 from .pipeline import BedrockModel, OpenAICompatModel, Pipeline
 from .store import DynamoStore
@@ -115,7 +115,7 @@ class Router:
         self.worker.heartbeat(key, owner)
 
 
-def ops_from_env(env, store, slack, policy):
+def ops_from_env(env, store, slack, policy, sqs_client=None):
     """ChatOps is off unless OPS_TARGETS is set. The Kubernetes token decides what it can do."""
     if not env.get("OPS_TARGETS"):
         return None
@@ -139,10 +139,19 @@ def ops_from_env(env, store, slack, policy):
                                   max_tokens=300, timeout=30, health_url=env.get("MODEL_HEALTH_URL", ""),
                                   system=Advisor.SYSTEM, temperature=0)
         advisor = Advisor(LoggedModel(model, env["ADVISOR_MODEL_NAME"]))
+    pipeline = tuple(json.loads(env.get("OPS_PIPELINE", "[]")))
+    if not all({"stage", "queue", "target"} <= set(st) and st["target"] in targets for st in pipeline):
+        raise SystemExit("OPS_PIPELINE stages need stage, queue and a target from OPS_TARGETS")
+    verify_checks = int(env.get("OPS_VERIFY_CHECKS", "5"))
+    if not 1 <= verify_checks <= 6:
+        raise SystemExit("OPS_VERIFY_CHECKS must be 1..6: each check is one SQS receive (maxReceiveCount 8)")
     after_patch = (lambda: os._exit(1)) if env.get("OPS_FAULT") == "exit_after_patch" else None
     return Ops(store, Kube(env["K8S_API"], env["K8S_TOKEN_FILE"], env["K8S_CA_FILE"]), slack, policy,
-               OpsPolicy(targets, operators, int(env.get("OPS_APPROVAL_TTL", "600"))),
-               advisor=advisor, runbooks=env.get("OPS_RUNBOOKS"), after_patch=after_patch)
+               OpsPolicy(targets, operators, int(env.get("OPS_APPROVAL_TTL", "600")), pipeline=pipeline,
+                         verify_interval=int(env.get("OPS_VERIFY_INTERVAL", "60")), verify_checks=verify_checks,
+                         backlog_warn=int(env.get("OPS_BACKLOG_WARN", "100"))),
+               advisor=advisor, runbooks=env.get("OPS_RUNBOOKS"), after_patch=after_patch,
+               queues=QueueStats(sqs_client) if pipeline and sqs_client else None)
 
 
 def process_message(queue, worker, raw):
@@ -200,7 +209,7 @@ def main():
     store = DynamoStore(state_client, os.environ["STATE_TABLE"])
     slack = Slack(token, api_base=os.environ.get("SLACK_API_BASE", SLACK_API))
     worker = Router(Worker(store, Pipeline(model, os.environ.get("APPROVED_CORPUS")), slack, policy),
-                    ops_from_env(os.environ, store, slack, policy))
+                    ops_from_env(os.environ, store, slack, policy, boto3.client("sqs", config=sdk_config(2, 5))))
     stopping = threading.Event()
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, lambda *_: stopping.set())

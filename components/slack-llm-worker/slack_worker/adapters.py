@@ -28,6 +28,18 @@ class SQSQueue:
         self.client.delete_message(QueueUrl=self.url, ReceiptHandle=receipt)
 
 
+class QueueStats:
+    """Read-only depth of another service's queue (the UtterAI pipeline stages)."""
+    def __init__(self, client):
+        self.client = client
+
+    def stats(self, url):
+        a = self.client.get_queue_attributes(QueueUrl=url, AttributeNames=[
+            "ApproximateNumberOfMessages", "ApproximateNumberOfMessagesNotVisible"])["Attributes"]
+        return {"visible": int(a["ApproximateNumberOfMessages"]),
+                "inflight": int(a["ApproximateNumberOfMessagesNotVisible"])}
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None

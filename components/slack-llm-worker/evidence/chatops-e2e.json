@@ -1,5 +1,5 @@
 {
-  "scope": "LocalStack + kind Kubernetes (RBAC-scoped ServiceAccount token) + loopback mock Slack; advisor model 'quality' via http://127.0.0.1:4000/v1. Not AWS, EKS or real Slack.",
+  "scope": "LocalStack + kind Kubernetes (RBAC-scoped ServiceAccount token) + loopback mock Slack; advisor model 'quality' via http://127.0.0.1:4000/v1. Not AWS, EKS or real Slack. Pipeline stage consumption is simulated by the test harness (PipelineSim).",
   "date": "2026-10-27T22:43:02+0900",
   "model_call_outcomes": {
     "ok": 14,
@@ -130,15 +130,64 @@
       "buttons": [
         "ops_status"
       ]
+    },
+    "pipeline_overview": {
+      "posted": true,
+      "seconds": 4.96,
+      "lines": [
+        "[ok] stt: 대기 0, 처리 중 0, DLQ 0, Pod 1/1, 재시작 0",
+        "[!] analysis: 대기 300, 처리 중 0, DLQ 0, Pod 1/1, 재시작 0 (소비 멈춤 의심)",
+        "[ok] report: 대기 0, 처리 중 0, DLQ 0, Pod 1/1, 재시작 0"
+      ]
+    },
+    "verify_resumed": {
+      "consumer": "recovers on restart",
+      "expected": "처리 재개 확인",
+      "reported": "처리 재개 확인: analysis 대기 300 → 10, 롤아웃 완료, 재시작 후 10초. 다음 단계의 적체도 /ops pipeline으로 확인하세요.",
+      "correct": true,
+      "seconds_from_approval": 11.1,
+      "generation_increase": 1,
+      "analysis_queue_after": 0
+    },
+    "verify_not_resumed": {
+      "consumer": "stays stuck after restart",
+      "expected": "처리 재개 안 됨",
+      "reported": "처리 재개 안 됨: analysis 대기 300 → 300, 롤아웃 완료, 54초 관찰. 재시작으로 해결되지 않았습니다. 담당자 확인이 필요합니다.",
+      "correct": true,
+      "seconds_from_approval": 55.0,
+      "generation_increase": 1,
+      "analysis_queue_after": 300
+    },
+    "alert_pipeline": {
+      "seconds_to_post": 6.27,
+      "pipeline_status_attached": true,
+      "flagged_stage": "analysis",
+      "proposal": "restart",
+      "verified": "처리 재개 확인: analysis 대기 300 → 10, 롤아웃 완료, 재시작 후 10초. 다음 단계의 적체도 /ops pipeline으로 확인하세요.",
+      "seconds_alert_to_verified": 18.3
     }
   },
-  "rerun": {
-    "scenarios": [
-      "alert_flow"
-    ],
-    "date": "2026-10-27T22:44:33+0900",
-    "model_call_outcomes": {
-      "ok": 3
+  "reruns": [
+    {
+      "scenarios": [
+        "alert_flow"
+      ],
+      "date": "2026-10-27T22:44:33+0900",
+      "model_call_outcomes": {
+        "ok": 3
+      }
+    },
+    {
+      "scenarios": [
+        "pipeline_overview",
+        "verify_resumed",
+        "verify_not_resumed",
+        "alert_pipeline"
+      ],
+      "date": "2026-10-28T15:33:43+0900",
+      "model_call_outcomes": {
+        "ok": 1
+      }
     }
-  }
+  ]
 }

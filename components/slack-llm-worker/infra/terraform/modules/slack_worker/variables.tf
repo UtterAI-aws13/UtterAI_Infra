@@ -78,6 +78,12 @@ variable "bedrock_model_arns" {
   default     = []
 }
 
+variable "pipeline_queue_arns" {
+  description = "Queues (and DLQs) of the pipeline that ChatOps reports on. The worker may only read their attributes."
+  type        = list(string)
+  default     = []
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

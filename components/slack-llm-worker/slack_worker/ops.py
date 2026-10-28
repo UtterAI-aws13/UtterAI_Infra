@@ -7,6 +7,10 @@ can touch even if this code is wrong.
 Two records per flow, both CAS-updated in the same store as the Q&A worker:
   job record    (job key)        one Slack request: RUN -> RESULT -> POSTING -> SENT / AMBIGUOUS / FAILED
   action record ("action:<id>")  one restart: OPEN -> EXECUTING -> DONE, or REJECTED / EXPIRED / FAILED
+
+After a restart of a pipeline stage's worker, the click's job record moves to VERIFY and the same
+SQS message comes back every verify_interval seconds until the stage's queue drains or the
+checks run out. Pod Ready is not the success signal; the queue draining is.
 """
 import hashlib
 import html
@@ -36,6 +40,14 @@ class OpsPolicy:
     operators: frozenset   # Slack users who may request and approve
     approval_ttl: int = 600
     max_kube_tries: int = 5
+    # [{"stage": "analysis", "queue": url, "dlq": url, "target": "analysis-worker"}, ...] in pipeline order
+    pipeline: tuple = ()
+    verify_interval: int = 60
+    verify_checks: int = 5     # each check is one SQS receive: keep (1 + checks) below maxReceiveCount
+    backlog_warn: int = 100
+
+    def stage_of(self, target):
+        return next((st for st in self.pipeline if st["target"] == target), None)
 
 
 def esc(text):
@@ -83,9 +95,10 @@ class Advisor:
 
 class Ops:
     def __init__(self, store, kube, slack, policy, ops_policy, advisor=None, runbooks=None,
-                 clock=time.time, lease=60, after_patch=None):
+                 clock=time.time, lease=60, after_patch=None, queues=None):
         self.store, self.kube, self.slack, self.policy, self.ops = store, kube, slack, policy, ops_policy
         self.advisor, self.runbooks, self.clock, self.lease = advisor, runbooks, clock, lease
+        self.queues = queues  # .stats(url) -> {"visible": n, "inflight": n}
         self.after_patch = after_patch or (lambda: None)  # test hook: crash between patch and DONE
 
     # ── job record (same lease/fencing rules as the Q&A worker) ─────────────────────────
@@ -130,7 +143,7 @@ class Ops:
         except Exception:
             pass
 
-    def post_once(self, job, owner, post):
+    def post_once(self, job, owner, post, back_to="RUN"):
         """chat.postMessage is not idempotent. Record the intent first; an unknown outcome is
         quarantined instead of retried, exactly as in the Q&A worker."""
         def intent(s):
@@ -141,7 +154,7 @@ class Ops:
             return post()
         except RateLimited:
             def reset(s):
-                s["phase"] = "RUN"
+                s["phase"] = back_to
                 return s
             self.owned(job["key"], owner, reset)
             raise
@@ -175,6 +188,8 @@ class Ops:
                 return "quarantine", 90
             if not healthy():
                 raise LostLease()
+            if state["phase"] == "VERIFY":
+                return self.verify(job, owner, state)
             return getattr(self, "on_" + job["kind"])(job, owner, state)
         except RateLimited as e:
             self.release(job, owner)
@@ -196,8 +211,16 @@ class Ops:
             return self.status(job, owner, target, thread_ts="")
         if command == "restart":
             return self.request(job, owner, target, thread_ts="")
+        if command == "pipeline" and self.ops.pipeline:
+            text = esc("\n".join(self.pipeline_lines()))
+            sent = self.post_once(job, owner, lambda: self.slack.post(job["channel"], text))
+            if sent is None:
+                return "quarantine", 90
+            self.finish(job, owner, "SENT", outcome="pipeline")
+            return "ack", 0
         sent = self.post_once(job, owner, lambda: self.slack.post(
-            job["channel"], "사용법: /ops status <대상> | /ops restart <대상>. 대상: " + ", ".join(sorted(self.ops.targets))))
+            job["channel"], "사용법: /ops pipeline | /ops status <대상> | /ops restart <대상>. 대상: "
+            + ", ".join(sorted(self.ops.targets))))
         if sent is None:
             return "quarantine", 90
         self.finish(job, owner, "SENT", outcome="help")
@@ -224,6 +247,38 @@ class Ops:
             return "quarantine", 90
         self.finish(job, owner, "SENT", outcome="status")
         return "ack", 0
+
+    def stage_health(self, st):
+        q, dlq = self.queues.stats(st["queue"]), self.queues.stats(st["dlq"]) if st.get("dlq") else {"visible": 0}
+        t = self.ops.targets[st["target"]]
+        d = self.kube.deployment(t["namespace"], t["deployment"])
+        restarts = sum(p["restarts"] for p in self.kube.pods(t["namespace"], d["selector"]))
+        flags = []
+        if d["ready"] < d["replicas"]:
+            flags.append("Pod 준비 안 됨")
+        if dlq["visible"]:
+            flags.append("DLQ 적재")
+        if q["visible"] >= self.ops.backlog_warn and q["inflight"] == 0 and d["ready"]:
+            flags.append("소비 멈춤 의심")   # Pods look fine but nothing is being received
+        elif q["visible"] >= self.ops.backlog_warn:
+            flags.append("적체")
+        return {"stage": st["stage"], "visible": q["visible"], "inflight": q["inflight"], "dlq": dlq["visible"],
+                "ready": d["ready"], "replicas": d["replicas"], "restarts": restarts, "flags": flags}
+
+    def pipeline_lines(self):
+        """One line per stage, in pipeline order, so the failing stage is visible at a glance."""
+        lines = []
+        for st in self.ops.pipeline:
+            try:
+                h = self.stage_health(st)
+            except Exception as e:
+                lines.append(f"[?] {st['stage']}: 조회 실패({type(e).__name__})")
+                continue
+            mark = "[!]" if h["flags"] else "[ok]"
+            lines.append(f"{mark} {h['stage']}: 대기 {h['visible']}, 처리 중 {h['inflight']}, DLQ {h['dlq']}, "
+                         f"Pod {h['ready']}/{h['replicas']}, 재시작 {h['restarts']}"
+                         + (f" ({', '.join(h['flags'])})" if h["flags"] else ""))
+        return lines
 
     def request(self, job, owner, target, thread_ts):
         if job["user"] not in self.ops.operators:
@@ -312,10 +367,58 @@ class Ops:
         if "deny" in verdict:
             reason = verdict["deny"]
             return self.deny(job, owner, reason)
+        stage = self.ops.stage_of(action["target"]) if verdict.get("run") and self.queues else None
+        baseline = self.queues.stats(stage["queue"])["visible"] if stage else None
         if verdict.get("run"):
             action = self.execute(key, owner, action)
         self.render(job, action, message_ts)
+        if stage and action["phase"] == "DONE":
+            # Hand the same SQS message back to ourselves: it returns after verify_interval.
+            def watch(s):
+                s.update(phase="VERIFY", owner="", until=0, action=aid,
+                         verify={"stage": stage["stage"], "target": action["target"], "baseline": baseline,
+                                 "checks": 0, "started": self.clock()})
+                return s
+            self.owned(job["key"], owner, watch)
+            return "retry", self.ops.verify_interval
         self.finish(job, owner, "SENT", outcome=action["phase"].lower(), action=aid)
+        return "ack", 0
+
+    def verify(self, job, owner, state):
+        """Restarted Pods being Ready proves nothing about the pipeline. Report when the stage's
+        queue has drained to half of what it held at approval (or to zero), or say it has not."""
+        v = state["verify"]
+        st = next(x for x in self.ops.pipeline if x["stage"] == v["stage"])
+        t = self.ops.targets[v["target"]]
+        d = self.kube.deployment(t["namespace"], t["deployment"])
+        rolled = (d["observed"] or 0) >= (d["generation"] or 0) and d["updated"] == d["replicas"] == d["ready"]
+        now_visible = self.queues.stats(st["queue"])["visible"]
+        base = v["baseline"] or 0
+        drained = now_visible == 0 or (base > 0 and now_visible <= base / 2)
+        checks = v["checks"] + 1
+        elapsed = int(self.clock() - v["started"])
+        if rolled and drained:
+            text = (f"처리 재개 확인: {v['stage']} 대기 {base} → {now_visible}, 롤아웃 완료, 재시작 후 {elapsed}초. "
+                    "다음 단계의 적체도 /ops pipeline으로 확인하세요.")
+            outcome = "resumed"
+        elif checks >= self.ops.verify_checks:
+            text = (f"처리 재개 안 됨: {v['stage']} 대기 {base} → {now_visible}, "
+                    f"롤아웃 {'완료' if rolled else '미완료'}, {elapsed}초 관찰. 재시작으로 해결되지 않았습니다. 담당자 확인이 필요합니다.")
+            outcome = "not_resumed"
+        else:
+            def tick(s):
+                s["verify"]["checks"] = checks
+                s["verify"]["last"] = {"visible": now_visible, "rolled": rolled}
+                s.update(owner="", until=0)
+                return s
+            self.owned(job["key"], owner, tick)
+            return "retry", self.ops.verify_interval
+        text = esc(text)
+        sent = self.post_once(job, owner, lambda: self.slack.post(job["channel"], text, thread_ts=job["thread_ts"]),
+                              back_to="VERIFY")
+        if sent is None:
+            return "quarantine", 90
+        self.finish(job, owner, "SENT", outcome=outcome, verify={**v, "checks": checks, "final": now_visible})
         return "ack", 0
 
     def execute(self, key, owner, action):
@@ -401,9 +504,15 @@ class Ops:
         result = {"text": text, "blocks": blocks, "advice": "skipped", "proposal": None, "target_known": known}
         if status != "firing":
             return result
-        docs = retrieve(self.runbooks, " ".join([labels.get("alertname", ""), body]), k=1)
+        # A runbook that names the alert wins; word overlap with the summary is only the fallback.
+        docs = (retrieve(self.runbooks, labels.get("alertname", ""), k=1)
+                or retrieve(self.runbooks, " ".join([labels.get("alertname", ""), body]), k=1))
         if docs:
             blocks.append({"type": "context", "elements": [{"type": "plain_text", "text": "런북: " + docs[0][0]}]})
+        if self.ops.pipeline and self.queues:
+            # The whole pipeline next to the alert: which stage is backed up, which has Pods down.
+            blocks.append({"type": "section", "text": {"type": "plain_text",
+                                                       "text": ("파이프라인 상태\n" + "\n".join(self.pipeline_lines()))[:2900]}})
         if self.advisor:
             try:
                 advice = self.advisor.advise(json.dumps(first, ensure_ascii=False)[:2000],

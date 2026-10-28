@@ -12,6 +12,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -28,7 +29,9 @@ KUBE = ROOT / "e2e/.kube.local"
 KUBECTL = ["kubectl", "--kubeconfig", str(KUBE / "kubeconfig"), "-n", "utterai"]
 TARGETS = {"api": {"namespace": "utterai", "deployment": "api"},
            "db": {"namespace": "utterai", "deployment": "db"},          # allowlisted, but RBAC denies patch
-           "stt-worker": {"namespace": "utterai", "deployment": "stt-worker"}}
+           "stt-worker": {"namespace": "utterai", "deployment": "stt-worker"},
+           "analysis-worker": {"namespace": "utterai", "deployment": "analysis-worker"},
+           "report-worker": {"namespace": "utterai", "deployment": "report-worker"}}
 OPS_CH, ALERT_CH = "C_LOCAL1", "C_ALERT"
 
 
@@ -50,6 +53,7 @@ class Ops(Harness):
         self.advisor_key = advisor_key
         out = json.loads(subprocess.check_output(["terraform", f"-chdir={TF}", "output", "-json"]))
         self.alert_token = out["alert_token"]["value"]
+        self.pipeline = out["pipeline"]["value"]
         self.base_url, self.api_key, self.health = base_url, api_key, health
 
     def start(self, **extra):
@@ -57,7 +61,8 @@ class Ops(Harness):
                "MODEL_NAME": "fast", "ADVISOR_MODEL_NAME": self.model, "ADVISOR_API_KEY": self.advisor_key,
                "OPS_TARGETS": json.dumps(TARGETS),
                "OPS_OPERATORS": "U_OPS1,U_OPS2", "OPS_APPROVAL_TTL": "20", "SLACK_ALERT_CHANNEL": ALERT_CH,
-               "OPS_RUNBOOKS": str(ROOT / "examples/runbooks"),
+               "OPS_RUNBOOKS": str(ROOT / "examples/runbooks"), "OPS_PIPELINE": json.dumps(self.pipeline),
+               "OPS_VERIFY_INTERVAL": "10", "OPS_VERIFY_CHECKS": "5", "OPS_BACKLOG_WARN": "100",
                "K8S_API": (KUBE / "server").read_text().strip(), "K8S_TOKEN_FILE": str(KUBE / "token"),
                "K8S_CA_FILE": str(KUBE / "ca.crt"), **extra}
         self.start_worker(**env)
@@ -328,8 +333,110 @@ def model_down(h):
     post = h.wait_post(t0, lambda p: p["channel"] == ALERT_CH, timeout=120)
     h.stop_worker()
     h.base_url = saved
+    h.start()
     return {"posted": bool(post), "seconds_to_post": round(post["at"] - t0, 2) if post else None,
             "buttons": [b for b in ("ops_status", "ops_request") if post and button(post, b)]}
+
+
+class PipelineSim:
+    """Stands in for the UtterAI stage workers' SQS consumption, which pause containers cannot do.
+    Each stage receives, deletes and forwards to the next stage. A stage can be stuck for good,
+    or stuck until its Deployment is restarted (a consumer that lost its connection)."""
+    def __init__(self, sqs, stages):
+        self.sqs, self.stages = sqs, stages
+        self.mode = {s["stage"]: "ok" for s in stages}
+        self.stop = threading.Event()
+        threading.Thread(target=self.run, daemon=True).start()
+
+    def stuck(self, stage, until_restart):
+        target = next(s["target"] for s in self.stages if s["stage"] == stage)
+        self.mode[stage] = ("until", target, deploy(target)["generation"]) if until_restart else "stuck"
+
+    def run(self):
+        last_check = 0
+        while not self.stop.is_set():
+            if time.time() - last_check > 2:
+                last_check = time.time()
+                for stage, mode in list(self.mode.items()):
+                    if isinstance(mode, tuple) and deploy(mode[1])["generation"] != mode[2]:
+                        self.mode[stage] = "ok"
+            for i, s in enumerate(self.stages):
+                if self.mode[s["stage"]] != "ok":
+                    continue
+                for m in self.sqs.receive_message(QueueUrl=s["queue"], MaxNumberOfMessages=10,
+                                                  WaitTimeSeconds=0).get("Messages", []):
+                    if i + 1 < len(self.stages):
+                        self.sqs.send_message(QueueUrl=self.stages[i + 1]["queue"], MessageBody=m["Body"])
+                    self.sqs.delete_message(QueueUrl=s["queue"], ReceiptHandle=m["ReceiptHandle"])
+            time.sleep(0.2)
+
+    def fill(self, stage, n):
+        url = next(s["queue"] for s in self.stages if s["stage"] == stage)
+        for start in range(0, n, 10):
+            self.sqs.send_message_batch(QueueUrl=url, Entries=[
+                {"Id": str(i), "MessageBody": json.dumps({"job": i})} for i in range(start, min(n, start + 10))])
+
+    def depth(self, stage):
+        url = next(s["queue"] for s in self.stages if s["stage"] == stage)
+        a = self.sqs.get_queue_attributes(QueueUrl=url, AttributeNames=["ApproximateNumberOfMessages"])["Attributes"]
+        return int(a["ApproximateNumberOfMessages"])
+
+
+def pipeline_overview(h, sim):
+    sim.stuck("analysis", until_restart=False)
+    sim.fill("analysis", 300)
+    time.sleep(3)
+    t0 = time.time()
+    h.command("U_VIEWER", "pipeline")
+    post = h.wait_post(t0, lambda p: p["channel"] == OPS_CH and "analysis:" in p["text"])
+    return {"posted": bool(post), "seconds": round(post["at"] - t0, 2) if post else None,
+            "lines": post["text"].split("\n") if post else None}
+
+
+def restart_and_verify(h, sim, until_restart):
+    sim.stuck("analysis", until_restart=until_restart)
+    if sim.depth("analysis") < 300:
+        sim.fill("analysis", 300 - sim.depth("analysis"))
+    before = deploy("analysis-worker")["generation"]
+    t0 = time.time()
+    h.command("U_OPS1", "restart analysis-worker")
+    aid, ts = h.wait_request(t0)
+    t1 = time.time()
+    h.click("U_OPS2", "ops_approve", aid, ts)
+    word = "처리 재개 확인" if until_restart else "처리 재개 안 됨"
+    post = h.wait_post(t1, lambda p: p["thread_ts"] == ts and ("처리 재개" in p["text"]), timeout=240)
+    return {"consumer": "recovers on restart" if until_restart else "stays stuck after restart",
+            "expected": word, "reported": post["text"] if post else None,
+            "correct": bool(post and word in post["text"]),
+            "seconds_from_approval": round(post["at"] - t1, 1) if post else None,
+            "generation_increase": deploy("analysis-worker")["generation"] - before,
+            "analysis_queue_after": sim.depth("analysis")}
+
+
+def alert_pipeline(h, sim):
+    """Alert → pipeline status beside it → runbook-based proposal → approval → resumed check."""
+    sim.stuck("analysis", until_restart=True)
+    if sim.depth("analysis") < 300:
+        sim.fill("analysis", 300 - sim.depth("analysis"))
+    time.sleep(3)
+    t0 = time.time()
+    h.alert(alert_body("QueueConsumerStalled", "analysis-worker",
+                       "analysis 큐 대기 300개, 처리 중 0개, analysis-worker Pod 1/1 Ready 상태가 6분째입니다."))
+    post = h.wait_post(t0, lambda p: p["channel"] == ALERT_CH, timeout=120)
+    blocks = json.dumps(post["blocks"] if post else [], ensure_ascii=False)
+    result = {"seconds_to_post": round(post["at"] - t0, 2) if post else None,
+              "pipeline_status_attached": "파이프라인 상태" in blocks,
+              "flagged_stage": "analysis" if "[!] analysis" in blocks else None,
+              "proposal": "restart" if post and button(post, "ops_request") else "none"}
+    if post and button(post, "ops_request"):
+        t1 = time.time()
+        h.click("U_OPS1", "ops_request", "analysis-worker", post["ts"], channel=ALERT_CH)
+        aid, ts = h.wait_request(t1, thread_ts=post["ts"])
+        h.click("U_OPS2", "ops_approve", aid, ts, channel=ALERT_CH, thread_ts=post["ts"])
+        done = h.wait_post(t1, lambda p: p["thread_ts"] == post["ts"] and "처리 재개" in p["text"], timeout=240)
+        result.update(verified=done["text"] if done else None,
+                      seconds_alert_to_verified=round(done["at"] - t0, 1) if done else None)
+    return result
 
 
 def main():
@@ -346,11 +453,18 @@ def main():
     h = Ops(args.model, args.base_url, keys.get("slack-bot", ""), args.health, keys.get("ops-advisor", ""))
     for url in (h.o["queue_url"], h.o["dlq_url"]):
         h.sqs.purge_queue(QueueUrl=url)
+    sim = PipelineSim(h.sqs, h.pipeline)
+    for s in h.pipeline:
+        h.sqs.purge_queue(QueueUrl=s["queue"])
     h.start()
     scenarios = {"status_command": status, "approval_flow": approval_flow,
                  "double_click": lambda h: double_click(h, 6), "reject_and_expire": lambda h: reject_and_expire(h, 20),
                  "rbac_denied": rbac_denied, "alert_flow": alert_flow, "advice_quality": advice_quality,
-                 "crash_after_patch": crash_after_patch, "model_down": model_down}
+                 "crash_after_patch": crash_after_patch, "model_down": model_down,
+                 "pipeline_overview": lambda h: pipeline_overview(h, sim),
+                 "verify_resumed": lambda h: restart_and_verify(h, sim, until_restart=True),
+                 "verify_not_resumed": lambda h: restart_and_verify(h, sim, until_restart=False),
+                 "alert_pipeline": lambda h: alert_pipeline(h, sim)}
     previous = json.loads(Path(args.output).read_text()) if args.only and Path(args.output).exists() else {}
     results = previous.get("results", {})
     try:
@@ -361,16 +475,20 @@ def main():
         if h.worker and h.worker.poll() is None:
             h.stop_worker()
         h.slack.stop()
+        sim.stop.set()
     calls = [x for x in h.log_lines if x.get("event") == "model_call"]
     report = {"scope": "LocalStack + kind Kubernetes (RBAC-scoped ServiceAccount token) + loopback mock Slack; "
-                       f"advisor model '{args.model}' via {args.base_url}. Not AWS, EKS or real Slack.",
+                       f"advisor model '{args.model}' via {args.base_url}. Not AWS, EKS or real Slack. "
+                       "Pipeline stage consumption is simulated by the test harness (PipelineSim).",
               "date": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
               "model_call_outcomes": dict(Counter(x["outcome"] for x in calls)),
               "results": results}
     if args.only:
+        runs = previous.get("reruns", [])
+        runs.append({"scenarios": args.only, "date": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                     "model_call_outcomes": dict(Counter(x["outcome"] for x in calls))})
         report.update(model_call_outcomes=previous.get("model_call_outcomes"), date=previous.get("date"),
-                      rerun={"scenarios": args.only, "date": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
-                             "model_call_outcomes": dict(Counter(x["outcome"] for x in calls))})
+                      reruns=runs)
     Path(args.output).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps(report, ensure_ascii=False, indent=2))
 

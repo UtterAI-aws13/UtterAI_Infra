@@ -336,3 +336,73 @@ def test_kube_failures_are_classified(tmp_path, error, expected):
 def test_kube_requires_https():
     with pytest.raises(ValueError):
         Kube("http://127.0.0.1:8080", "t", None)
+
+
+# ── pipeline overview and post-restart verification ──────────────────────────────────
+
+from dataclasses import replace
+
+
+class FakeQueues:
+    def __init__(self):
+        self.depth = {}
+
+    def stats(self, url):
+        return dict(self.depth.get(url, {"visible": 0, "inflight": 0}))
+
+
+PIPE = ({"stage": "stt", "queue": "q-stt", "dlq": "d-stt", "target": "api"},)
+
+
+@pytest.fixture
+def pipe(env):
+    ops, clock, store, kube, slack = env
+    queues = FakeQueues()
+    ops.queues = queues
+    ops.ops = replace(ops.ops, pipeline=PIPE, verify_interval=30, verify_checks=3)
+    return ops, clock, store, kube, slack, queues
+
+
+def test_pipeline_overview_flags_a_stalled_consumer(pipe):
+    ops, _, _, _, slack, queues = pipe
+    queues.depth["q-stt"] = {"visible": 300, "inflight": 0}
+    ops.handle(ops_job("U9", "pipeline"), "o")
+    assert "[!] stt: 대기 300, 처리 중 0" in slack.of("post")[0]["text"] and "소비 멈춤 의심" in slack.of("post")[0]["text"]
+
+
+def approve_and_watch(ops, clock, slack, queues, user="U2"):
+    queues.depth["q-stt"] = {"visible": 300, "inflight": 0}
+    aid = request(ops, slack)
+    approve = click(user, "ops_approve", aid, at=clock.value)
+    assert ops.handle(approve, "o1") == ("retry", 30)   # restart done; the same message returns to verify
+    return approve
+
+
+def test_verification_reports_resumed_when_the_queue_drains(pipe):
+    ops, clock, store, kube, slack, queues = pipe
+    approve = approve_and_watch(ops, clock, slack, queues)
+    clock.advance(30)
+    assert ops.handle(approve, "o2") == ("retry", 30)   # still backed up
+    queues.depth["q-stt"] = {"visible": 40, "inflight": 5}
+    clock.advance(30)
+    assert ops.handle(approve, "o3")[0] == "ack"
+    assert "처리 재개 확인" in slack.of("post")[-1]["text"] and "300 → 40" in slack.of("post")[-1]["text"]
+    assert store.get(approve["key"])["outcome"] == "resumed"
+
+
+def test_verification_reports_not_resumed_after_the_last_check(pipe):
+    ops, clock, store, kube, slack, queues = pipe
+    approve = approve_and_watch(ops, clock, slack, queues)
+    outcomes = []
+    for i in range(3):
+        clock.advance(30)
+        outcomes.append(ops.handle(approve, f"o{i + 2}")[0])
+    assert outcomes == ["retry", "retry", "ack"]
+    assert "처리 재개 안 됨" in slack.of("post")[-1]["text"] and len(kube.patches) == 1
+    assert store.get(approve["key"])["outcome"] == "not_resumed"
+
+
+def test_restart_outside_the_pipeline_does_not_verify(env):
+    ops, clock, store, kube, slack = env
+    aid = request(ops, slack)
+    assert ops.handle(click("U2", "ops_approve", aid), "o")[0] == "ack"

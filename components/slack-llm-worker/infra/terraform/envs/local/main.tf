@@ -84,6 +84,26 @@ resource "aws_secretsmanager_secret_version" "alert" {
   secret_string = jsonencode({ alert_token = local.alert_token })
 }
 
+# Stand-ins for the UtterAI pipeline queues (owned by the pipeline, not by this module).
+locals {
+  stages = ["stt", "analysis", "report"]
+}
+
+resource "aws_sqs_queue" "stage_dlq" {
+  for_each = toset(local.stages)
+  name     = "utterai-${each.key}-dlq"
+}
+
+resource "aws_sqs_queue" "stage" {
+  for_each                   = toset(local.stages)
+  name                       = "utterai-${each.key}"
+  visibility_timeout_seconds = 5
+  redrive_policy = jsonencode({
+    deadLetterTargetArn = aws_sqs_queue.stage_dlq[each.key].arn
+    maxReceiveCount     = 5
+  })
+}
+
 module "slack_worker" {
   source = "../../modules/slack_worker"
 
@@ -94,6 +114,7 @@ module "slack_worker" {
   slack              = local.slack
 
   alert_token_secret_arn = aws_secretsmanager_secret.alert.arn
+  pipeline_queue_arns    = concat([for q in aws_sqs_queue.stage : q.arn], [for q in aws_sqs_queue.stage_dlq : q.arn])
   create_worker_task     = false
 
   depends_on = [aws_secretsmanager_secret_version.signing, aws_secretsmanager_secret_version.alert]
@@ -131,4 +152,13 @@ output "signing_secret" {
 output "alert_token" {
   value     = local.alert_token
   sensitive = true
+}
+
+output "pipeline" {
+  value = [for s in local.stages : {
+    stage  = s
+    queue  = aws_sqs_queue.stage[s].url
+    dlq    = aws_sqs_queue.stage_dlq[s].url
+    target = "${s}-worker"
+  }]
 }
