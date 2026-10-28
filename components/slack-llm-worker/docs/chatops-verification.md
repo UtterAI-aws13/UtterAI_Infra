@@ -1,5 +1,7 @@
 # ChatOps 확장 검증 (4단계)
 
+> **이후 변경:** 실제 알림 기록을 보니 재시작으로 해결된 장애가 없었고, UtterAI는 ArgoCD로 배포한다. 그래서 GitOps 대상 워크로드는 직접 재시작 대신 되돌리기 PR로 바꿨다([gitops-verification.md](gitops-verification.md)). 이 문서의 재시작·승인·RBAC 검증은 GitOps 대상이 아닌 워크로드용 보조 기능으로 남아 있다. 아래의 응답 시간(3.5초, 18.3초 등)은 모의 Slack과 시뮬레이터 기준이라 성능 지표로 쓰지 않는다.
+
 검증일: 2026-10-27. 원시 결과: [evidence/chatops-e2e.json](../evidence/chatops-e2e.json)
 
 ## 무엇을 더했나

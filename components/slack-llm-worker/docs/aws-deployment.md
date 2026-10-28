@@ -19,6 +19,8 @@
 | 감시 | evidence JSON, 구조화 로그 | CloudWatch Logs, DLQ·대기 시간 알람 2개 | 알람은 모듈에 있음. 알림 대상은 미연결 |
 | ChatOps 실행 대상 | kind 클러스터, ServiceAccount 토큰 파일 | 기존 EKS. 워커 태스크 역할을 access entry로 Kubernetes 그룹에 연결하고, 같은 Role(`api`만 patch)을 바인딩 | 워커 코드는 같음. 토큰 공급 방식만 다름(STS 서명 토큰). 미구현 |
 | 파이프라인 큐 조회 | LocalStack의 단계별 큐(stt, analysis, report), 소비는 시뮬레이터 | UtterAI 파이프라인의 기존 SQS. 워커 역할에 해당 큐의 `sqs:GetQueueAttributes`만 부여(`pipeline_queue_arns`) | 모듈에 반영. 복구 판단에 CloudWatch 지표를 더하면 더 정확함 |
+| GitOps 되돌리기 | Gitea(main 보호), kind의 Argo CD core | GitHub 저장소 + GitHub App(브랜치·PR·커밋 상태 권한만), 기존 Argo CD. webhook 서명은 `X-Hub-Signature-256` 그대로 | 코드는 Gitea API 기준. GitHub용 클라이언트는 미작성 |
+| Git webhook 비밀값 | LocalStack Secrets Manager | Secrets Manager(`git_webhook_secret_arn`) | 모듈에 반영 |
 | Alertmanager 연동 | 테스트 스크립트가 webhook 호출 | 기존 Alertmanager의 webhook receiver → Function URL `/alertmanager` | Bearer 토큰은 Secrets Manager. 모듈에 반영 |
 
 워커와 게이트웨이의 AWS용 ECS 서비스·ALB·RDS·ElastiCache는 Terraform으로 작성하지 않았다. 비용과 리소스 범위를 보여 주는 설계 단계다.
@@ -106,6 +108,8 @@ flowchart LR
 | 비용 | 테스트 단가로 예산 동작만 확인 | 실제 토큰 수와 청구 금액 |
 | ChatOps 권한 | kind RBAC으로 `db` patch 거부 확인 | EKS access entry와 IAM 역할을 거친 같은 RBAC 동작, Fargate에서 EKS API까지 네트워크 경로 |
 | Slack 버튼 | 서명한 block_actions 요청을 직접 전송 | 실제 Slack 화면, 상호작용 요청 재시도 |
+| GitOps 권한 | Gitea 보호 규칙으로 봇의 merge 405 거부 | GitHub branch protection·CODEOWNERS·GitHub App 권한 범위 |
+| Argo CD 반영 시간 | 폴링 15초로 단축 | 기본 3분 폴링 또는 webhook. 복구 확인 간격·횟수를 이에 맞춰 조정 |
 
 ### 로컬 에뮬레이션이 숨긴 문제를 찾은 사례
 
