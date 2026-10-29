@@ -14,7 +14,7 @@
 | LLM 게이트웨이 | LiteLLM Proxy ×2 (docker compose) | ECS Fargate 서비스 ×2 + 내부 ALB | 같은 `litellm.yaml`. Terraform 미작성 |
 | 키·사용량 저장 | PostgreSQL 컨테이너 | RDS for PostgreSQL | 미작성 |
 | 인스턴스 간 호출 제한 공유 | Redis 컨테이너 | ElastiCache Serverless(Valkey) | 미작성 |
-| 모델 | Ollama(llama3.2:1b, qwen2.5:3b, nomic-embed-text) | Bedrock(예: Claude Haiku 4.5, Titan Embeddings) | 별칭(`fast`, `quality`, `embed`)만 바꾼다. 애플리케이션 코드는 그대로 |
+| 모델 | Ollama(llama3.2:1b, qwen2.5:3b, nomic-embed-text) | Bedrock Claude Haiku 4.5(질의응답·장애 요약), Titan Embeddings | 별칭(`fast`, `quality`, `embed`)만 바꾼다. 요약도 Haiku로 충분함을 실측([gateway-verification.md](gateway-verification.md#별칭별-모델-선택-측정)) |
 | Slack API | loopback 모의 Slack(429·timeout 주입) | slack.com(NAT 또는 기존 외부 경로) | `SLACK_API_BASE`만 다름. 허용 주소는 slack.com과 loopback뿐 |
 | 감시 | evidence JSON, 구조화 로그 | CloudWatch Logs, DLQ·대기 시간 알람 2개 | 알람은 모듈에 있음. 알림 대상은 미연결 |
 | ChatOps 실행 대상 | kind 클러스터, ServiceAccount 토큰 파일 | 기존 EKS. 워커 태스크 역할을 access entry로 Kubernetes 그룹에 연결하고, 같은 Role(`api`만 patch)을 바인딩 | 워커 코드는 같음. 토큰 공급 방식만 다름(STS 서명 토큰). 미구현 |
