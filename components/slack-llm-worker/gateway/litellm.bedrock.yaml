@@ -1,0 +1,24 @@
+# Same aliases as litellm.yaml, backed by Bedrock instead of local models. Used only by
+# e2e/run_model_policy.py --gateway http://127.0.0.1:4002/v1 to measure the alias split on hosted
+# models. Starting it calls a paid service: run it only with explicit approval.
+#
+# Credentials come from the environment of the container (temporary session credentials),
+# never from this file. Prices are not set here; the benchmark prices tokens itself.
+
+model_list:
+  - model_name: fast
+    litellm_params:
+      model: bedrock/global.anthropic.claude-haiku-4-5-20251001-v1:0
+      aws_region_name: ap-northeast-2
+  - model_name: quality
+    litellm_params:
+      model: bedrock/global.anthropic.claude-sonnet-4-5-20250929-v1:0
+      aws_region_name: ap-northeast-2
+
+litellm_settings:
+  num_retries: 0
+  request_timeout: 60
+  drop_params: true
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

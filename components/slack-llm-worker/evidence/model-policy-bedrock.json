@@ -1,0 +1,557 @@
+{
+  "meta": {
+    "date": "2026-10-29",
+    "fast": "bedrock/global.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "quality": "bedrock/global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    "via": "LiteLLM proxy http://127.0.0.1:4002/v1",
+    "price_usd_per_mtok": {
+      "fast": [
+        1.0,
+        5.0
+      ],
+      "quality": [
+        3.0,
+        15.0
+      ]
+    },
+    "note": "Costs are list-price estimates from token counts. Local-model latencies are relative only."
+  },
+  "result": {
+    "qa_fast": {
+      "calls": 18,
+      "p50_seconds": 2.36,
+      "p95_seconds": 2.82,
+      "avg_input_tokens": 144,
+      "avg_output_tokens": 351,
+      "usd_per_1000_calls": 1.897
+    },
+    "summary_fast": {
+      "calls": 12,
+      "p50_seconds": 1.82,
+      "p95_seconds": 2.26,
+      "avg_input_tokens": 628,
+      "avg_output_tokens": 225,
+      "usd_per_1000_calls": 1.751,
+      "valid_rate": 1.0,
+      "grounded_rate": 1.0
+    },
+    "qa_quality": {
+      "calls": 18,
+      "p50_seconds": 6.63,
+      "p95_seconds": 7.86,
+      "avg_input_tokens": 144,
+      "avg_output_tokens": 344,
+      "usd_per_1000_calls": 5.596
+    },
+    "summary_quality": {
+      "calls": 12,
+      "p50_seconds": 5.25,
+      "p95_seconds": 6.57,
+      "avg_input_tokens": 628,
+      "avg_output_tokens": 238,
+      "usd_per_1000_calls": 5.446,
+      "valid_rate": 1.0,
+      "grounded_rate": 1.0
+    },
+    "by_incident": {
+      "fast": {
+        "bad_image_crash": {
+          "valid": 3,
+          "grounded": 3,
+          "of": 3
+        },
+        "node_capacity_pending": {
+          "valid": 3,
+          "grounded": 3,
+          "of": 3
+        },
+        "oom_killed": {
+          "valid": 3,
+          "grounded": 3,
+          "of": 3
+        },
+        "stalled_consumer": {
+          "valid": 3,
+          "grounded": 3,
+          "of": 3
+        }
+      },
+      "quality": {
+        "bad_image_crash": {
+          "valid": 3,
+          "grounded": 3,
+          "of": 3
+        },
+        "node_capacity_pending": {
+          "valid": 3,
+          "grounded": 3,
+          "of": 3
+        },
+        "oom_killed": {
+          "valid": 3,
+          "grounded": 3,
+          "of": 3
+        },
+        "stalled_consumer": {
+          "valid": 3,
+          "grounded": 3,
+          "of": 3
+        }
+      }
+    }
+  },
+  "raw": {
+    "qa_fast": [
+      {
+        "question": "CrashLoopBackOff가 뭐야?",
+        "seconds": 2.615,
+        "inputTokens": 135,
+        "outputTokens": 400,
+        "chars": 539
+      },
+      {
+        "question": "Pod가 Pending에서 안 넘어가면 뭘 먼저 봐야 해?",
+        "seconds": 2.554,
+        "inputTokens": 150,
+        "outputTokens": 400,
+        "chars": 706
+      },
+      {
+        "question": "SQS DLQ에 메시지가 쌓이면 어떻게 확인해?",
+        "seconds": 2.347,
+        "inputTokens": 148,
+        "outputTokens": 400,
+        "chars": 662
+      },
+      {
+        "question": "Argo CD에서 Synced인데 Degraded면 무슨 뜻이야?",
+        "seconds": 2.356,
+        "inputTokens": 148,
+        "outputTokens": 325,
+        "chars": 382
+      },
+      {
+        "question": "롤백 PR은 누가 merge할 수 있어?",
+        "seconds": 1.871,
+        "inputTokens": 138,
+        "outputTokens": 216,
+        "chars": 253
+      },
+      {
+        "question": "kubectl로 이전 컨테이너 로그 보는 법 알려줘",
+        "seconds": 2.566,
+        "inputTokens": 144,
+        "outputTokens": 384,
+        "chars": 637
+      },
+      {
+        "question": "CrashLoopBackOff가 뭐야?",
+        "seconds": 2.37,
+        "inputTokens": 135,
+        "outputTokens": 369,
+        "chars": 496
+      },
+      {
+        "question": "Pod가 Pending에서 안 넘어가면 뭘 먼저 봐야 해?",
+        "seconds": 2.59,
+        "inputTokens": 150,
+        "outputTokens": 373,
+        "chars": 674
+      },
+      {
+        "question": "SQS DLQ에 메시지가 쌓이면 어떻게 확인해?",
+        "seconds": 2.422,
+        "inputTokens": 148,
+        "outputTokens": 400,
+        "chars": 668
+      },
+      {
+        "question": "Argo CD에서 Synced인데 Degraded면 무슨 뜻이야?",
+        "seconds": 2.818,
+        "inputTokens": 148,
+        "outputTokens": 389,
+        "chars": 523
+      },
+      {
+        "question": "롤백 PR은 누가 merge할 수 있어?",
+        "seconds": 1.729,
+        "inputTokens": 138,
+        "outputTokens": 204,
+        "chars": 241
+      },
+      {
+        "question": "kubectl로 이전 컨테이너 로그 보는 법 알려줘",
+        "seconds": 1.898,
+        "inputTokens": 144,
+        "outputTokens": 336,
+        "chars": 530
+      },
+      {
+        "question": "CrashLoopBackOff가 뭐야?",
+        "seconds": 2.351,
+        "inputTokens": 135,
+        "outputTokens": 380,
+        "chars": 478
+      },
+      {
+        "question": "Pod가 Pending에서 안 넘어가면 뭘 먼저 봐야 해?",
+        "seconds": 2.921,
+        "inputTokens": 150,
+        "outputTokens": 400,
+        "chars": 747
+      },
+      {
+        "question": "SQS DLQ에 메시지가 쌓이면 어떻게 확인해?",
+        "seconds": 2.595,
+        "inputTokens": 148,
+        "outputTokens": 400,
+        "chars": 657
+      },
+      {
+        "question": "Argo CD에서 Synced인데 Degraded면 무슨 뜻이야?",
+        "seconds": 2.116,
+        "inputTokens": 148,
+        "outputTokens": 312,
+        "chars": 385
+      },
+      {
+        "question": "롤백 PR은 누가 merge할 수 있어?",
+        "seconds": 1.951,
+        "inputTokens": 138,
+        "outputTokens": 246,
+        "chars": 260
+      },
+      {
+        "question": "kubectl로 이전 컨테이너 로그 보는 법 알려줘",
+        "seconds": 2.221,
+        "inputTokens": 144,
+        "outputTokens": 376,
+        "chars": 575
+      }
+    ],
+    "summary_fast": [
+      {
+        "incident": "bad_image_crash",
+        "seconds": 1.682,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 716,
+        "outputTokens": 210
+      },
+      {
+        "incident": "node_capacity_pending",
+        "seconds": 1.823,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 334,
+        "outputTokens": 211
+      },
+      {
+        "incident": "oom_killed",
+        "seconds": 1.706,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 667,
+        "outputTokens": 241
+      },
+      {
+        "incident": "stalled_consumer",
+        "seconds": 1.952,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 793,
+        "outputTokens": 237
+      },
+      {
+        "incident": "bad_image_crash",
+        "seconds": 3.147,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 716,
+        "outputTokens": 210
+      },
+      {
+        "incident": "node_capacity_pending",
+        "seconds": 1.583,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 334,
+        "outputTokens": 211
+      },
+      {
+        "incident": "oom_killed",
+        "seconds": 2.259,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 667,
+        "outputTokens": 241
+      },
+      {
+        "incident": "stalled_consumer",
+        "seconds": 1.917,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 793,
+        "outputTokens": 237
+      },
+      {
+        "incident": "bad_image_crash",
+        "seconds": 1.807,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 716,
+        "outputTokens": 210
+      },
+      {
+        "incident": "node_capacity_pending",
+        "seconds": 1.654,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 334,
+        "outputTokens": 211
+      },
+      {
+        "incident": "oom_killed",
+        "seconds": 1.762,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 667,
+        "outputTokens": 241
+      },
+      {
+        "incident": "stalled_consumer",
+        "seconds": 1.855,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 793,
+        "outputTokens": 237
+      }
+    ],
+    "qa_quality": [
+      {
+        "question": "CrashLoopBackOff가 뭐야?",
+        "seconds": 7.385,
+        "inputTokens": 135,
+        "outputTokens": 400,
+        "chars": 535
+      },
+      {
+        "question": "Pod가 Pending에서 안 넘어가면 뭘 먼저 봐야 해?",
+        "seconds": 5.86,
+        "inputTokens": 150,
+        "outputTokens": 287,
+        "chars": 494
+      },
+      {
+        "question": "SQS DLQ에 메시지가 쌓이면 어떻게 확인해?",
+        "seconds": 7.238,
+        "inputTokens": 148,
+        "outputTokens": 400,
+        "chars": 694
+      },
+      {
+        "question": "Argo CD에서 Synced인데 Degraded면 무슨 뜻이야?",
+        "seconds": 7.838,
+        "inputTokens": 148,
+        "outputTokens": 400,
+        "chars": 620
+      },
+      {
+        "question": "롤백 PR은 누가 merge할 수 있어?",
+        "seconds": 5.829,
+        "inputTokens": 138,
+        "outputTokens": 257,
+        "chars": 298
+      },
+      {
+        "question": "kubectl로 이전 컨테이너 로그 보는 법 알려줘",
+        "seconds": 4.968,
+        "inputTokens": 144,
+        "outputTokens": 286,
+        "chars": 492
+      },
+      {
+        "question": "CrashLoopBackOff가 뭐야?",
+        "seconds": 7.961,
+        "inputTokens": 135,
+        "outputTokens": 400,
+        "chars": 539
+      },
+      {
+        "question": "Pod가 Pending에서 안 넘어가면 뭘 먼저 봐야 해?",
+        "seconds": 6.506,
+        "inputTokens": 150,
+        "outputTokens": 332,
+        "chars": 513
+      },
+      {
+        "question": "SQS DLQ에 메시지가 쌓이면 어떻게 확인해?",
+        "seconds": 7.242,
+        "inputTokens": 148,
+        "outputTokens": 400,
+        "chars": 692
+      },
+      {
+        "question": "Argo CD에서 Synced인데 Degraded면 무슨 뜻이야?",
+        "seconds": 7.632,
+        "inputTokens": 148,
+        "outputTokens": 400,
+        "chars": 609
+      },
+      {
+        "question": "롤백 PR은 누가 merge할 수 있어?",
+        "seconds": 5.588,
+        "inputTokens": 138,
+        "outputTokens": 269,
+        "chars": 278
+      },
+      {
+        "question": "kubectl로 이전 컨테이너 로그 보는 법 알려줘",
+        "seconds": 5.977,
+        "inputTokens": 144,
+        "outputTokens": 367,
+        "chars": 557
+      },
+      {
+        "question": "CrashLoopBackOff가 뭐야?",
+        "seconds": 7.193,
+        "inputTokens": 135,
+        "outputTokens": 375,
+        "chars": 502
+      },
+      {
+        "question": "Pod가 Pending에서 안 넘어가면 뭘 먼저 봐야 해?",
+        "seconds": 7.013,
+        "inputTokens": 150,
+        "outputTokens": 357,
+        "chars": 583
+      },
+      {
+        "question": "SQS DLQ에 메시지가 쌓이면 어떻게 확인해?",
+        "seconds": 6.63,
+        "inputTokens": 148,
+        "outputTokens": 376,
+        "chars": 695
+      },
+      {
+        "question": "Argo CD에서 Synced인데 Degraded면 무슨 뜻이야?",
+        "seconds": 7.855,
+        "inputTokens": 148,
+        "outputTokens": 382,
+        "chars": 523
+      },
+      {
+        "question": "롤백 PR은 누가 merge할 수 있어?",
+        "seconds": 5.07,
+        "inputTokens": 138,
+        "outputTokens": 234,
+        "chars": 249
+      },
+      {
+        "question": "kubectl로 이전 컨테이너 로그 보는 법 알려줘",
+        "seconds": 5.228,
+        "inputTokens": 144,
+        "outputTokens": 275,
+        "chars": 415
+      }
+    ],
+    "summary_quality": [
+      {
+        "incident": "bad_image_crash",
+        "seconds": 5.25,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 716,
+        "outputTokens": 250
+      },
+      {
+        "incident": "node_capacity_pending",
+        "seconds": 5.132,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 334,
+        "outputTokens": 232
+      },
+      {
+        "incident": "oom_killed",
+        "seconds": 6.513,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 667,
+        "outputTokens": 215
+      },
+      {
+        "incident": "stalled_consumer",
+        "seconds": 5.972,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 793,
+        "outputTokens": 258
+      },
+      {
+        "incident": "bad_image_crash",
+        "seconds": 6.562,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 716,
+        "outputTokens": 246
+      },
+      {
+        "incident": "node_capacity_pending",
+        "seconds": 5.217,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 334,
+        "outputTokens": 238
+      },
+      {
+        "incident": "oom_killed",
+        "seconds": 4.303,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 667,
+        "outputTokens": 182
+      },
+      {
+        "incident": "stalled_consumer",
+        "seconds": 6.662,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 793,
+        "outputTokens": 290
+      },
+      {
+        "incident": "bad_image_crash",
+        "seconds": 5.21,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 716,
+        "outputTokens": 246
+      },
+      {
+        "incident": "node_capacity_pending",
+        "seconds": 4.488,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 334,
+        "outputTokens": 222
+      },
+      {
+        "incident": "oom_killed",
+        "seconds": 3.932,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 667,
+        "outputTokens": 182
+      },
+      {
+        "incident": "stalled_consumer",
+        "seconds": 6.574,
+        "valid": true,
+        "grounded": true,
+        "inputTokens": 793,
+        "outputTokens": 290
+      }
+    ]
+  }
+}

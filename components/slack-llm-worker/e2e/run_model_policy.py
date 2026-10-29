@@ -23,6 +23,7 @@ from slack_worker.ops import Summarizer  # noqa: E402
 from slack_worker.pipeline import SYSTEM_PROMPT, OpenAICompatModel  # noqa: E402
 
 GATEWAY = "http://127.0.0.1:4000/v1"
+ARGS = None
 MASTER = "sk-local-master-test-only"
 # USD per million tokens, same values as gateway/litellm.yaml.
 PRICE = {"fast": (1.0, 5.0), "quality": (3.0, 15.0)}
@@ -69,7 +70,7 @@ TEMPLATE = re.compile(r"두 문장 이내 요약|근거에 기반한 원인 후�
 
 
 def model(alias, system, temperature=None, max_tokens=400):
-    return OpenAICompatModel(GATEWAY, alias, api_key=MASTER, max_tokens=max_tokens, timeout=120,
+    return OpenAICompatModel(ARGS.gateway, alias, api_key=MASTER, max_tokens=max_tokens, timeout=120,
                              system=system, temperature=temperature)
 
 
@@ -143,7 +144,12 @@ def main():
     ap.add_argument("--qa-repeats", type=int, default=3)
     ap.add_argument("--summary-repeats", type=int, default=4)
     ap.add_argument("--out", default=str(ROOT / "evidence/model-policy.json"))
+    ap.add_argument("--gateway", default=GATEWAY)
+    ap.add_argument("--models", default="fast=ollama_chat/llama3.2:1b,quality=ollama_chat/qwen2.5:3b",
+                    help="what the aliases point at, recorded in the evidence file")
     args = ap.parse_args()
+    global ARGS
+    ARGS = args
 
     raw, result = {}, {}
     for alias in ("fast", "quality"):  # one model at a time, so timings exclude model swaps
@@ -158,9 +164,9 @@ def main():
                               "grounded": sum(r["grounded"] for r in raw[f"summary_{alias}"] if r["incident"] == inc["name"]),
                               "of": args.summary_repeats} for inc in INCIDENTS}
         for alias in ("fast", "quality")}
-    meta = {"date": time.strftime("%Y-%m-%d"), "fast": "ollama_chat/llama3.2:1b", "quality": "ollama_chat/qwen2.5:3b",
-            "via": "LiteLLM proxy (local)", "price_usd_per_mtok": PRICE,
-            "note": "Local models on a laptop; latencies are relative, costs are list-price estimates from token counts."}
+    meta = {"date": time.strftime("%Y-%m-%d"), **dict(kv.split("=", 1) for kv in args.models.split(",")),
+            "via": "LiteLLM proxy " + args.gateway, "price_usd_per_mtok": PRICE,
+            "note": "Costs are list-price estimates from token counts. Local-model latencies are relative only."}
     Path(args.out).write_text(json.dumps({"meta": meta, "result": result, "raw": raw}, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
