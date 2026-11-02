@@ -1,0 +1,288 @@
+{
+  "scope": "kind Argo CD + real local SQS-compatible messages; synthetic integer jobs; no UtterAI application changes",
+  "startedAt": "2026-10-29T09:02:03.568576+00:00",
+  "workDirectory": "/private/tmp/gitops-advanced-redluwol",
+  "repository": "http://172.19.0.5:3000/lab/gitops-advanced-c7d9485c5945.git",
+  "cases": [
+    {
+      "name": "git-revert-healthy-but-contract-incompatible",
+      "application": {
+        "name": "contract-485c5945",
+        "uid": "576867e1-5811-4313-bb7e-743380a06d4e",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "gitops-contract-485c5945",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "workloads/reader",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-c7d9485c5945.git",
+              "targetRevision": "main"
+            }
+          },
+          "revision": "59ad7b10dca54302f6abbbc60cfe1e4295278bed",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-29T09:04:23Z",
+          "status": "Healthy"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "baselineRevision": "8b858bb4e88591afc77eea9610b3aa4195a1fe4e",
+      "upgradeRevision": "cf3e36326e82e18391f008b0f7e3800cff2cc02f",
+      "rollbackRevision": "59ad7b10dca54302f6abbbc60cfe1e4295278bed",
+      "publishedJobs": 10,
+      "successfulJobs": 5,
+      "quarantinedJobs": 5,
+      "outcomes": [
+        {
+          "job_id": "old-0",
+          "schema_version": 1,
+          "reader": "v1",
+          "result": 0
+        },
+        {
+          "job_id": "old-1",
+          "schema_version": 1,
+          "reader": "v1",
+          "result": 2
+        },
+        {
+          "job_id": "old-3",
+          "schema_version": 1,
+          "reader": "v1",
+          "result": 6
+        },
+        {
+          "job_id": "old-2",
+          "schema_version": 1,
+          "reader": "v1",
+          "result": 4
+        },
+        {
+          "job_id": "old-4",
+          "schema_version": 1,
+          "reader": "v1",
+          "result": 8
+        },
+        {
+          "job_id": "new-0",
+          "schema_version": 2,
+          "reader": "v1-bridge",
+          "result": 0
+        },
+        {
+          "job_id": "new-2",
+          "schema_version": 2,
+          "reader": "v1-bridge",
+          "result": 4
+        },
+        {
+          "job_id": "new-1",
+          "schema_version": 2,
+          "reader": "v1-bridge",
+          "result": 2
+        },
+        {
+          "job_id": "new-3",
+          "schema_version": 2,
+          "reader": "v1-bridge",
+          "result": 6
+        },
+        {
+          "job_id": "new-4",
+          "schema_version": 2,
+          "reader": "v1-bridge",
+          "result": 8
+        }
+      ],
+      "dlq": [
+        {
+          "original": {
+            "job_id": "new-0",
+            "schema_version": 2,
+            "input": {
+              "value": 0
+            }
+          },
+          "reader": "v1",
+          "attempt": 3,
+          "error": "unsupported schema 2 for v1"
+        },
+        {
+          "original": {
+            "job_id": "new-2",
+            "schema_version": 2,
+            "input": {
+              "value": 2
+            }
+          },
+          "reader": "v1",
+          "attempt": 3,
+          "error": "unsupported schema 2 for v1"
+        },
+        {
+          "original": {
+            "job_id": "new-1",
+            "schema_version": 2,
+            "input": {
+              "value": 1
+            }
+          },
+          "reader": "v1",
+          "attempt": 3,
+          "error": "unsupported schema 2 for v1"
+        },
+        {
+          "original": {
+            "job_id": "new-3",
+            "schema_version": 2,
+            "input": {
+              "value": 3
+            }
+          },
+          "reader": "v1",
+          "attempt": 3,
+          "error": "unsupported schema 2 for v1"
+        },
+        {
+          "original": {
+            "job_id": "new-4",
+            "schema_version": 2,
+            "input": {
+              "value": 4
+            }
+          },
+          "reader": "v1",
+          "attempt": 3,
+          "error": "unsupported schema 2 for v1"
+        }
+      ],
+      "compatibilityGate": {
+        "reader": "v1",
+        "retainedSchemas": [
+          1,
+          2
+        ],
+        "supportedSchemas": [
+          1
+        ],
+        "allowed": false,
+        "unsupportedSchemas": [
+          2
+        ]
+      },
+      "passed": true
+    },
+    {
+      "name": "compatible-reader-replays-quarantined-jobs",
+      "revision": "7cd1b56c2724ee50630d0d973b501550efbd61c4",
+      "recoveredJobIDs": [
+        "new-0",
+        "new-1",
+        "new-2",
+        "new-3",
+        "new-4"
+      ],
+      "uniqueCompletedJobs": 10,
+      "duplicateOutputCount": 0,
+      "outcomes": [
+        {
+          "job_id": "old-0",
+          "schema_version": 1,
+          "reader": "v1",
+          "result": 0
+        },
+        {
+          "job_id": "old-1",
+          "schema_version": 1,
+          "reader": "v1",
+          "result": 2
+        },
+        {
+          "job_id": "old-3",
+          "schema_version": 1,
+          "reader": "v1",
+          "result": 6
+        },
+        {
+          "job_id": "old-2",
+          "schema_version": 1,
+          "reader": "v1",
+          "result": 4
+        },
+        {
+          "job_id": "old-4",
+          "schema_version": 1,
+          "reader": "v1",
+          "result": 8
+        },
+        {
+          "job_id": "new-0",
+          "schema_version": 2,
+          "reader": "v1-bridge",
+          "result": 0
+        },
+        {
+          "job_id": "new-2",
+          "schema_version": 2,
+          "reader": "v1-bridge",
+          "result": 4
+        },
+        {
+          "job_id": "new-1",
+          "schema_version": 2,
+          "reader": "v1-bridge",
+          "result": 2
+        },
+        {
+          "job_id": "new-3",
+          "schema_version": 2,
+          "reader": "v1-bridge",
+          "result": 6
+        },
+        {
+          "job_id": "new-4",
+          "schema_version": 2,
+          "reader": "v1-bridge",
+          "result": 8
+        }
+      ],
+      "compatibilityGate": {
+        "reader": "v1-bridge",
+        "retainedSchemas": [
+          1,
+          2
+        ],
+        "supportedSchemas": [
+          1,
+          2
+        ],
+        "allowed": true,
+        "unsupportedSchemas": []
+      },
+      "passed": true
+    }
+  ],
+  "sourceHashes": {
+    "tests/gitops/advanced.py": "eeac1affc2fe5f4588a7f2ad803e2a47829df6e8a220918c768fffc21d57b0f7",
+    "tests/gitops/cache_audit.py": "1e20a6b66199bab0bf4621a7ed43deb7550ab0c53f42ba2e7146344d4782df09",
+    "tests/gitops/contract_policy.py": "582849d5b7a58504e01eeb1eacc0cd9c15c398b7dfb6c9830dc5fc24e9228ff5",
+    "tests/gitops/contract_worker.py": "43d7b471c854291afae9e07b0da2879b12243719353aca5f989e6bc09e3e50d9",
+    "tests/gitops/keda_ownership.py": "96aa6b7dd04eb2adb99981b1b2af804283d98fba49f70236838cc5620f7f35c8",
+    "tests/gitops/lab.py": "cc5aa3af9b022f78a0fe216d38e0e0c069c3c36d4b4b3e6729cccda63a82b3e8",
+    "tests/gitops/local.py": "6d88aec07b5e58447756968b49ca89f10ab274f9e91ef5f015076d56ee39618e",
+    "tests/gitops/manifest_cache.py": "9287bc59016e248dad9f61502dc28862576dff4c3ceeea6417bfc5f670bf4da6",
+    "tests/gitops/manifest_equivalence.py": "202668895ea8b244b2fbc8e2332634d5231ed27c90345dd3322df8b4fcba4df3",
+    "tests/gitops/rollback_contract.py": "2e9a43389b0ee781af0b2463ee74e3d0a71336de53dea3c48778cc289870a1d8",
+    "tests/gitops/test_bootstrap.py": "448d19920fea044b72e05dcc4b92914df7ef0559292d5976bc247d7e62e5834c",
+    "tests/gitops/test_contract_and_audit.py": "45ee37644c34e7b789cece0f42597e6316eb9c8d755c7fe7442515087dda148c",
+    "tests/gitops/test_lab.py": "a443823e9fd25cfb3e12cd902b8522ad89c11a5ea200878e71ea14631c713b3d",
+    "tests/gitops/test_policies.py": "203ff1991d99e33a1e8db3893ca8994564012f9d21355165ae0fa09787c63e5e"
+  },
+  "queueFixture": "utterai-contract-sqs-485c5945",
+  "passed": true
+}

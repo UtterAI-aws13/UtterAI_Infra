@@ -1,0 +1,11 @@
+{
+  "unitTests": 14,
+  "unitTestsPassed": true,
+  "integrationEvidence": "app-of-apps-local.json",
+  "sourceHashes": {
+    "scripts/gitops/bootstrap.py": "96dc230422c8249ec15ebe39557365d5565c689e712f3ecf24f15229979e6d82",
+    "tests/gitops/test_bootstrap.py": "448d19920fea044b72e05dcc4b92914df7ef0559292d5976bc247d7e62e5834c"
+  },
+  "liveEKS": "not applied; both configured API endpoints failed DNS lookup",
+  "publication": "local working tree only; not pushed or merged"
+}

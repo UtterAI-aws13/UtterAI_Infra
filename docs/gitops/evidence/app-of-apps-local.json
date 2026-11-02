@@ -1,0 +1,112 @@
+{
+  "scope": "local kind, mock workloads; not EKS",
+  "argocd": "v3.4.3",
+  "timestamp": "2026-10-28T09:20:41.971408+00:00",
+  "kubernetes": "v1.31.9",
+  "sourceHashes": {
+    "deploy/argocd/bootstrap/dev/kustomization.yaml": "c8c2d87da6a936a75570600ce12f52b84f9b912a28bcedcae71da66190f21e3c",
+    "deploy/argocd/bootstrap/dev/project.yaml": "476a0c2f11a251e79a9e519b986eae2ad02bbf21a36229e34495f93e775726b6",
+    "deploy/argocd/bootstrap/dev/root.yaml": "fd6b9477737b6c9157f66da1fbbdd7e3be32295221f56b0750ea75ba09d4a1da",
+    "deploy/argocd/bootstrap/prod/kustomization.yaml": "c8c2d87da6a936a75570600ce12f52b84f9b912a28bcedcae71da66190f21e3c",
+    "deploy/argocd/bootstrap/prod/project.yaml": "e79a339a2568fcc81b1109372da12590f27b5fb4200f6c07d47b5d811fc94e02",
+    "deploy/argocd/bootstrap/prod/root.yaml": "a690c44ea55e3087877a6681af446d357f01afbbb6d63132c372ccc81f897a3f",
+    "deploy/argocd/dev/ai-service-dev.yaml": "ee327c817dd4ff9ff113ce308f3189c96748ac7ed3373549a2a8a019820c77c3",
+    "deploy/argocd/dev/ai-worker-dev.yaml": "aa983dac9fb14c920f05e3a1f8560c308e0f22438aa3f8fe9de0a7ae4c3918ba",
+    "deploy/argocd/dev/backend-dev.yaml": "3f6ce9dedbe1ef0c35fb08790a9c41f88bdb2b1fc70fc3fe8ab8dae4caf925de",
+    "deploy/argocd/dev/kustomization.yaml": "b4ed5316e1166747c7f1df95b515790c2041a7a259cd450417969cc7c9d3c5e0",
+    "deploy/argocd/dev/platform-dev.yaml": "5655a3d347f78279e2dbf02213cb4e09ee869ee816fcc081ff0af9c18e8239f9",
+    "deploy/argocd/infra-lab/capacity-lab.yaml": "b233a5575ae26f87003a60f8bb6d2b711fcff747c89d3e7c3d62e217f20790af",
+    "deploy/argocd/prod/ai-service-prod.yaml": "8614139cfce28ab8049df86397157d4fea296251bf40149813664d1115aa186f",
+    "deploy/argocd/prod/ai-worker-prod.yaml": "2c7c873b25713da91cb1d028f7b8740ad02abf76e1359c7d66ed2822bcf9ccbd",
+    "deploy/argocd/prod/backend-prod.yaml": "02cb879e939b4c2eeea971216b54d8fed1a6533b96267c0daea0374f55df1a05",
+    "deploy/argocd/prod/kustomization.yaml": "d6bf0f89915abd2a6efa2123489ad930ae11bf0c14b1fda2783ebfd8cd2eb4cb",
+    "deploy/argocd/prod/platform-prod.yaml": "aab9389b78caf310158d3fed8079434a50807117cce00affea1d29d26b794d42",
+    "scripts/gitops/bootstrap.py": "e6f8d9682b46c06b955d3d035d0dac7b12733bf7b270838685c3c9a44a767842",
+    "tests/gitops/local.py": "6d88aec07b5e58447756968b49ca89f10ab274f9e91ef5f015076d56ee39618e"
+  },
+  "fixtureRevision": "5204c5af3d0ec533a791f7e0dd848713cf039782",
+  "fixture": "/private/tmp/utterai-apps-cv1km1_a",
+  "environments": {
+    "dev": {
+      "adoptionPreservedUIDs": true,
+      "childSpecsPreserved": true,
+      "singleChildChangeIsolated": true,
+      "explicitPruneProtected": true,
+      "protectedRemovalRevision": "b5b5ed2854f8227464301edc1a4c9138150accd3",
+      "rootDeletionPreservedChildren": true,
+      "individualReapplyPreservedUIDs": true,
+      "rootRecreated": true,
+      "uids": {
+        "utterai-ai-service-dev": {
+          "application": "cc464530-66c7-4924-905e-dbd32422465c",
+          "deployment": "8677e4ec-ae6a-405a-8853-05171e271ec9",
+          "pods": [
+            "8e4d2b41-28b5-44d5-83b9-36b74a15b12d"
+          ]
+        },
+        "utterai-ai-worker-dev": {
+          "application": "bc8cea32-5129-45c3-b448-9b35058c4aa2",
+          "deployment": "f1992026-30b6-4296-81fa-09dde70e565f",
+          "pods": [
+            "04b6044c-7c18-48b0-afe7-9eed8bd762d3"
+          ]
+        },
+        "utterai-backend-dev": {
+          "application": "b60e0e23-e3bf-4233-afaa-b5275a42b352",
+          "deployment": "1f48b951-228f-4129-bda3-0eeb6b0e2c16",
+          "pods": [
+            "6fb4eac2-9ade-4bba-b24d-b73d44fcb571"
+          ]
+        },
+        "utterai-platform-dev": {
+          "application": "3a630e1f-4c87-42b1-a2ee-1ce3721df707",
+          "deployment": "996af823-9054-4e34-9cfb-94dda86dcb6b",
+          "pods": [
+            "a57272f7-003a-4183-bd00-88b4faf3d11d"
+          ]
+        }
+      }
+    },
+    "prod": {
+      "adoptionPreservedUIDs": true,
+      "childSpecsPreserved": true,
+      "singleChildChangeIsolated": true,
+      "explicitPruneProtected": true,
+      "protectedRemovalRevision": "860f1e872e6e90796bab890a7342e17bc5d533a9",
+      "rootDeletionPreservedChildren": true,
+      "individualReapplyPreservedUIDs": true,
+      "rootRecreated": true,
+      "uids": {
+        "utterai-ai-service-prod": {
+          "application": "7d712efb-63f9-45f6-9a58-9a10cb03cc3d",
+          "deployment": "bd0a29e1-87f2-4596-b93f-1509d3453bb3",
+          "pods": [
+            "6857237e-7634-46d1-9cec-ec43b5a32348"
+          ]
+        },
+        "utterai-ai-worker-prod": {
+          "application": "3e0da8d8-1550-4050-8aa3-79a3cc7e4d23",
+          "deployment": "b501a98e-defb-4293-9b99-77ce9d3cc31a",
+          "pods": [
+            "8ae9f6fe-acf2-480d-9301-97a07313aef8"
+          ]
+        },
+        "utterai-backend-prod": {
+          "application": "cc29ff62-64e9-4abe-9835-f8fee2f2448e",
+          "deployment": "c0bd1ac6-719c-47b0-805d-8699849ef891",
+          "pods": [
+            "df144d42-0b10-4cfd-b9e9-b09d4e7f1a05"
+          ]
+        },
+        "utterai-platform-prod": {
+          "application": "d0fe089b-161f-46cf-84b1-84730e8c5634",
+          "deployment": "5df3224a-b96b-4d6f-9d48-ed7b188feced",
+          "pods": [
+            "3418dbd9-939e-445f-bc45-5c01b25aec7f"
+          ]
+        }
+      }
+    }
+  },
+  "passed": true
+}

@@ -1,0 +1,618 @@
+{
+  "scope": "kind-only; real Argo CD and KEDA/HPA, synthetic workloads/local SQS",
+  "startedAt": "2026-10-28T11:49:23.708799+00:00",
+  "workDirectory": "/private/tmp/gitops-advanced-op1yiupq",
+  "repository": "http://172.19.0.5:3000/lab/gitops-advanced-op1yiupq.git",
+  "cases": [
+    {
+      "name": "manifest-cache-False-unrelated-1",
+      "optimized": false,
+      "scenario": "unrelated",
+      "trial": 1,
+      "revision": "652af26060df1d4d5e5720be798b67c14fb7416b",
+      "kustomizeExecutions": 4,
+      "commitToComparisonSeconds": 4.461,
+      "pushSeconds": 2.9999,
+      "metricDeltas": {
+        "gitFetch": 1.0,
+        "gitLsRemote": 4.0,
+        "processCPUSeconds": 0.57,
+        "generateManifestRPCs": 16.0
+      },
+      "buildLogs": [
+        {
+          "time": "2026-10-28T11:51:31Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-03",
+          "execID": "a05cc"
+        },
+        {
+          "time": "2026-10-28T11:51:31Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-01",
+          "execID": "784a0"
+        },
+        {
+          "time": "2026-10-28T11:51:31Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-02",
+          "execID": "a6575"
+        },
+        {
+          "time": "2026-10-28T11:51:31Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-00",
+          "execID": "815cf"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "manifest-cache-False-unrelated-2",
+      "optimized": false,
+      "scenario": "unrelated",
+      "trial": 2,
+      "revision": "75bfebbb69482b545a257859aefcf539ffbc7c87",
+      "kustomizeExecutions": 4,
+      "commitToComparisonSeconds": 3.5081,
+      "pushSeconds": 1.6874,
+      "metricDeltas": {
+        "gitFetch": 1.0,
+        "gitLsRemote": 4.0,
+        "processCPUSeconds": 0.51,
+        "generateManifestRPCs": 5.0
+      },
+      "buildLogs": [
+        {
+          "time": "2026-10-28T11:51:41Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-01",
+          "execID": "8343b"
+        },
+        {
+          "time": "2026-10-28T11:51:41Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-02",
+          "execID": "28543"
+        },
+        {
+          "time": "2026-10-28T11:51:41Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-03",
+          "execID": "ec752"
+        },
+        {
+          "time": "2026-10-28T11:51:41Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-00",
+          "execID": "73a98"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "manifest-cache-False-unrelated-3",
+      "optimized": false,
+      "scenario": "unrelated",
+      "trial": 3,
+      "revision": "71f0b420ea8432c04bef35ab29af00e34bf57126",
+      "kustomizeExecutions": 4,
+      "commitToComparisonSeconds": 5.3944,
+      "pushSeconds": 2.7828,
+      "metricDeltas": {
+        "gitFetch": 1.0,
+        "gitLsRemote": 4.0,
+        "processCPUSeconds": 0.52,
+        "generateManifestRPCs": 5.0
+      },
+      "buildLogs": [
+        {
+          "time": "2026-10-28T11:51:51Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-01",
+          "execID": "a06b3"
+        },
+        {
+          "time": "2026-10-28T11:51:51Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-03",
+          "execID": "0d0c6"
+        },
+        {
+          "time": "2026-10-28T11:51:51Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-00",
+          "execID": "7f8ff"
+        },
+        {
+          "time": "2026-10-28T11:51:51Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-02",
+          "execID": "84d38"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "manifest-cache-False-leaf-1",
+      "optimized": false,
+      "scenario": "leaf",
+      "trial": 1,
+      "revision": "9f91d91380593e9ca9f4a8e27207fd09b87d9967",
+      "kustomizeExecutions": 4,
+      "commitToComparisonSeconds": 3.527,
+      "pushSeconds": 2.0873,
+      "metricDeltas": {
+        "gitFetch": 1.0,
+        "gitLsRemote": 4.0,
+        "processCPUSeconds": 0.28,
+        "generateManifestRPCs": 4.0
+      },
+      "buildLogs": [
+        {
+          "time": "2026-10-28T11:52:12Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-00",
+          "execID": "11b47"
+        },
+        {
+          "time": "2026-10-28T11:52:12Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-01",
+          "execID": "e59bd"
+        },
+        {
+          "time": "2026-10-28T11:52:12Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-03",
+          "execID": "191e4"
+        },
+        {
+          "time": "2026-10-28T11:52:12Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-02",
+          "execID": "d3cf0"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "manifest-cache-False-leaf-2",
+      "optimized": false,
+      "scenario": "leaf",
+      "trial": 2,
+      "revision": "1b42b41a002efc3c118556b5f34e25e235a73b94",
+      "kustomizeExecutions": 4,
+      "commitToComparisonSeconds": 5.8777,
+      "pushSeconds": 4.343,
+      "metricDeltas": {
+        "gitFetch": 1.0,
+        "gitLsRemote": 4.0,
+        "processCPUSeconds": 0.55,
+        "generateManifestRPCs": 7.0
+      },
+      "buildLogs": [
+        {
+          "time": "2026-10-28T11:52:25Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-01",
+          "execID": "7e099"
+        },
+        {
+          "time": "2026-10-28T11:52:25Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-02",
+          "execID": "c3cd0"
+        },
+        {
+          "time": "2026-10-28T11:52:25Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-00",
+          "execID": "03ed1"
+        },
+        {
+          "time": "2026-10-28T11:52:25Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-03",
+          "execID": "c080b"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "manifest-cache-False-leaf-3",
+      "optimized": false,
+      "scenario": "leaf",
+      "trial": 3,
+      "revision": "f5db4b8226c17c4ebd38906eff7a0df79d5818c6",
+      "kustomizeExecutions": 4,
+      "commitToComparisonSeconds": 14.3911,
+      "pushSeconds": 6.2932,
+      "metricDeltas": {
+        "gitFetch": 1.0,
+        "gitLsRemote": 4.0,
+        "processCPUSeconds": 0.89,
+        "generateManifestRPCs": 11.0
+      },
+      "buildLogs": [
+        {
+          "time": "2026-10-28T11:52:45Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-00",
+          "execID": "918cc"
+        },
+        {
+          "time": "2026-10-28T11:52:45Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-02",
+          "execID": "a198a"
+        },
+        {
+          "time": "2026-10-28T11:52:45Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-03",
+          "execID": "fd29f"
+        },
+        {
+          "time": "2026-10-28T11:52:45Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-01",
+          "execID": "a0ca0"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "manifest-cache-False-shared-1",
+      "optimized": false,
+      "scenario": "shared",
+      "trial": 1,
+      "revision": "8986e71a1cdc8018f11c5937bbcc86c5d4fc6507",
+      "kustomizeExecutions": 4,
+      "commitToComparisonSeconds": 13.7999,
+      "pushSeconds": 8.659,
+      "metricDeltas": {
+        "gitFetch": 1.0,
+        "gitLsRemote": 4.0,
+        "processCPUSeconds": 1.39,
+        "generateManifestRPCs": 23.0
+      },
+      "buildLogs": [
+        {
+          "time": "2026-10-28T11:53:14Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-03",
+          "execID": "b48b2"
+        },
+        {
+          "time": "2026-10-28T11:53:14Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-00",
+          "execID": "4a2c1"
+        },
+        {
+          "time": "2026-10-28T11:53:14Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-02",
+          "execID": "b4cdb"
+        },
+        {
+          "time": "2026-10-28T11:53:14Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-01",
+          "execID": "53f74"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "manifest-cache-False-shared-2",
+      "optimized": false,
+      "scenario": "shared",
+      "trial": 2,
+      "revision": "a6cc333b45dc773c8f1253f3c2671a25a846c8ae",
+      "kustomizeExecutions": 4,
+      "commitToComparisonSeconds": 12.0737,
+      "pushSeconds": 5.1133,
+      "metricDeltas": {
+        "gitFetch": 1.0,
+        "gitLsRemote": 4.0,
+        "processCPUSeconds": 0.56,
+        "generateManifestRPCs": 4.0
+      },
+      "buildLogs": [
+        {
+          "time": "2026-10-28T11:53:51Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-00",
+          "execID": "d7611"
+        },
+        {
+          "time": "2026-10-28T11:53:51Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-02",
+          "execID": "d7b99"
+        },
+        {
+          "time": "2026-10-28T11:53:51Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-03",
+          "execID": "49053"
+        },
+        {
+          "time": "2026-10-28T11:53:51Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-01",
+          "execID": "e1536"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "manifest-cache-False-shared-3",
+      "optimized": false,
+      "scenario": "shared",
+      "trial": 3,
+      "revision": "986a816bda70ab768e6be88979d6c247ea5059ce",
+      "kustomizeExecutions": 4,
+      "commitToComparisonSeconds": 4.4689,
+      "pushSeconds": 2.3574,
+      "metricDeltas": {
+        "gitFetch": 1.0,
+        "gitLsRemote": 4.0,
+        "processCPUSeconds": 0.61,
+        "generateManifestRPCs": 8.0
+      },
+      "buildLogs": [
+        {
+          "time": "2026-10-28T11:54:15Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-01",
+          "execID": "f387a"
+        },
+        {
+          "time": "2026-10-28T11:54:15Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-02",
+          "execID": "9cab5"
+        },
+        {
+          "time": "2026-10-28T11:54:15Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-03",
+          "execID": "b380e"
+        },
+        {
+          "time": "2026-10-28T11:54:15Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-00",
+          "execID": "3a4ca"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "manifest-cache-True-unrelated-1",
+      "optimized": true,
+      "scenario": "unrelated",
+      "trial": 1,
+      "revision": "19b0a351e3660206cc2eb6f591c8bf16534ff7b2",
+      "kustomizeExecutions": 0,
+      "commitToComparisonSeconds": 2.6211,
+      "pushSeconds": 1.2322,
+      "metricDeltas": {
+        "gitFetch": 1.0,
+        "gitLsRemote": 4.0,
+        "processCPUSeconds": 0.13,
+        "generateManifestRPCs": 4.0
+      },
+      "buildLogs": [],
+      "passed": true
+    },
+    {
+      "name": "manifest-cache-True-unrelated-2",
+      "optimized": true,
+      "scenario": "unrelated",
+      "trial": 2,
+      "revision": "246a6adcab4caa8b057a7ecdc2737f7e17d699fc",
+      "kustomizeExecutions": 0,
+      "commitToComparisonSeconds": 2.8854,
+      "pushSeconds": 1.3359,
+      "metricDeltas": {
+        "gitFetch": 1.0,
+        "gitLsRemote": 4.0,
+        "processCPUSeconds": 0.22,
+        "generateManifestRPCs": 5.0
+      },
+      "buildLogs": [],
+      "passed": true
+    },
+    {
+      "name": "manifest-cache-True-unrelated-3",
+      "optimized": true,
+      "scenario": "unrelated",
+      "trial": 3,
+      "revision": "abe5c10129e6e1bcba0a3470ce519df3ffd9bb3e",
+      "kustomizeExecutions": 0,
+      "commitToComparisonSeconds": 7.7962,
+      "pushSeconds": 5.6059,
+      "metricDeltas": {
+        "gitFetch": 1.0,
+        "gitLsRemote": 4.0,
+        "processCPUSeconds": 0.64,
+        "generateManifestRPCs": 14.0
+      },
+      "buildLogs": [],
+      "passed": true
+    },
+    {
+      "name": "manifest-cache-True-leaf-1",
+      "optimized": true,
+      "scenario": "leaf",
+      "trial": 1,
+      "revision": "9a9738b19c858364e98764109eeb7704efba98bd",
+      "kustomizeExecutions": 1,
+      "commitToComparisonSeconds": 3.4365,
+      "pushSeconds": 1.4282,
+      "metricDeltas": {
+        "gitFetch": 1.0,
+        "gitLsRemote": 4.0,
+        "processCPUSeconds": 0.38,
+        "generateManifestRPCs": 4.0
+      },
+      "buildLogs": [
+        {
+          "time": "2026-10-28T11:54:59Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-00",
+          "execID": "a3893"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "manifest-cache-True-leaf-2",
+      "optimized": true,
+      "scenario": "leaf",
+      "trial": 2,
+      "revision": "5370daedcfa242327e8dae91d902ee56a73abef3",
+      "kustomizeExecutions": 1,
+      "commitToComparisonSeconds": 5.3529,
+      "pushSeconds": 3.5142,
+      "metricDeltas": {
+        "gitFetch": 1.0,
+        "gitLsRemote": 4.0,
+        "processCPUSeconds": 0.69,
+        "generateManifestRPCs": 9.0
+      },
+      "buildLogs": [
+        {
+          "time": "2026-10-28T11:55:10Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-00",
+          "execID": "78b04"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "manifest-cache-True-leaf-3",
+      "optimized": true,
+      "scenario": "leaf",
+      "trial": 3,
+      "revision": "4403dec66bda3117be32bb4eb8bb3494052e7d5f",
+      "kustomizeExecutions": 1,
+      "commitToComparisonSeconds": 4.5821,
+      "pushSeconds": 2.2526,
+      "metricDeltas": {
+        "gitFetch": 1.0,
+        "gitLsRemote": 4.0,
+        "processCPUSeconds": 0.55,
+        "generateManifestRPCs": 7.0
+      },
+      "buildLogs": [
+        {
+          "time": "2026-10-28T11:55:21Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-00",
+          "execID": "1a0f9"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "manifest-cache-True-shared-1",
+      "optimized": true,
+      "scenario": "shared",
+      "trial": 1,
+      "revision": "eb90665270ea753ee40e0a8b11fc65869f6e61d1",
+      "kustomizeExecutions": 4,
+      "commitToComparisonSeconds": 3.8842,
+      "pushSeconds": 2.4038,
+      "metricDeltas": {
+        "gitFetch": 1.0,
+        "gitLsRemote": 4.0,
+        "processCPUSeconds": 0.3,
+        "generateManifestRPCs": 7.0
+      },
+      "buildLogs": [
+        {
+          "time": "2026-10-28T11:55:29Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-01",
+          "execID": "d312c"
+        },
+        {
+          "time": "2026-10-28T11:55:29Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-02",
+          "execID": "27b06"
+        },
+        {
+          "time": "2026-10-28T11:55:29Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-03",
+          "execID": "9297c"
+        },
+        {
+          "time": "2026-10-28T11:55:29Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-00",
+          "execID": "25d57"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "manifest-cache-True-shared-2",
+      "optimized": true,
+      "scenario": "shared",
+      "trial": 2,
+      "revision": "d30c37ff8b66f0ac1bf6f1fcd3965c24907a65c8",
+      "kustomizeExecutions": 4,
+      "commitToComparisonSeconds": 2.4022,
+      "pushSeconds": 0.8236,
+      "metricDeltas": {
+        "gitFetch": 1.0,
+        "gitLsRemote": 4.0,
+        "processCPUSeconds": 0.23,
+        "generateManifestRPCs": 6.0
+      },
+      "buildLogs": [
+        {
+          "time": "2026-10-28T11:55:35Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-01",
+          "execID": "1ec19"
+        },
+        {
+          "time": "2026-10-28T11:55:35Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-02",
+          "execID": "ceb67"
+        },
+        {
+          "time": "2026-10-28T11:55:35Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-00",
+          "execID": "a631f"
+        },
+        {
+          "time": "2026-10-28T11:55:35Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-03",
+          "execID": "f0aca"
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "manifest-cache-True-shared-3",
+      "optimized": true,
+      "scenario": "shared",
+      "trial": 3,
+      "revision": "f87d8be674c60bbb3178e48ab047ab19f269a13d",
+      "kustomizeExecutions": 4,
+      "commitToComparisonSeconds": 3.3786,
+      "pushSeconds": 1.8915,
+      "metricDeltas": {
+        "gitFetch": 1.0,
+        "gitLsRemote": 4.0,
+        "processCPUSeconds": 0.36,
+        "generateManifestRPCs": 4.0
+      },
+      "buildLogs": [
+        {
+          "time": "2026-10-28T11:55:49Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-03",
+          "execID": "3ed4a"
+        },
+        {
+          "time": "2026-10-28T11:55:49Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-00",
+          "execID": "415af"
+        },
+        {
+          "time": "2026-10-28T11:55:49Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-01",
+          "execID": "06b20"
+        },
+        {
+          "time": "2026-10-28T11:55:49Z",
+          "command": "kustomize build /tmp/_argocd-repo/14cd68e7-422a-48a7-965f-0acc7ce4ef31/bench/op1yiupq/apps/app-02",
+          "execID": "a2e68"
+        }
+      ],
+      "passed": true
+    }
+  ],
+  "sourceHashes": {
+    "tests/gitops/advanced.py": "eeac1affc2fe5f4588a7f2ad803e2a47829df6e8a220918c768fffc21d57b0f7",
+    "tests/gitops/keda_ownership.py": "69cd5be76d8f7ca1c9e26d772f80f44390af6cf9fd93d931b6b2225f6c573987",
+    "tests/gitops/lab.py": "6f873429dd5289cc18ee6c2185e2b75fcadd394a985a9035345c13b768a94eed",
+    "tests/gitops/local.py": "6d88aec07b5e58447756968b49ca89f10ab274f9e91ef5f015076d56ee39618e",
+    "tests/gitops/manifest_cache.py": "9287bc59016e248dad9f61502dc28862576dff4c3ceeea6417bfc5f670bf4da6",
+    "tests/gitops/test_bootstrap.py": "448d19920fea044b72e05dcc4b92914df7ef0559292d5976bc247d7e62e5834c"
+  },
+  "benchmark": {
+    "applications": 4,
+    "trialsPerScenario": 3,
+    "trigger": "normal refresh after each commit; no webhook; no hard refresh in measured cases",
+    "workload": "two ConfigMaps per Kustomize app, shared base, no running application Pods",
+    "counters": "Kustomize exec log count is repository/path-scoped; RPC and process CPU are global diagnostics"
+  },
+  "passed": true
+}

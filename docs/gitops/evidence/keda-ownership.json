@@ -1,0 +1,1374 @@
+{
+  "scope": "kind-only; real Argo CD and KEDA/HPA, synthetic workloads/local SQS",
+  "startedAt": "2026-10-28T12:00:42.332491+00:00",
+  "workDirectory": "/private/tmp/gitops-advanced-lp655tgo",
+  "repository": "http://172.19.0.5:3000/lab/gitops-advanced-077293c42b5c.git",
+  "cases": [
+    {
+      "name": "keda-no-ignore-baseline",
+      "firstCreationReplicas": 1,
+      "scaledReplicas": 4,
+      "application": {
+        "name": "keda-no-ignore-93c42b5c",
+        "uid": "e74911a8-c064-4b12-bc0c-97e9a62cee8d",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "gitops-keda-no-ignore-93c42b5c",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "workloads/no-ignore",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-077293c42b5c.git",
+              "targetRevision": "7a2e8a90a30e3f3ff15e2255f7dcd84be29a8b6e"
+            }
+          },
+          "revision": "7a2e8a90a30e3f3ff15e2255f7dcd84be29a8b6e",
+          "status": "OutOfSync"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-28T12:01:07Z",
+          "status": "Healthy"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "passed": true
+    },
+    {
+      "name": "keda-no-ignore-rollout-1",
+      "mode": "no-ignore",
+      "revision": "1508a3f009e7d1f5b8080a9214a6db1f94fd2ae6",
+      "operationSyncOptions": [],
+      "elapsedSeconds": 16.211,
+      "minimumReplicas": 1,
+      "finalReplicas": 4,
+      "observations": [
+        {
+          "seconds": 0.0602,
+          "resourceVersion": "22134",
+          "generation": 2,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.7859,
+          "resourceVersion": "22180",
+          "generation": 3,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.9034,
+          "resourceVersion": "22183",
+          "generation": 3,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.977,
+          "resourceVersion": "22198",
+          "generation": 3,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 3.0272,
+          "resourceVersion": "22207",
+          "generation": 3,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 3.0503,
+          "resourceVersion": "22209",
+          "generation": 3,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 3.9195,
+          "resourceVersion": "22234",
+          "generation": 3,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 2
+        },
+        {
+          "seconds": 3.9463,
+          "resourceVersion": "22242",
+          "generation": 3,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 12.7455,
+          "resourceVersion": "22280",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 12.7843,
+          "resourceVersion": "22285",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 12.7977,
+          "resourceVersion": "22287",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 12.8446,
+          "resourceVersion": "22301",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 14.1363,
+          "resourceVersion": "22328",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 2
+        },
+        {
+          "seconds": 14.1516,
+          "resourceVersion": "22329",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "keda-no-ignore-rollout-2",
+      "mode": "no-ignore",
+      "revision": "255a66bb2303a28b32a1711adb87b9286e139419",
+      "operationSyncOptions": [],
+      "elapsedSeconds": 12.96,
+      "minimumReplicas": 1,
+      "finalReplicas": 4,
+      "observations": [
+        {
+          "seconds": 0.0652,
+          "resourceVersion": "22329",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.5327,
+          "resourceVersion": "22357",
+          "generation": 5,
+          "replicas": 1,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.5868,
+          "resourceVersion": "22360",
+          "generation": 5,
+          "replicas": 1,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.621,
+          "resourceVersion": "22371",
+          "generation": 5,
+          "replicas": 1,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.7191,
+          "resourceVersion": "22388",
+          "generation": 5,
+          "replicas": 1,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.8542,
+          "resourceVersion": "22391",
+          "generation": 5,
+          "replicas": 1,
+          "image": "nginx:alpine",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 3.9069,
+          "resourceVersion": "22411",
+          "generation": 5,
+          "replicas": 1,
+          "image": "nginx:alpine",
+          "readyReplicas": 2
+        },
+        {
+          "seconds": 3.9272,
+          "resourceVersion": "22418",
+          "generation": 5,
+          "replicas": 1,
+          "image": "nginx:alpine",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 9.5971,
+          "resourceVersion": "22445",
+          "generation": 6,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 9.6585,
+          "resourceVersion": "22449",
+          "generation": 6,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 9.7175,
+          "resourceVersion": "22459",
+          "generation": 6,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 9.7565,
+          "resourceVersion": "22467",
+          "generation": 6,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 11.0109,
+          "resourceVersion": "22487",
+          "generation": 6,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 2
+        },
+        {
+          "seconds": 11.023,
+          "resourceVersion": "22491",
+          "generation": 6,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 3
+        },
+        {
+          "seconds": 11.0371,
+          "resourceVersion": "22492",
+          "generation": 6,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "keda-no-ignore-rollout-3",
+      "mode": "no-ignore",
+      "revision": "fa9d14560604caa3680aa9ac3a8f4909e48d30c3",
+      "operationSyncOptions": [],
+      "elapsedSeconds": 12.994,
+      "minimumReplicas": 1,
+      "finalReplicas": 4,
+      "observations": [
+        {
+          "seconds": 0.0563,
+          "resourceVersion": "22492",
+          "generation": 6,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.5081,
+          "resourceVersion": "22519",
+          "generation": 7,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.5328,
+          "resourceVersion": "22521",
+          "generation": 7,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.5694,
+          "resourceVersion": "22535",
+          "generation": 7,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.6081,
+          "resourceVersion": "22545",
+          "generation": 7,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 2.6503,
+          "resourceVersion": "22552",
+          "generation": 7,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 4.1585,
+          "resourceVersion": "22573",
+          "generation": 7,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 2
+        },
+        {
+          "seconds": 4.1991,
+          "resourceVersion": "22579",
+          "generation": 7,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 9.7712,
+          "resourceVersion": "22601",
+          "generation": 8,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 9.8559,
+          "resourceVersion": "22607",
+          "generation": 8,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 9.9332,
+          "resourceVersion": "22613",
+          "generation": 8,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 10.0027,
+          "resourceVersion": "22622",
+          "generation": 8,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 11.3384,
+          "resourceVersion": "22646",
+          "generation": 8,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 2
+        },
+        {
+          "seconds": 11.3535,
+          "resourceVersion": "22650",
+          "generation": 8,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 3
+        },
+        {
+          "seconds": 11.3689,
+          "resourceVersion": "22651",
+          "generation": 8,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "keda-diff-only-baseline",
+      "firstCreationReplicas": 1,
+      "scaledReplicas": 4,
+      "application": {
+        "name": "keda-diff-only-93c42b5c",
+        "uid": "4b4845ef-ce89-4879-b598-2b3bebf94017",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "gitops-keda-diff-only-93c42b5c",
+              "server": "https://kubernetes.default.svc"
+            },
+            "ignoreDifferences": [
+              {
+                "group": "apps",
+                "jsonPointers": [
+                  "/spec/replicas"
+                ],
+                "kind": "Deployment",
+                "name": "worker",
+                "namespace": "gitops-keda-diff-only-93c42b5c"
+              }
+            ],
+            "source": {
+              "path": "workloads/diff-only",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-077293c42b5c.git",
+              "targetRevision": "8e5f00dea979d17808ee1e363bde5043965052c6"
+            }
+          },
+          "revision": "8e5f00dea979d17808ee1e363bde5043965052c6",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-28T12:02:15Z",
+          "status": "Healthy"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "passed": true
+    },
+    {
+      "name": "keda-diff-only-rollout-1",
+      "mode": "diff-only",
+      "revision": "f5d7b985cbb910eb49a4f6d42d68098885029072",
+      "operationSyncOptions": [],
+      "elapsedSeconds": 15.115,
+      "minimumReplicas": 1,
+      "finalReplicas": 4,
+      "observations": [
+        {
+          "seconds": 0.0484,
+          "resourceVersion": "22817",
+          "generation": 2,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 3.2238,
+          "resourceVersion": "22840",
+          "generation": 3,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 3.2645,
+          "resourceVersion": "22843",
+          "generation": 3,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 3.3197,
+          "resourceVersion": "22855",
+          "generation": 3,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 3.3713,
+          "resourceVersion": "22866",
+          "generation": 3,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 3.4104,
+          "resourceVersion": "22870",
+          "generation": 3,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 4.9043,
+          "resourceVersion": "22897",
+          "generation": 3,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 2
+        },
+        {
+          "seconds": 4.924,
+          "resourceVersion": "22902",
+          "generation": 3,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 12.5967,
+          "resourceVersion": "22931",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 12.6362,
+          "resourceVersion": "22936",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 12.6563,
+          "resourceVersion": "22938",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 12.7852,
+          "resourceVersion": "22952",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 14.0148,
+          "resourceVersion": "22975",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 2
+        },
+        {
+          "seconds": 14.025,
+          "resourceVersion": "22978",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 3
+        },
+        {
+          "seconds": 14.0328,
+          "resourceVersion": "22980",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "keda-diff-only-rollout-2",
+      "mode": "diff-only",
+      "revision": "e0071782eb05464a1bd00b1ccefbaea49836473a",
+      "operationSyncOptions": [],
+      "elapsedSeconds": 12.949,
+      "minimumReplicas": 1,
+      "finalReplicas": 4,
+      "observations": [
+        {
+          "seconds": 0.0773,
+          "resourceVersion": "22980",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.8997,
+          "resourceVersion": "23006",
+          "generation": 5,
+          "replicas": 1,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.9153,
+          "resourceVersion": "23008",
+          "generation": 5,
+          "replicas": 1,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.9454,
+          "resourceVersion": "23019",
+          "generation": 5,
+          "replicas": 1,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.9876,
+          "resourceVersion": "23028",
+          "generation": 5,
+          "replicas": 1,
+          "image": "nginx:alpine",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 3.0518,
+          "resourceVersion": "23036",
+          "generation": 5,
+          "replicas": 1,
+          "image": "nginx:alpine",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 4.7852,
+          "resourceVersion": "23061",
+          "generation": 5,
+          "replicas": 1,
+          "image": "nginx:alpine",
+          "readyReplicas": 2
+        },
+        {
+          "seconds": 4.8302,
+          "resourceVersion": "23067",
+          "generation": 5,
+          "replicas": 1,
+          "image": "nginx:alpine",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 10.3294,
+          "resourceVersion": "23087",
+          "generation": 6,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 10.3822,
+          "resourceVersion": "23092",
+          "generation": 6,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 10.4349,
+          "resourceVersion": "23101",
+          "generation": 6,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 10.4918,
+          "resourceVersion": "23109",
+          "generation": 6,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 11.8737,
+          "resourceVersion": "23132",
+          "generation": 6,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 2
+        },
+        {
+          "seconds": 11.8814,
+          "resourceVersion": "23134",
+          "generation": 6,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "keda-diff-only-rollout-3",
+      "mode": "diff-only",
+      "revision": "0ddeb8f02e445207e7f5731f5c811bd49f7a156a",
+      "operationSyncOptions": [],
+      "elapsedSeconds": 13.474,
+      "minimumReplicas": 1,
+      "finalReplicas": 4,
+      "observations": [
+        {
+          "seconds": 0.0989,
+          "resourceVersion": "23134",
+          "generation": 6,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 3.3839,
+          "resourceVersion": "23162",
+          "generation": 7,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 3.4356,
+          "resourceVersion": "23165",
+          "generation": 7,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 3.5689,
+          "resourceVersion": "23177",
+          "generation": 7,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 3.6423,
+          "resourceVersion": "23189",
+          "generation": 7,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 5.9861,
+          "resourceVersion": "23221",
+          "generation": 7,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 2
+        },
+        {
+          "seconds": 6.116,
+          "resourceVersion": "23228",
+          "generation": 7,
+          "replicas": 1,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 10.1386,
+          "resourceVersion": "23248",
+          "generation": 8,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 10.1853,
+          "resourceVersion": "23253",
+          "generation": 8,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 10.2197,
+          "resourceVersion": "23257",
+          "generation": 8,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 10.3965,
+          "resourceVersion": "23274",
+          "generation": 8,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 1
+        },
+        {
+          "seconds": 11.951,
+          "resourceVersion": "23294",
+          "generation": 8,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 2
+        },
+        {
+          "seconds": 11.9597,
+          "resourceVersion": "23297",
+          "generation": 8,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 3
+        },
+        {
+          "seconds": 11.9695,
+          "resourceVersion": "23298",
+          "generation": 8,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "keda-respect-baseline",
+      "firstCreationReplicas": 1,
+      "scaledReplicas": 4,
+      "application": {
+        "name": "keda-respect-93c42b5c",
+        "uid": "c01c34f5-03f8-41d5-8b84-fd8feb849e36",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "gitops-keda-respect-93c42b5c",
+              "server": "https://kubernetes.default.svc"
+            },
+            "ignoreDifferences": [
+              {
+                "group": "apps",
+                "jsonPointers": [
+                  "/spec/replicas"
+                ],
+                "kind": "Deployment",
+                "name": "worker",
+                "namespace": "gitops-keda-respect-93c42b5c"
+              }
+            ],
+            "source": {
+              "path": "workloads/respect",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-077293c42b5c.git",
+              "targetRevision": "85771e7dd5b208b49e9a6d0f5b1bb765de6677de"
+            }
+          },
+          "revision": "85771e7dd5b208b49e9a6d0f5b1bb765de6677de",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-28T12:03:23Z",
+          "status": "Healthy"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "passed": true
+    },
+    {
+      "name": "keda-respect-rollout-1",
+      "mode": "respect",
+      "revision": "49a9ed4df44b213ec7d1b15738e17e71cd72a60a",
+      "operationSyncOptions": [
+        "RespectIgnoreDifferences=true"
+      ],
+      "elapsedSeconds": 7.725,
+      "minimumReplicas": 4,
+      "finalReplicas": 4,
+      "observations": [
+        {
+          "seconds": 0.0459,
+          "resourceVersion": "23472",
+          "generation": 2,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.4826,
+          "resourceVersion": "23490",
+          "generation": 3,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.5454,
+          "resourceVersion": "23492",
+          "generation": 3,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.6183,
+          "resourceVersion": "23510",
+          "generation": 3,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.6667,
+          "resourceVersion": "23517",
+          "generation": 3,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 3
+        },
+        {
+          "seconds": 2.7375,
+          "resourceVersion": "23522",
+          "generation": 3,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 3
+        },
+        {
+          "seconds": 3.8925,
+          "resourceVersion": "23550",
+          "generation": 3,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 3.9448,
+          "resourceVersion": "23563",
+          "generation": 3,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 5
+        },
+        {
+          "seconds": 4.0166,
+          "resourceVersion": "23565",
+          "generation": 3,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 5
+        },
+        {
+          "seconds": 4.048,
+          "resourceVersion": "23569",
+          "generation": 3,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 4.0902,
+          "resourceVersion": "23576",
+          "generation": 3,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 4.112,
+          "resourceVersion": "23583",
+          "generation": 3,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 3
+        },
+        {
+          "seconds": 4.1375,
+          "resourceVersion": "23587",
+          "generation": 3,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 3
+        },
+        {
+          "seconds": 5.5321,
+          "resourceVersion": "23613",
+          "generation": 3,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 5.5551,
+          "resourceVersion": "23617",
+          "generation": 3,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 5.5629,
+          "resourceVersion": "23621",
+          "generation": 3,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 5
+        },
+        {
+          "seconds": 5.5786,
+          "resourceVersion": "23623",
+          "generation": 3,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "keda-respect-rollout-2",
+      "mode": "respect",
+      "revision": "9e8ca536d52fb604d919128e18c578d1874e45f4",
+      "operationSyncOptions": [
+        "RespectIgnoreDifferences=true"
+      ],
+      "elapsedSeconds": 7.768,
+      "minimumReplicas": 4,
+      "finalReplicas": 4,
+      "observations": [
+        {
+          "seconds": 0.056,
+          "resourceVersion": "23623",
+          "generation": 3,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.3875,
+          "resourceVersion": "23654",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.4329,
+          "resourceVersion": "23657",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.5015,
+          "resourceVersion": "23669",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.5464,
+          "resourceVersion": "23675",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.5728,
+          "resourceVersion": "23685",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.5974,
+          "resourceVersion": "23688",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.6717,
+          "resourceVersion": "23692",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 3
+        },
+        {
+          "seconds": 2.6975,
+          "resourceVersion": "23693",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 3
+        },
+        {
+          "seconds": 4.4926,
+          "resourceVersion": "23719",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 4.5187,
+          "resourceVersion": "23727",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 5
+        },
+        {
+          "seconds": 4.538,
+          "resourceVersion": "23734",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 4.5917,
+          "resourceVersion": "23746",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 4.6133,
+          "resourceVersion": "23752",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 3
+        },
+        {
+          "seconds": 4.6265,
+          "resourceVersion": "23755",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 3
+        },
+        {
+          "seconds": 5.5942,
+          "resourceVersion": "23773",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 5.6292,
+          "resourceVersion": "23780",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 5.6681,
+          "resourceVersion": "23782",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 5
+        },
+        {
+          "seconds": 5.6914,
+          "resourceVersion": "23784",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "keda-respect-rollout-3",
+      "mode": "respect",
+      "revision": "0a90da4c6ae969a03bef95bac6451ecb810b2744",
+      "operationSyncOptions": [
+        "RespectIgnoreDifferences=true"
+      ],
+      "elapsedSeconds": 9.909,
+      "minimumReplicas": 4,
+      "finalReplicas": 4,
+      "observations": [
+        {
+          "seconds": 0.074,
+          "resourceVersion": "23784",
+          "generation": 4,
+          "replicas": 4,
+          "image": "nginx:alpine",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.9232,
+          "resourceVersion": "23816",
+          "generation": 5,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 2.9558,
+          "resourceVersion": "23818",
+          "generation": 5,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 3.0098,
+          "resourceVersion": "23827",
+          "generation": 5,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 3.0555,
+          "resourceVersion": "23837",
+          "generation": 5,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 3.0996,
+          "resourceVersion": "23846",
+          "generation": 5,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 3
+        },
+        {
+          "seconds": 3.123,
+          "resourceVersion": "23849",
+          "generation": 5,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 3
+        },
+        {
+          "seconds": 5.8698,
+          "resourceVersion": "23879",
+          "generation": 5,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 6.1199,
+          "resourceVersion": "23889",
+          "generation": 5,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 5
+        },
+        {
+          "seconds": 6.1868,
+          "resourceVersion": "23897",
+          "generation": 5,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 6.2831,
+          "resourceVersion": "23906",
+          "generation": 5,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 6.4894,
+          "resourceVersion": "23914",
+          "generation": 5,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 3
+        },
+        {
+          "seconds": 7.808,
+          "resourceVersion": "23937",
+          "generation": 5,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 7.9691,
+          "resourceVersion": "23942",
+          "generation": 5,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        },
+        {
+          "seconds": 7.985,
+          "resourceVersion": "23943",
+          "generation": 5,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 3
+        },
+        {
+          "seconds": 8.9935,
+          "resourceVersion": "23952",
+          "generation": 5,
+          "replicas": 4,
+          "image": "nginx:gitops-v2",
+          "readyReplicas": 4
+        }
+      ],
+      "passed": true
+    },
+    {
+      "name": "keda-respect-self-heal-image",
+      "expectedImage": "nginx:gitops-v2",
+      "replicas": 4,
+      "passed": true
+    }
+  ],
+  "sourceHashes": {
+    "tests/gitops/advanced.py": "eeac1affc2fe5f4588a7f2ad803e2a47829df6e8a220918c768fffc21d57b0f7",
+    "tests/gitops/keda_ownership.py": "96aa6b7dd04eb2adb99981b1b2af804283d98fba49f70236838cc5620f7f35c8",
+    "tests/gitops/lab.py": "cc5aa3af9b022f78a0fe216d38e0e0c069c3c36d4b4b3e6729cccda63a82b3e8",
+    "tests/gitops/local.py": "6d88aec07b5e58447756968b49ca89f10ab274f9e91ef5f015076d56ee39618e",
+    "tests/gitops/manifest_cache.py": "9287bc59016e248dad9f61502dc28862576dff4c3ceeea6417bfc5f670bf4da6",
+    "tests/gitops/test_bootstrap.py": "448d19920fea044b72e05dcc4b92914df7ef0559292d5976bc247d7e62e5834c",
+    "tests/gitops/test_lab.py": "a443823e9fd25cfb3e12cd902b8522ad89c11a5ea200878e71ea14631c713b3d"
+  },
+  "queueFixture": {
+    "container": "utterai-gitops-sqs-93c42b5c",
+    "scope": "local Docker, accessed by kind KEDA over kind Docker network"
+  },
+  "passed": true,
+  "versions": {
+    "keda": "2.16.1",
+    "elasticmq": "1.6.9",
+    "argocd": "3.4.3"
+  }
+}

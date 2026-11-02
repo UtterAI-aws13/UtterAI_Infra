@@ -1,0 +1,23 @@
+{
+  "scope": "kind/local SQS synthetic contract + controlled ConfigMap audit; no production application changes",
+  "recordedAt": "2026-10-29T09:11:40.681669+00:00",
+  "unitAndPolicyTestsPassed": 26,
+  "newIntegrationCases": {
+    "rollback": 2,
+    "cacheAudit": 8
+  },
+  "sourceHashes": {
+    "tests/gitops/contract_policy.py": "582849d5b7a58504e01eeb1eacc0cd9c15c398b7dfb6c9830dc5fc24e9228ff5",
+    "tests/gitops/contract_worker.py": "43d7b471c854291afae9e07b0da2879b12243719353aca5f989e6bc09e3e50d9",
+    "tests/gitops/rollback_contract.py": "2e9a43389b0ee781af0b2463ee74e3d0a71336de53dea3c48778cc289870a1d8",
+    "tests/gitops/manifest_equivalence.py": "202668895ea8b244b2fbc8e2332634d5231ed27c90345dd3322df8b4fcba4df3",
+    "tests/gitops/cache_audit.py": "1e20a6b66199bab0bf4621a7ed43deb7550ab0c53f42ba2e7146344d4782df09",
+    "tests/gitops/test_contract_and_audit.py": "45ee37644c34e7b789cece0f42597e6316eb9c8d755c7fe7442515087dda148c"
+  },
+  "limits": [
+    "single 10-job cohort; not exactly-once proof",
+    "declared compatibility gate prototype, not an installed production hook",
+    "audit compares cache-based synced live ConfigMaps with fresh render; does not read raw Redis desired cache"
+  ],
+  "publication": "local working tree; no commit or push"
+}

@@ -1,0 +1,532 @@
+{
+  "scope": "kind Argo CD cache correctness; read-only independent rendering of controlled ConfigMaps",
+  "startedAt": "2026-10-29T08:40:18.722215+00:00",
+  "workDirectory": "/private/tmp/gitops-advanced-f2ood401",
+  "repository": "http://172.19.0.5:3000/lab/gitops-advanced-b966ad448102.git",
+  "cases": [
+    {
+      "name": "missing-base-audit-1",
+      "equivalent": false,
+      "cachedFingerprint": "18dc2833c0f030c716230ac0df60fa3abf787b20e70e6a7dfe8532f5f36bacc5",
+      "independentFingerprint": "93547a1263856e0f3d111f0f0bd8114d864d331ac66d57a5c6b0c2ec9ef388ca",
+      "cachedConfigMaps": [
+        {
+          "apiVersion": "v1",
+          "kind": "ConfigMap",
+          "namespace": "gitops-audit-local-ad448102",
+          "name": "settings",
+          "data": {
+            "version": "v1"
+          },
+          "binaryData": {},
+          "immutable": false
+        }
+      ],
+      "independentConfigMaps": [
+        {
+          "apiVersion": "v1",
+          "kind": "ConfigMap",
+          "namespace": "gitops-audit-local-ad448102",
+          "name": "settings",
+          "data": {
+            "version": "v2"
+          },
+          "binaryData": {},
+          "immutable": false
+        }
+      ],
+      "revision": "711d2599af70c4c4f6b8806472412f02d26f87da",
+      "auditSeconds": 0.6904,
+      "readOnly": true,
+      "application": {
+        "name": "audit-local-ad448102",
+        "uid": "4fdbc8c5-b014-43a4-9141-bdb7d20ad95b",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "gitops-audit-local-ad448102",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "audit/apps/worker",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-b966ad448102.git",
+              "targetRevision": "main"
+            }
+          },
+          "revision": "711d2599af70c4c4f6b8806472412f02d26f87da",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-29T08:40:23Z",
+          "status": "Healthy"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "comparison": "cache-based synced live ConfigMap vs independent exact-revision render; raw Redis cache is not read",
+      "actualKustomizeGenerationsBeforeAudit": 0,
+      "decision": "block promotion; review dependency scope",
+      "passed": true
+    },
+    {
+      "name": "corrected-base-audit-1",
+      "equivalent": true,
+      "cachedFingerprint": "93547a1263856e0f3d111f0f0bd8114d864d331ac66d57a5c6b0c2ec9ef388ca",
+      "independentFingerprint": "93547a1263856e0f3d111f0f0bd8114d864d331ac66d57a5c6b0c2ec9ef388ca",
+      "cachedConfigMaps": [
+        {
+          "apiVersion": "v1",
+          "kind": "ConfigMap",
+          "namespace": "gitops-audit-local-ad448102",
+          "name": "settings",
+          "data": {
+            "version": "v2"
+          },
+          "binaryData": {},
+          "immutable": false
+        }
+      ],
+      "independentConfigMaps": [
+        {
+          "apiVersion": "v1",
+          "kind": "ConfigMap",
+          "namespace": "gitops-audit-local-ad448102",
+          "name": "settings",
+          "data": {
+            "version": "v2"
+          },
+          "binaryData": {},
+          "immutable": false
+        }
+      ],
+      "revision": "711d2599af70c4c4f6b8806472412f02d26f87da",
+      "auditSeconds": 1.047,
+      "readOnly": true,
+      "application": {
+        "name": "audit-local-ad448102",
+        "uid": "4fdbc8c5-b014-43a4-9141-bdb7d20ad95b",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "gitops-audit-local-ad448102",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "audit/apps/worker",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-b966ad448102.git",
+              "targetRevision": "main"
+            }
+          },
+          "revision": "711d2599af70c4c4f6b8806472412f02d26f87da",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-29T08:40:23Z",
+          "status": "Healthy"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "comparison": "cache-based synced live ConfigMap vs independent exact-revision render; raw Redis cache is not read",
+      "passed": true
+    },
+    {
+      "name": "missing-base-audit-2",
+      "equivalent": false,
+      "cachedFingerprint": "93547a1263856e0f3d111f0f0bd8114d864d331ac66d57a5c6b0c2ec9ef388ca",
+      "independentFingerprint": "a88b1e6b24cba20e814710cf9f9c7fe88c5b3565c39d3d924feb8662a0958bd2",
+      "cachedConfigMaps": [
+        {
+          "apiVersion": "v1",
+          "kind": "ConfigMap",
+          "namespace": "gitops-audit-local-ad448102",
+          "name": "settings",
+          "data": {
+            "version": "v2"
+          },
+          "binaryData": {},
+          "immutable": false
+        }
+      ],
+      "independentConfigMaps": [
+        {
+          "apiVersion": "v1",
+          "kind": "ConfigMap",
+          "namespace": "gitops-audit-local-ad448102",
+          "name": "settings",
+          "data": {
+            "version": "v3"
+          },
+          "binaryData": {},
+          "immutable": false
+        }
+      ],
+      "revision": "22ba244d3ffb2dd134702d1a7648620fa86c266f",
+      "auditSeconds": 0.5294,
+      "readOnly": true,
+      "application": {
+        "name": "audit-local-ad448102",
+        "uid": "4fdbc8c5-b014-43a4-9141-bdb7d20ad95b",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "gitops-audit-local-ad448102",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "audit/apps/worker",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-b966ad448102.git",
+              "targetRevision": "main"
+            }
+          },
+          "revision": "22ba244d3ffb2dd134702d1a7648620fa86c266f",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-29T08:40:23Z",
+          "status": "Healthy"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "comparison": "cache-based synced live ConfigMap vs independent exact-revision render; raw Redis cache is not read",
+      "actualKustomizeGenerationsBeforeAudit": 0,
+      "decision": "block promotion; review dependency scope",
+      "passed": true
+    },
+    {
+      "name": "corrected-base-audit-2",
+      "equivalent": true,
+      "cachedFingerprint": "a88b1e6b24cba20e814710cf9f9c7fe88c5b3565c39d3d924feb8662a0958bd2",
+      "independentFingerprint": "a88b1e6b24cba20e814710cf9f9c7fe88c5b3565c39d3d924feb8662a0958bd2",
+      "cachedConfigMaps": [
+        {
+          "apiVersion": "v1",
+          "kind": "ConfigMap",
+          "namespace": "gitops-audit-local-ad448102",
+          "name": "settings",
+          "data": {
+            "version": "v3"
+          },
+          "binaryData": {},
+          "immutable": false
+        }
+      ],
+      "independentConfigMaps": [
+        {
+          "apiVersion": "v1",
+          "kind": "ConfigMap",
+          "namespace": "gitops-audit-local-ad448102",
+          "name": "settings",
+          "data": {
+            "version": "v3"
+          },
+          "binaryData": {},
+          "immutable": false
+        }
+      ],
+      "revision": "22ba244d3ffb2dd134702d1a7648620fa86c266f",
+      "auditSeconds": 1.2332,
+      "readOnly": true,
+      "application": {
+        "name": "audit-local-ad448102",
+        "uid": "4fdbc8c5-b014-43a4-9141-bdb7d20ad95b",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "gitops-audit-local-ad448102",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "audit/apps/worker",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-b966ad448102.git",
+              "targetRevision": "main"
+            }
+          },
+          "revision": "22ba244d3ffb2dd134702d1a7648620fa86c266f",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-29T08:40:23Z",
+          "status": "Healthy"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "comparison": "cache-based synced live ConfigMap vs independent exact-revision render; raw Redis cache is not read",
+      "passed": true
+    },
+    {
+      "name": "missing-base-audit-3",
+      "equivalent": false,
+      "cachedFingerprint": "a88b1e6b24cba20e814710cf9f9c7fe88c5b3565c39d3d924feb8662a0958bd2",
+      "independentFingerprint": "eb5815c2e057647d564b9ab5cf2f8a80a1273120ae8a193bf8afe93f55be7571",
+      "cachedConfigMaps": [
+        {
+          "apiVersion": "v1",
+          "kind": "ConfigMap",
+          "namespace": "gitops-audit-local-ad448102",
+          "name": "settings",
+          "data": {
+            "version": "v3"
+          },
+          "binaryData": {},
+          "immutable": false
+        }
+      ],
+      "independentConfigMaps": [
+        {
+          "apiVersion": "v1",
+          "kind": "ConfigMap",
+          "namespace": "gitops-audit-local-ad448102",
+          "name": "settings",
+          "data": {
+            "version": "v4"
+          },
+          "binaryData": {},
+          "immutable": false
+        }
+      ],
+      "revision": "53f854e3190d001391956bf483b02f50aee7cffa",
+      "auditSeconds": 0.495,
+      "readOnly": true,
+      "application": {
+        "name": "audit-local-ad448102",
+        "uid": "4fdbc8c5-b014-43a4-9141-bdb7d20ad95b",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "gitops-audit-local-ad448102",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "audit/apps/worker",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-b966ad448102.git",
+              "targetRevision": "main"
+            }
+          },
+          "revision": "53f854e3190d001391956bf483b02f50aee7cffa",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-29T08:40:23Z",
+          "status": "Healthy"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "comparison": "cache-based synced live ConfigMap vs independent exact-revision render; raw Redis cache is not read",
+      "actualKustomizeGenerationsBeforeAudit": 0,
+      "decision": "block promotion; review dependency scope",
+      "passed": true
+    },
+    {
+      "name": "corrected-base-audit-3",
+      "equivalent": true,
+      "cachedFingerprint": "eb5815c2e057647d564b9ab5cf2f8a80a1273120ae8a193bf8afe93f55be7571",
+      "independentFingerprint": "eb5815c2e057647d564b9ab5cf2f8a80a1273120ae8a193bf8afe93f55be7571",
+      "cachedConfigMaps": [
+        {
+          "apiVersion": "v1",
+          "kind": "ConfigMap",
+          "namespace": "gitops-audit-local-ad448102",
+          "name": "settings",
+          "data": {
+            "version": "v4"
+          },
+          "binaryData": {},
+          "immutable": false
+        }
+      ],
+      "independentConfigMaps": [
+        {
+          "apiVersion": "v1",
+          "kind": "ConfigMap",
+          "namespace": "gitops-audit-local-ad448102",
+          "name": "settings",
+          "data": {
+            "version": "v4"
+          },
+          "binaryData": {},
+          "immutable": false
+        }
+      ],
+      "revision": "53f854e3190d001391956bf483b02f50aee7cffa",
+      "auditSeconds": 0.4678,
+      "readOnly": true,
+      "application": {
+        "name": "audit-local-ad448102",
+        "uid": "4fdbc8c5-b014-43a4-9141-bdb7d20ad95b",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "gitops-audit-local-ad448102",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "audit/apps/worker",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-b966ad448102.git",
+              "targetRevision": "main"
+            }
+          },
+          "revision": "53f854e3190d001391956bf483b02f50aee7cffa",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-29T08:40:23Z",
+          "status": "Healthy"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "comparison": "cache-based synced live ConfigMap vs independent exact-revision render; raw Redis cache is not read",
+      "passed": true
+    },
+    {
+      "name": "same-application-sha-mutable-remote-base",
+      "equivalent": false,
+      "cachedFingerprint": "8d7dd8decfe562968b8224a7717d44d385bf9b9e7ff7ff64565fcaae94d91296",
+      "independentFingerprint": "cf8f728302d4af5e812d6489b14c87a7da62f9bf0fc6d00ad603e038fd8a1d3b",
+      "cachedConfigMaps": [
+        {
+          "apiVersion": "v1",
+          "kind": "ConfigMap",
+          "namespace": "gitops-audit-remote-ad448102",
+          "name": "external-settings",
+          "data": {
+            "version": "remote-v1"
+          },
+          "binaryData": {},
+          "immutable": false
+        }
+      ],
+      "independentConfigMaps": [
+        {
+          "apiVersion": "v1",
+          "kind": "ConfigMap",
+          "namespace": "gitops-audit-remote-ad448102",
+          "name": "external-settings",
+          "data": {
+            "version": "remote-v2"
+          },
+          "binaryData": {},
+          "immutable": false
+        }
+      ],
+      "revision": "78dd4b33fa31ae7a95bc9ff4d9e80a4a44ae8649",
+      "auditSeconds": 1.9776,
+      "readOnly": true,
+      "application": {
+        "name": "audit-remote-ad448102",
+        "uid": "de2e7007-127e-4756-8b57-784169b523d9",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "gitops-audit-remote-ad448102",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "remote-consumer",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-b966ad448102.git",
+              "targetRevision": "main"
+            }
+          },
+          "revision": "78dd4b33fa31ae7a95bc9ff4d9e80a4a44ae8649",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-29T08:41:15Z",
+          "status": "Healthy"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "comparison": "cache-based synced live ConfigMap vs independent exact-revision render; raw Redis cache is not read",
+      "applicationGitSHAUnchanged": true,
+      "initialRemoteRevision": "5714855b2856a5b0f0d2eb41d37e3f3b5512bf43",
+      "changedRemoteRevision": "99e7429194ed39dced82b2ec31938a0360ac1408",
+      "passed": true
+    },
+    {
+      "name": "pinned-external-input-remains-equivalent",
+      "equivalent": true,
+      "cachedFingerprint": "cf8f728302d4af5e812d6489b14c87a7da62f9bf0fc6d00ad603e038fd8a1d3b",
+      "independentFingerprint": "cf8f728302d4af5e812d6489b14c87a7da62f9bf0fc6d00ad603e038fd8a1d3b",
+      "cachedConfigMaps": [
+        {
+          "apiVersion": "v1",
+          "kind": "ConfigMap",
+          "namespace": "gitops-audit-remote-ad448102",
+          "name": "external-settings",
+          "data": {
+            "version": "remote-v2"
+          },
+          "binaryData": {},
+          "immutable": false
+        }
+      ],
+      "independentConfigMaps": [
+        {
+          "apiVersion": "v1",
+          "kind": "ConfigMap",
+          "namespace": "gitops-audit-remote-ad448102",
+          "name": "external-settings",
+          "data": {
+            "version": "remote-v2"
+          },
+          "binaryData": {},
+          "immutable": false
+        }
+      ],
+      "revision": "7e5b8739370f6cf02073cfa2ae7a08a280435ba8",
+      "auditSeconds": 1.5562,
+      "readOnly": true,
+      "application": {
+        "name": "audit-remote-ad448102",
+        "uid": "de2e7007-127e-4756-8b57-784169b523d9",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "gitops-audit-remote-ad448102",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "remote-consumer",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-b966ad448102.git",
+              "targetRevision": "main"
+            }
+          },
+          "revision": "7e5b8739370f6cf02073cfa2ae7a08a280435ba8",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-29T08:41:15Z",
+          "status": "Healthy"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "comparison": "cache-based synced live ConfigMap vs independent exact-revision render; raw Redis cache is not read",
+      "pinnedRemoteRevision": "99e7429194ed39dced82b2ec31938a0360ac1408",
+      "passed": true
+    }
+  ],
+  "sourceHashes": {
+    "tests/gitops/advanced.py": "eeac1affc2fe5f4588a7f2ad803e2a47829df6e8a220918c768fffc21d57b0f7",
+    "tests/gitops/cache_audit.py": "1e20a6b66199bab0bf4621a7ed43deb7550ab0c53f42ba2e7146344d4782df09",
+    "tests/gitops/contract_policy.py": "582849d5b7a58504e01eeb1eacc0cd9c15c398b7dfb6c9830dc5fc24e9228ff5",
+    "tests/gitops/contract_worker.py": "36cb08827dc787f16c03be84d91793a2e9ad266e6b47609d019f2092f6aefc8a",
+    "tests/gitops/keda_ownership.py": "96aa6b7dd04eb2adb99981b1b2af804283d98fba49f70236838cc5620f7f35c8",
+    "tests/gitops/lab.py": "cc5aa3af9b022f78a0fe216d38e0e0c069c3c36d4b4b3e6729cccda63a82b3e8",
+    "tests/gitops/local.py": "6d88aec07b5e58447756968b49ca89f10ab274f9e91ef5f015076d56ee39618e",
+    "tests/gitops/manifest_cache.py": "9287bc59016e248dad9f61502dc28862576dff4c3ceeea6417bfc5f670bf4da6",
+    "tests/gitops/manifest_equivalence.py": "202668895ea8b244b2fbc8e2332634d5231ed27c90345dd3322df8b4fcba4df3",
+    "tests/gitops/rollback_contract.py": "c2c0e2b882ee9bad5f8e042625ebca54933c9f4165fd7039f3f478ae33871cb6",
+    "tests/gitops/test_bootstrap.py": "448d19920fea044b72e05dcc4b92914df7ef0559292d5976bc247d7e62e5834c",
+    "tests/gitops/test_contract_and_audit.py": "45ee37644c34e7b789cece0f42597e6316eb9c8d755c7fe7442515087dda148c",
+    "tests/gitops/test_lab.py": "a443823e9fd25cfb3e12cd902b8522ad89c11a5ea200878e71ea14631c713b3d",
+    "tests/gitops/test_policies.py": "203ff1991d99e33a1e8db3893ca8994564012f9d21355165ae0fa09787c63e5e"
+  },
+  "renderer": "v5.8.1",
+  "passed": true
+}

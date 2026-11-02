@@ -1,0 +1,39 @@
+{
+  "scope": "kind controller verification and offline policy checks; no EKS required or changed",
+  "recordedAt": "2026-10-28T12:06:43.869881+00:00",
+  "unitTestsPassed": 19,
+  "integrationCases": {
+    "health-waves.json": 9,
+    "keda-ownership.json": 13,
+    "manifest-cache-4.json": 18
+  },
+  "sourceHashes": {
+    "deploy/argocd/bootstrap/dev/kustomization.yaml": "c8c2d87da6a936a75570600ce12f52b84f9b912a28bcedcae71da66190f21e3c",
+    "deploy/argocd/bootstrap/dev/project.yaml": "476a0c2f11a251e79a9e519b986eae2ad02bbf21a36229e34495f93e775726b6",
+    "deploy/argocd/bootstrap/dev/root.yaml": "5c8506e4a5ca5cd7046113afb1dfdb1ceab6b1af3dff77f1b7168defdf583230",
+    "deploy/argocd/bootstrap/prod/kustomization.yaml": "c8c2d87da6a936a75570600ce12f52b84f9b912a28bcedcae71da66190f21e3c",
+    "deploy/argocd/bootstrap/prod/project.yaml": "e79a339a2568fcc81b1109372da12590f27b5fb4200f6c07d47b5d811fc94e02",
+    "deploy/argocd/bootstrap/prod/root.yaml": "a7f50830c4219cec85e4f8573fbe1a63e78cde9b624bcd19f26749a1b338c0c6",
+    "deploy/argocd/dev/ai-service-dev.yaml": "e20ed00c0d2547ad501591f81a1b25aed9bb0aeb6b3549ae119beec0efd99114",
+    "deploy/argocd/dev/ai-worker-dev.yaml": "16799aef62f29b8441e5e3810657a95ffb3f4e8518c20b4f41d508f4d06ba7d4",
+    "deploy/argocd/dev/backend-dev.yaml": "b074ca6d65ea8e263e637d499754d855cc06e129a8dfc9043a5012992e41c4c1",
+    "deploy/argocd/dev/kustomization.yaml": "b4ed5316e1166747c7f1df95b515790c2041a7a259cd450417969cc7c9d3c5e0",
+    "deploy/argocd/dev/platform-dev.yaml": "171f372bc4a1e88bc4cc97f884795cc596d6171866138b5933116e558696ec4f",
+    "deploy/argocd/infra-lab/capacity-lab.yaml": "b233a5575ae26f87003a60f8bb6d2b711fcff747c89d3e7c3d62e217f20790af",
+    "deploy/argocd/prod/ai-service-prod.yaml": "6b65faebb7dfb4ad8ebfd0519fe6308df5669fad8360d97f4b1fbc45a6e7d059",
+    "deploy/argocd/prod/ai-worker-prod.yaml": "91821cd7ba3cb33a02b241237cb0aecd276ea666b37f26982b9cba6a702bf2ac",
+    "deploy/argocd/prod/backend-prod.yaml": "99fc67d0411e466d47371c0b0c0c43939ea822dbbf12f61a50cd1be297277c38",
+    "deploy/argocd/prod/kustomization.yaml": "d6bf0f89915abd2a6efa2123489ad930ae11bf0c14b1fda2783ebfd8cd2eb4cb",
+    "deploy/argocd/prod/platform-prod.yaml": "5f3ecbfb43b8e4c8df935c7dcb146ff1903987c372b97b040f5f0261d7fc83cf",
+    "tests/gitops/advanced.py": "eeac1affc2fe5f4588a7f2ad803e2a47829df6e8a220918c768fffc21d57b0f7",
+    "tests/gitops/application-health.lua": "9b5c6440897b74309500788e7137e43b3f1111377bb77be916194e608cf2e96c",
+    "tests/gitops/keda_ownership.py": "96aa6b7dd04eb2adb99981b1b2af804283d98fba49f70236838cc5620f7f35c8",
+    "tests/gitops/lab.py": "cc5aa3af9b022f78a0fe216d38e0e0c069c3c36d4b4b3e6729cccda63a82b3e8",
+    "tests/gitops/local.py": "6d88aec07b5e58447756968b49ca89f10ab274f9e91ef5f015076d56ee39618e",
+    "tests/gitops/manifest_cache.py": "9287bc59016e248dad9f61502dc28862576dff4c3ceeea6417bfc5f670bf4da6",
+    "tests/gitops/test_bootstrap.py": "448d19920fea044b72e05dcc4b92914df7ef0559292d5976bc247d7e62e5834c",
+    "tests/gitops/test_lab.py": "a443823e9fd25cfb3e12cd902b8522ad89c11a5ea200878e71ea14631c713b3d",
+    "tests/gitops/test_policies.py": "203ff1991d99e33a1e8db3893ca8994564012f9d21355165ae0fa09787c63e5e"
+  },
+  "publication": "local working tree; no push/merge"
+}

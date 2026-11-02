@@ -1,0 +1,508 @@
+{
+  "scope": "kind-only; real Argo CD and KEDA/HPA, synthetic workloads/local SQS",
+  "startedAt": "2026-10-28T10:58:47.198839+00:00",
+  "workDirectory": "/private/tmp/gitops-advanced-gckta6lk",
+  "repository": "http://172.19.0.5:3000/lab/gitops-advanced-gckta6lk.git",
+  "cases": [
+    {
+      "name": "parent-health-default",
+      "parent": {
+        "name": "health-root-gckta6lk",
+        "uid": "1b422dc5-fb7e-4fb8-989d-9889889e1aaa",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "argocd",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "roots/health-root-gckta6lk",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-gckta6lk.git",
+              "targetRevision": "6650351770556ca47f81a81d1a86e480ec28f99a"
+            }
+          },
+          "revision": "6650351770556ca47f81a81d1a86e480ec28f99a",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-28T10:58:50Z",
+          "status": "Healthy"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "child": {
+        "name": "health-worker-gckta6lk",
+        "uid": "d4a45a26-0720-419a-afd3-ed73af584a8f",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "gitops-health-gckta6lk",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "workloads/health-worker-gckta6lk",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-gckta6lk.git",
+              "targetRevision": "b33ac52ee346085d585b3d030ace5015dbf5bc2d"
+            }
+          },
+          "revision": "b33ac52ee346085d585b3d030ace5015dbf5bc2d",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-28T10:59:06Z",
+          "status": "Degraded"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "passed": true,
+      "conclusion": "Parent Healthy while Child Synced/Degraded"
+    },
+    {
+      "name": "parent-health-opt-in",
+      "parent": {
+        "name": "health-root-gckta6lk",
+        "uid": "1b422dc5-fb7e-4fb8-989d-9889889e1aaa",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "argocd",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "roots/health-root-gckta6lk",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-gckta6lk.git",
+              "targetRevision": "6650351770556ca47f81a81d1a86e480ec28f99a"
+            }
+          },
+          "revision": "6650351770556ca47f81a81d1a86e480ec28f99a",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-28T10:59:07Z",
+          "status": "Degraded"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "child": {
+        "name": "health-worker-gckta6lk",
+        "uid": "d4a45a26-0720-419a-afd3-ed73af584a8f",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "gitops-health-gckta6lk",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "workloads/health-worker-gckta6lk",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-gckta6lk.git",
+              "targetRevision": "b33ac52ee346085d585b3d030ace5015dbf5bc2d"
+            }
+          },
+          "revision": "b33ac52ee346085d585b3d030ace5015dbf5bc2d",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-28T10:59:06Z",
+          "status": "Degraded"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "passed": true
+    },
+    {
+      "name": "parent-health-recovery",
+      "parent": {
+        "name": "health-root-gckta6lk",
+        "uid": "1b422dc5-fb7e-4fb8-989d-9889889e1aaa",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "argocd",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "roots/health-root-gckta6lk",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-gckta6lk.git",
+              "targetRevision": "d3217683838cb4f04f966de253fd5adaf2338e23"
+            }
+          },
+          "revision": "d3217683838cb4f04f966de253fd5adaf2338e23",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-28T10:59:20Z",
+          "status": "Healthy"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "child": {
+        "name": "health-worker-gckta6lk",
+        "uid": "d4a45a26-0720-419a-afd3-ed73af584a8f",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "gitops-health-gckta6lk",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "workloads/health-worker-gckta6lk",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-gckta6lk.git",
+              "targetRevision": "2efd74d46707894e19cce7d1a3cb2f2ecaf845dc"
+            }
+          },
+          "revision": "2efd74d46707894e19cce7d1a3cb2f2ecaf845dc",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-28T10:59:19Z",
+          "status": "Healthy"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "passed": true
+    },
+    {
+      "name": "waves-without-health",
+      "mode": "plain",
+      "dependentCreated": true,
+      "parent": {
+        "name": "wave-plain-gckta6lk",
+        "uid": "2d7c83a0-4c01-41cf-a2b2-3273084dd156",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "argocd",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "roots/wave-plain-gckta6lk",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-gckta6lk.git",
+              "targetRevision": "cf837d4d85b8d3b30c8f542f29c56c3f00ecbecf"
+            }
+          },
+          "revision": "cf837d4d85b8d3b30c8f542f29c56c3f00ecbecf",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-28T10:59:26Z",
+          "status": "Healthy"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "first": {
+        "name": "addon-plain-gckta6lk",
+        "uid": "8cece6cf-d7ca-46bb-9d2a-ddbb75650ae9",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "gitops-wave-plain-gckta6lk",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "workloads/addon-plain-gckta6lk",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-gckta6lk.git",
+              "targetRevision": "e3c186e03d8f55e81baf5fa14883a8984220ebcb"
+            }
+          },
+          "revision": "e3c186e03d8f55e81baf5fa14883a8984220ebcb",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-28T10:59:47Z",
+          "status": "Degraded"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "second": {
+        "name": "dependent-plain-gckta6lk",
+        "uid": "4587e40a-6860-4d4b-a742-daac560a0e23",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "gitops-wave-plain-gckta6lk",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "workloads/dependent-plain-gckta6lk",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-gckta6lk.git",
+              "targetRevision": "e3c186e03d8f55e81baf5fa14883a8984220ebcb"
+            }
+          },
+          "revision": "e3c186e03d8f55e81baf5fa14883a8984220ebcb",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-28T10:59:34Z",
+          "status": "Healthy"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "passed": true
+    },
+    {
+      "name": "waves-plain-recovery",
+      "parent": {
+        "name": "wave-plain-gckta6lk",
+        "uid": "2d7c83a0-4c01-41cf-a2b2-3273084dd156",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "argocd",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "roots/wave-plain-gckta6lk",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-gckta6lk.git",
+              "targetRevision": "2090e630e2bc5d105db90192e8b0af92bbefd0c0"
+            }
+          },
+          "revision": "2090e630e2bc5d105db90192e8b0af92bbefd0c0",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-28T10:59:26Z",
+          "status": "Healthy"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "passed": true,
+      "actions": [
+        "terminate old operation if running",
+        "commit fix",
+        "sync new Root revision",
+        "refresh Parent after Child recovery"
+      ]
+    },
+    {
+      "name": "waves-with-health-block",
+      "mode": "gated",
+      "observedSeconds": 10.68,
+      "dependentCreated": false,
+      "parent": {
+        "name": "wave-gated-gckta6lk",
+        "uid": "bde39b4e-c9d7-4799-a377-e52c909a0008",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "argocd",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "roots/wave-gated-gckta6lk",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-gckta6lk.git",
+              "targetRevision": "f2728a35777e301b97f193cecf83d712fede11c6"
+            }
+          },
+          "revision": "f2728a35777e301b97f193cecf83d712fede11c6",
+          "status": "OutOfSync"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-28T11:00:43Z",
+          "status": "Progressing"
+        },
+        "operationPhase": "Running",
+        "conditions": []
+      },
+      "first": {
+        "name": "addon-gated-gckta6lk",
+        "uid": "31edcb9a-1648-4b09-bdb1-f311f3ac875d",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "gitops-wave-gated-gckta6lk",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "workloads/addon-gated-gckta6lk",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-gckta6lk.git",
+              "targetRevision": "ee5170a67a94bfd30f05475970c88e797cae8e3a"
+            }
+          },
+          "revision": "ee5170a67a94bfd30f05475970c88e797cae8e3a",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-28T11:00:59Z",
+          "status": "Degraded"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "passed": true
+    },
+    {
+      "name": "waves-gated-recovery",
+      "parent": {
+        "name": "wave-gated-gckta6lk",
+        "uid": "bde39b4e-c9d7-4799-a377-e52c909a0008",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "argocd",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "roots/wave-gated-gckta6lk",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-gckta6lk.git",
+              "targetRevision": "9c6766524480bdaa55b878643701468f03fb0141"
+            }
+          },
+          "revision": "9c6766524480bdaa55b878643701468f03fb0141",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-28T11:01:30Z",
+          "status": "Healthy"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "passed": true,
+      "actions": [
+        "terminate old operation if running",
+        "commit fix",
+        "sync new Root revision",
+        "refresh Parent after Child recovery"
+      ]
+    },
+    {
+      "name": "independent-apps-without-waves",
+      "mode": "parallel",
+      "dependentCreated": true,
+      "parent": {
+        "name": "wave-parallel-gckta6lk",
+        "uid": "9b4b28ad-e0d3-44ec-b9b1-0f3247f31d34",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "argocd",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "roots/wave-parallel-gckta6lk",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-gckta6lk.git",
+              "targetRevision": "e125fd2ea84d8c2ce7148e948c132e288b5f108a"
+            }
+          },
+          "revision": "e125fd2ea84d8c2ce7148e948c132e288b5f108a",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-28T11:01:32Z",
+          "status": "Progressing"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "first": {
+        "name": "addon-parallel-gckta6lk",
+        "uid": "053f979e-e8c6-4279-86d3-986605e851ca",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "gitops-wave-parallel-gckta6lk",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "workloads/addon-parallel-gckta6lk",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-gckta6lk.git",
+              "targetRevision": "294b6619bf164fa3e8e1f8a138bdbaef96b4a312"
+            }
+          },
+          "revision": "294b6619bf164fa3e8e1f8a138bdbaef96b4a312",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-28T11:01:49Z",
+          "status": "Degraded"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "second": {
+        "name": "dependent-parallel-gckta6lk",
+        "uid": "f69e1ad2-7406-41e4-81e7-1346aaa2050d",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "gitops-wave-parallel-gckta6lk",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "workloads/dependent-parallel-gckta6lk",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-gckta6lk.git",
+              "targetRevision": "294b6619bf164fa3e8e1f8a138bdbaef96b4a312"
+            }
+          },
+          "revision": "294b6619bf164fa3e8e1f8a138bdbaef96b4a312",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-28T11:01:35Z",
+          "status": "Healthy"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "passed": true
+    },
+    {
+      "name": "waves-parallel-recovery",
+      "parent": {
+        "name": "wave-parallel-gckta6lk",
+        "uid": "9b4b28ad-e0d3-44ec-b9b1-0f3247f31d34",
+        "sync": {
+          "comparedTo": {
+            "destination": {
+              "namespace": "argocd",
+              "server": "https://kubernetes.default.svc"
+            },
+            "source": {
+              "path": "roots/wave-parallel-gckta6lk",
+              "repoURL": "http://172.19.0.5:3000/lab/gitops-advanced-gckta6lk.git",
+              "targetRevision": "ed85b571b67dc7632c4b8db32916e1208283cef1"
+            }
+          },
+          "revision": "ed85b571b67dc7632c4b8db32916e1208283cef1",
+          "status": "Synced"
+        },
+        "health": {
+          "lastTransitionTime": "2026-10-28T11:01:59Z",
+          "status": "Healthy"
+        },
+        "operationPhase": "Succeeded",
+        "conditions": []
+      },
+      "passed": true,
+      "actions": [
+        "terminate old operation if running",
+        "commit fix",
+        "sync new Root revision",
+        "refresh Parent after Child recovery"
+      ]
+    }
+  ],
+  "sourceHashes": {
+    "tests/gitops/advanced.py": "eeac1affc2fe5f4588a7f2ad803e2a47829df6e8a220918c768fffc21d57b0f7",
+    "tests/gitops/keda_ownership.py": "69cd5be76d8f7ca1c9e26d772f80f44390af6cf9fd93d931b6b2225f6c573987",
+    "tests/gitops/lab.py": "9915335e9563960a73c61e8bbe08dc313aec28ed1ab00549588ee1b9416076cd",
+    "tests/gitops/local.py": "6d88aec07b5e58447756968b49ca89f10ab274f9e91ef5f015076d56ee39618e",
+    "tests/gitops/manifest_cache.py": "9287bc59016e248dad9f61502dc28862576dff4c3ceeea6417bfc5f670bf4da6",
+    "tests/gitops/test_bootstrap.py": "448d19920fea044b72e05dcc4b92914df7ef0559292d5976bc247d7e62e5834c"
+  },
+  "waveControl": {
+    "resource.ignoreResourceUpdatesEnabled": false
+  },
+  "passed": true,
+  "originalHealthCustomizationRestored": true
+}
