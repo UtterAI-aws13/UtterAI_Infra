@@ -7,6 +7,8 @@ metadata:
     app.kubernetes.io/name: utterai-ai-service
     app.kubernetes.io/part-of: utterai
     utterai.io/environment: dev
+  annotations:
+    argocd.argoproj.io/manifest-generate-paths: ".;../../base"
 spec:
   project: default
   source:
@@ -19,6 +21,8 @@ spec:
   ignoreDifferences:
     - group: apps
       kind: Deployment
+      name: utterai-ai-service
+      namespace: utterai-ai-service
       jsonPointers:
         - /spec/replicas
   syncPolicy:
@@ -27,3 +31,4 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - RespectIgnoreDifferences=true

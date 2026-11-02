@@ -1,0 +1,19 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: utterai-bootstrap-dev
+  namespace: argocd
+spec:
+  description: Administrator-owned dev Application bootstrap; not a tenant security
+    boundary.
+  sourceRepos:
+  - https://github.com/UtterAI-aws13/UtterAI_Infra
+  destinations:
+  - server: https://kubernetes.default.svc
+    namespace: argocd
+  clusterResourceBlacklist:
+  - group: '*'
+    kind: '*'
+  namespaceResourceWhitelist:
+  - group: argoproj.io
+    kind: Application

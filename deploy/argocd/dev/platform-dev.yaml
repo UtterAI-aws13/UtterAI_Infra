@@ -7,6 +7,8 @@ metadata:
     app.kubernetes.io/name: utterai-platform
     app.kubernetes.io/part-of: utterai
     utterai.io/environment: dev
+  annotations:
+    argocd.argoproj.io/manifest-generate-paths: "/k8s/platform"
 spec:
   project: default
   source:

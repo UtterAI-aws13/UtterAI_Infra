@@ -7,6 +7,8 @@ metadata:
     app.kubernetes.io/name: utterai-ai-worker
     app.kubernetes.io/part-of: utterai
     utterai.io/environment: dev
+  annotations:
+    argocd.argoproj.io/manifest-generate-paths: ".;../../base"
 spec:
   project: default
   source:
@@ -19,6 +21,20 @@ spec:
   ignoreDifferences:
     - group: apps
       kind: Deployment
+      name: utterai-cpu-worker
+      namespace: utterai-ai-cpu
+      jsonPointers:
+        - /spec/replicas
+    - group: apps
+      kind: Deployment
+      name: utterai-ml-gpu-worker
+      namespace: utterai-ai-gpu
+      jsonPointers:
+        - /spec/replicas
+    - group: apps
+      kind: Deployment
+      name: utterai-batch-worker
+      namespace: utterai-batch
       jsonPointers:
         - /spec/replicas
   syncPolicy:
@@ -27,3 +43,4 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - RespectIgnoreDifferences=true

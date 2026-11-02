@@ -1,0 +1,36 @@
+name: GitOps App of Apps CI
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'deploy/argocd/**'
+      - 'k8s/**'
+      - 'scripts/gitops/**'
+      - 'scripts/k8s-*-bootstrap-argocd.sh'
+      - 'tests/gitops/**'
+      - '.github/workflows/gitops-ci.yaml'
+  push:
+    branches: [main, 'feature/**', 'eunyoung/infra-lab']
+    paths:
+      - 'deploy/argocd/**'
+      - 'k8s/**'
+      - 'scripts/gitops/**'
+      - 'scripts/k8s-*-bootstrap-argocd.sh'
+      - 'tests/gitops/**'
+      - '.github/workflows/gitops-ci.yaml'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.31.9'
+      - run: python -m pip install -r scripts/gitops/requirements.txt
+      - run: python -m unittest discover -s tests/gitops -p 'test_*.py' -v
+      - run: bash -n scripts/k8s-dev-bootstrap-argocd.sh scripts/k8s-prod-bootstrap-argocd.sh

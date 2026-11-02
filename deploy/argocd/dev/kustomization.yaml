@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Explicit membership: infra-lab and bootstrap resources are never discovered recursively.
+resources:
+  - platform-dev.yaml
+  - backend-dev.yaml
+  - ai-service-dev.yaml
+  - ai-worker-dev.yaml
+commonAnnotations:
+  argocd.argoproj.io/sync-options: Prune=false,Delete=false

@@ -1,0 +1,23 @@
+# Manual sync; intentionally no automated policy or cascading finalizer.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: utterai-prod-root
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: utterai
+    utterai.io/environment: prod
+  annotations:
+    argocd.argoproj.io/manifest-generate-paths: /deploy/argocd/prod
+spec:
+  project: utterai-bootstrap-prod
+  source:
+    repoURL: https://github.com/UtterAI-aws13/UtterAI_Infra
+    targetRevision: main
+    path: deploy/argocd/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    syncOptions:
+    - FailOnSharedResource=true
